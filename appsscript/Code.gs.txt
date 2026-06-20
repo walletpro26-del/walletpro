@@ -1,0 +1,838 @@
+// --- CONFIGURATION ---
+const SHEET_LENDING = 'LendingBorrowing';
+const SHEET_EXPENSES = 'HomeExpenses';
+const SHEET_USERS = 'users';
+const UPLOAD_ROOT_FOLDER_ID = '14xbaBzrRHcKaraAie0H-zczC4VfaNn-y'; // User provided ID
+
+// --- ADMIN CREDENTIALS ---
+const ADMIN_EMAIL = 'sheikhgulfam91@gmail.com';
+const ADMIN_PASS_RAW = '212221';
+
+function doGet(e) {
+  // JSON API mode: ?action=someEndpoint
+  const action = e && e.parameter && e.parameter.action ? String(e.parameter.action) : '';
+  if (action) {
+    try {
+      const out = handleApiAction(action, e);
+      return ContentService
+        .createTextOutput(JSON.stringify(out))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: false, message: String(err) }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // Default: existing HTML UI
+  return HtmlService.createTemplateFromFile('index')
+    .evaluate()
+    .setTitle('Accounts Manager Pro')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function handleApiAction(action, e) {
+  // All API calls are GET-style; React will send simple query params.
+  // For actions needing payload, we accept JSON in `data` query param.
+  // Example: ?action=saveData&data={"formType":"expense",...}
+  const params = e && e.parameter ? e.parameter : {};
+  const dataRaw = params.data || '';
+  let data = null;
+  if (dataRaw) {
+    try { data = JSON.parse(dataRaw); } catch (err) { data = null; }
+  }
+
+  switch (action) {
+    case 'verifyUser': {
+      const email = params.email || '';
+      const password = params.password || '';
+      return verifyUser(email, password);
+    }
+
+    case 'fetchBankRecords': {
+      return fetchBankRecords();
+    }
+
+    case 'getSuggestionData': {
+      return getSuggestionData();
+    }
+
+    case 'getDashboardData': {
+      return getDashboardData();
+    }
+
+    case 'getAnalysisReport': {
+      // type, startDate, endDate, filters (array/stringified JSON)
+      const type = params.type || 'expense';
+      const startDate = params.startDate || 'ALL';
+      const endDate = params.endDate || 'ALL';
+      let filters = null;
+      if (params.filters) {
+        try { filters = JSON.parse(params.filters); } catch (err) { filters = null; }
+      }
+      return getAnalysisReport(type, startDate, endDate, filters);
+    }
+
+    case 'saveData': {
+      if (!data) return { success: false, message: 'Missing data' };
+      return saveData(data);
+    }
+
+    case 'updateTransaction': {
+      if (!data) return { success: false, message: 'Missing data' };
+      return updateTransaction(data);
+    }
+
+    case 'deleteTransaction': {
+      const sheetType = params.sheetType || '';
+      const rowIndex = parseInt(params.rowIndex || '0', 10);
+      return deleteTransaction(sheetType, rowIndex);
+    }
+
+    case 'deleteOptionMetadata': {
+      const type = params.type || '';
+      const value = params.value || '';
+      return deleteOptionMetadata(type, value);
+    }
+
+    default:
+      return { success: false, message: 'Unknown action: ' + action };
+  }
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// (Rest of file restored exactly from your pasted content.)
+
+function setupSpreadsheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Users
+  let userSheet = ss.getSheetByName(SHEET_USERS);
+  if (!userSheet) {
+    userSheet = ss.insertSheet(SHEET_USERS);
+    userSheet.appendRow(['Email', 'Password', 'Name', 'Role', 'CreatedOn']);
+    userSheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#cbd5e1');
+    userSheet.setFrozenRows(1);
+  }
+  // Ensure Admin
+  const usersData = userSheet.getDataRange().getValues();
+  let adminExists = false;
+  for (let i = 1; i < usersData.length; i++) {
+    if (String(usersData[i][0]).trim() === ADMIN_EMAIL) { adminExists = true; break; }
+  }
+  if (!adminExists) {
+    userSheet.appendRow([ADMIN_EMAIL, hashString(ADMIN_PASS_RAW), 'Sheikh Gulfam', 'Admin', new Date()]);
+  }
+
+  // 2. Lending
+  let lendSheet = ss.getSheetByName(SHEET_LENDING);
+  if (!lendSheet) {
+    lendSheet = ss.insertSheet(SHEET_LENDING);
+    lendSheet.appendRow(['Timestamp', 'Expenditure Type', 'Name', 'Amount', 'Remarks', 'Receipt']);
+    lendSheet.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#fbbf24');
+    lendSheet.setFrozenRows(1);
+  } else if (lendSheet.getLastColumn() < 6) {
+     lendSheet.getRange(1, 6).setValue('Receipt').setFontWeight('bold').setBackground('#fbbf24');
+  }
+
+  // 3. Expense
+  let expSheet = ss.getSheetByName(SHEET_EXPENSES);
+  if (!expSheet) {
+    expSheet = ss.insertSheet(SHEET_EXPENSES);
+    expSheet.appendRow(['Timestamp', 'For whom', 'Category', 'Details', 'Amount', 'Mode', 'Remarks', 'Receipt']);
+    expSheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#94a3b8');
+    expSheet.setFrozenRows(1);
+  } else if (expSheet.getLastColumn() < 8) {
+     expSheet.getRange(1, 8).setValue('Receipt').setFontWeight('bold').setBackground('#94a3b8');
+  }
+  
+  return "Setup Complete.";
+}
+
+// --- FILE UPLOAD HANDLER ---
+function processFileUpload(data, fileName, mimeType) {
+  if (!data) return "";
+  
+  try {
+    const decoded = Utilities.base64Decode(data);
+    const blob = Utilities.newBlob(decoded, mimeType, fileName);
+    
+    const now = new Date();
+    const yearFolder = getOrCreateSubFolder(DriveApp.getFolderById(UPLOAD_ROOT_FOLDER_ID), now.getFullYear().toString());
+    const monthName = Utilities.formatDate(now, Session.getScriptTimeZone(), "MMMM");
+    const targetFolder = getOrCreateSubFolder(yearFolder, monthName);
+    
+    const file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return file.getUrl();
+  } catch (e) {
+    return "Error: " + e.toString();
+  }
+}
+
+function getOrCreateSubFolder(parentFolder, subFolderName) {
+  const folders = parentFolder.getFoldersByName(subFolderName);
+  if (folders.hasNext()) return folders.next();
+  return parentFolder.createFolder(subFolderName);
+}
+
+// --- AUTH ---
+const SHEET_SBI = 'SBIbank_trancHistory';
+const SHEET_JK = 'J&Kbank_trancHistory';
+
+function verifyUser(email, password) {
+  if (email === ADMIN_EMAIL && hashString(password) === hashString(ADMIN_PASS_RAW)) {
+      return { success: true, name: 'Sheikh Gulfam', role: 'Admin' };
+  }
+  return { success: false, message: 'Invalid Credentials' };
+}
+
+function fetchBankRecords() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let results = [];
+    let errors = [];
+    
+    // --- FETCH SBI ---
+    const sbiSheet = ss.getSheetByName(SHEET_SBI);
+    if (!sbiSheet) {
+      errors.push(`Sheet "${SHEET_SBI}" not found.`);
+    } else {
+      const lastRow = sbiSheet.getLastRow();
+      if (lastRow >= 17) {
+        // Fetch ALL rows from row 17
+        const numRows = lastRow - 17 + 1;
+        if (numRows > 0) {
+            // Updated 5-Column Structure: A=Date, B=Details, C=Debit, D=Credit, E=Balance
+            const data = sbiSheet.getRange(17, 1, numRows, 5).getValues();
+            data.forEach((row) => {
+              if (row[0]) {
+                 const dateObj = parseDate(row[0]);
+                 if (dateObj) {
+                     const dateTerms = enrichDateForSearch(dateObj);
+                     results.push({
+                       bank: 'SBI',
+                       date: dateObj.toISOString(),
+                       description: String(row[1]),
+                       ref: '-', // No Ref column in 5-col layout
+                       debit: parseAmount(row[2]), // Col C - use parseAmount for comma handling
+                       credit: parseAmount(row[3]), // Col D - use parseAmount for comma handling
+                       balance: parseAmount(row[4]), // Col E - use parseAmount for comma handling
+                       searchStr: `${dateTerms} ${row[1]} ${row[2]} ${row[3]} ${row[4]}`.toLowerCase()
+                     });
+                 }
+              }
+            });
+        }
+      }
+    }
+
+    // --- FETCH J&K ---
+    const jkSheet = ss.getSheetByName(SHEET_JK);
+    if (!jkSheet) {
+      errors.push(`Sheet "${SHEET_JK}" not found.`);
+    } else {
+      const lastRow = jkSheet.getLastRow();
+      if (lastRow >= 2) {
+        // Fetch ALL rows from row 2
+        const numRows = lastRow - 2 + 1;
+        if (numRows > 0) {
+            // Updated 5-Column Structure: A=Date, B=Details, C=Debit, D=Credit, E=Balance
+            const data = jkSheet.getRange(2, 1, numRows, 5).getValues();
+            data.forEach((row) => {
+              if (row[0]) {
+                 const dateObj = parseDate(row[0]);
+                 if (dateObj) {
+                     const dateTerms = enrichDateForSearch(dateObj);
+                     results.push({
+                       bank: 'J&K',
+                       date: dateObj.toISOString(),
+                       description: String(row[1]),
+                       ref: '-', 
+                       debit: parseAmount(row[2]), // Col C - use parseAmount for comma handling
+                       credit: parseAmount(row[3]), // Col D - use parseAmount for comma handling
+                       balance: parseAmount(row[4]), // Col E - use parseAmount for comma handling
+                       searchStr: `${dateTerms} ${row[1]} ${row[2]} ${row[3]} ${row[4]}`.toLowerCase()
+                     });
+                 }
+              }
+            });
+        }
+      }
+    }
+    
+    // Return explicit error if BOTH sheets missing
+    if (results.length === 0 && errors.length > 0) {
+       return { error: true, message: errors.join(" ") }; 
+    }
+    
+    results.sort((a,b) => new Date(b.date) - new Date(a.date));
+    return results;
+
+  } catch (e) {
+    return { error: true, message: "Server Error: " + e.toString() };
+  }
+}
+
+function enrichDateForSearch(dateInput) {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return String(dateInput);
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const monthIndex = d.getMonth();
+  const month = String(monthIndex + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const shortYear = String(year).slice(-2);
+  
+  const monthNames = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  const shortMonthNames = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  
+  const fullMonth = monthNames[monthIndex];
+  const shortMonth = shortMonthNames[monthIndex];
+
+  // Create a rich string with all likely search variations
+  return [
+    `${day}/${month}/${year}`,      // 01/03/2016
+    `${day}-${month}-${year}`,      // 01-03-2016
+    `${day}.${month}.${year}`,      // 01.03.2016
+    `${day} ${shortMonth} ${year}`, // 01 mar 2016
+    `${day} ${fullMonth} ${year}`,  // 01 march 2016
+    `${shortMonth} ${year}`,        // mar 2016
+    `${fullMonth} ${year}`,         // march 2016
+    `${shortMonth} ${shortYear}`,   // mar 16
+    `${day}-${shortMonth}-${year}`  // 01-mar-2016
+  ].join(" ");
+}
+
+function hashString(str) {
+  const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(str));
+  let txtHash = '';
+  for (let i = 0; i < raw.length; i++) {
+    let hashVal = raw[i];
+    if (hashVal < 0) hashVal += 256;
+    if (hashVal.toString(16).length == 1) txtHash += '0';
+    txtHash += hashVal.toString(16);
+  }
+  return txtHash;
+}
+
+// --- DATA & ANALYTICS ---
+function getSuggestionData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lendSheet = ss.getSheetByName(SHEET_LENDING);
+  const expSheet = ss.getSheetByName(SHEET_EXPENSES);
+  
+  let data = { persons: [], forWhom: [], details: [], categories: [], quickFills: [] };
+  
+  // 1. Lending Suggestions
+  if (lendSheet && lendSheet.getLastRow() > 1) {
+    let vals = lendSheet.getRange(2, 3, lendSheet.getLastRow()-1, 1).getValues().flat();
+    data.persons = [...new Set(vals.map(String).filter(s => s.trim().length > 0))];
+  }
+  
+  // 2. Expense Suggestions & Quick Fills
+  if (expSheet && expSheet.getLastRow() > 1) {
+    const rows = expSheet.getRange(2, 1, expSheet.getLastRow()-1, 7).getValues();
+    let whom = [], cats = [], dets = [];
+    let freqMap = {};
+    
+    // Iterate in reverse (recent first) to capture latest dates/trends
+    for (let i = rows.length - 1; i >= 0; i--) {
+        let r = rows[i];
+        if(r[1]) whom.push(r[1]);
+        if(r[2]) cats.push(r[2]);
+        if(r[3]) dets.push(r[3]);
+
+        let amt = parseAmount(r[4]);
+        if (amt > 0 && r[2] && r[3]) {
+            let normWhom = String(r[1] || 'Self').trim(); 
+            let normCat = String(r[2]).trim();
+            let normDetails = String(r[3]).trim();
+            
+            let key = [normWhom, normCat, normDetails].join('||');
+            
+            if (!freqMap[key]) {
+                // Initialize with first seen (which is most recent because of reverse loop)
+                freqMap[key] = { 
+                    count: 0, 
+                    lastSeenIndex: i, // Higher index = more recent
+                    data: { 
+                        whom: normWhom, 
+                        whomFull: r[1] || 'Self', 
+                        category: normCat, 
+                        details: normDetails, 
+                        amount: amt, 
+                        mode: r[5]||'Cash', 
+                        label: `${normDetails}` 
+                    }
+                };
+            }
+            freqMap[key].count++;
+        }
+    }
+    
+    data.forWhom = [...new Set(whom.map(String).filter(s => s.trim().length > 0))];
+    data.categories = [...new Set(cats.map(String).filter(s => s.trim().length > 0))];
+    data.details = [...new Set(dets.map(String).filter(s => s.trim().length > 0))];
+
+    // Sort by Last Seen Index (Recency) primarily, then Count
+    const sorted = Object.values(freqMap).sort((a,b) => {
+        // Give heavy weight to recency
+        if (b.lastSeenIndex !== a.lastSeenIndex) return b.lastSeenIndex - a.lastSeenIndex;
+        return b.count - a.count;
+    });
+    data.quickFills = sorted.slice(0, 15).map(item => item.data);
+  }
+  
+  return data;
+}
+
+// --- DELETE TRANSACTION & FILE ---
+function deleteTransaction(sheetType, rowIndex) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = (sheetType === 'lending') ? ss.getSheetByName(SHEET_LENDING) : ss.getSheetByName(SHEET_EXPENSES);
+  let receiptColIndex = (sheetType === 'lending') ? 6 : 8; // Column F or H
+  
+  if (sheet) {
+    try {
+      // 1. Get Receipt URL to Delete File
+      const receiptUrl = sheet.getRange(rowIndex, receiptColIndex).getValue();
+      if (receiptUrl && String(receiptUrl).includes("drive.google.com")) {
+        try {
+          const fileId = extractFileId(receiptUrl);
+          if (fileId) DriveApp.getFileById(fileId).setTrashed(true);
+        } catch (e) { 
+          console.error("File delete failed (ignoring): " + e.toString()); 
+        }
+      }
+      
+      // 2. Delete Row
+      sheet.deleteRow(rowIndex);
+      return { success: true }; 
+    } 
+    catch (e) { return { success: false, message: e.toString() }; }
+  }
+  return { success: false, message: "Sheet not found" };
+}
+
+function extractFileId(url) {
+  var match = url.match(/[-\w]{25,}/);
+  return match ? match[0] : null;
+}
+
+function saveData(formData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // USE USER PROVIDED DATE OR FALLBACK TO NOW
+  let timestamp = formData.date ? new Date(formData.date) : new Date();
+  // If user provides just a date (yyyy-mm-dd), set time to current time to avoid 00:00:00
+  const now = new Date();
+  if (timestamp.getHours() === 0 && timestamp.getMinutes() === 0) {
+      timestamp.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+  }
+  const dateStr = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "dd-MM-yyyy HH.mm.ss a");
+  
+  let receiptUrl = "";
+  if (formData.fileData && formData.fileName) {
+    // Generate Smart Filename
+    let ext = formData.fileName.split('.').pop();
+    let smartName = "File.ext";
+    let niceDate = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    
+    if (formData.formType === 'lending') {
+        let type = formData.lendType || 'Txn';
+        let person = (formData.person || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+        let amt = formData.amount || '0';
+        smartName = `${type}_${person}_${amt}_${niceDate}.${ext}`;
+    } else {
+        let cat = (formData.category || 'Exp').replace(/[^a-zA-Z0-9]/g, '');
+        let det = (formData.details || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+        let amt = formData.amount || '0';
+        smartName = `Exp_${cat}_${det}_${amt}_${niceDate}.${ext}`;
+    }
+    
+    receiptUrl = processFileUpload(formData.fileData, smartName, formData.mimeType);
+  }
+
+  try {
+    if (formData.formType === 'lending') {
+      const sheet = ss.getSheetByName(SHEET_LENDING);
+      if (!sheet) return { success: false, message: 'Sheet missing.' };
+      const amount = Math.abs(parseFloat(formData.amount)); 
+      
+      let finalType = formData.lendType; 
+      if (formData.isForgive === 'true') finalType = "Forgive";
+      else if (formData.lendType === 'Lend') finalType = "Lend";
+      else if (formData.lendType === 'Borrow') finalType = "Borrow";
+      else if (formData.lendType === 'Return') finalType = (formData.txnDirection === 'IN') ? "They Return" : "I Return";
+
+      sheet.appendRow([dateStr, finalType, formData.person, amount, formData.details, receiptUrl]);
+      
+    } else if (formData.formType === 'expense') {
+      const sheet = ss.getSheetByName(SHEET_EXPENSES);
+      if (!sheet) return { success: false, message: 'Sheet missing.' };
+      sheet.appendRow([dateStr, formData.forWhom, formData.category, formData.details, formData.amount, formData.paymentMode, formData.remarks, receiptUrl]);
+    }
+    return { success: true, message: 'Saved successfully!' };
+  } catch (e) {
+    return { success: false, message: 'Error: ' + e.toString() };
+  }
+}
+
+function updateTransaction(formData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rowIndex = parseInt(formData.rowIndex);
+  if(!rowIndex) return { success: false, message: "Invalid Row Index" };
+  
+  // Similar Date Logic for Update
+  let timestamp = formData.date ? new Date(formData.date) : new Date();
+  const now = new Date();
+  if (timestamp.getHours() === 0 && timestamp.getMinutes() === 0) {
+      timestamp.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+  }
+  const dateStr = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "dd-MM-yyyy HH.mm.ss a");
+
+  let receiptUrl = formData.existingReceipt || "";
+  if (formData.fileData && formData.fileName) {
+     // Generate Smart Filename (Same logic)
+    let ext = formData.fileName.split('.').pop();
+    let smartName = "File.ext";
+    let niceDate = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    
+    if (formData.formType === 'lending') {
+        let type = formData.lendType || 'Txn';
+        let person = (formData.person || 'Unknown').replace(/[^a-zA-Z0-9]/g, '');
+        let amt = formData.amount || '0';
+        smartName = `${type}_${person}_${amt}_${niceDate}.${ext}`;
+    } else {
+        let cat = (formData.category || 'Exp').replace(/[^a-zA-Z0-9]/g, '');
+        let det = (formData.details || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+        let amt = formData.amount || '0';
+        smartName = `Exp_${cat}_${det}_${amt}_${niceDate}.${ext}`;
+    }
+    receiptUrl = processFileUpload(formData.fileData, smartName, formData.mimeType);
+  }
+
+  try {
+    if (formData.formType === 'lending') {
+      const sheet = ss.getSheetByName(SHEET_LENDING);
+      const amount = Math.abs(parseFloat(formData.amount)); 
+      let finalType = formData.lendType; 
+      if (formData.isForgive === 'true') finalType = "Forgive";
+      else if (formData.lendType === 'Lend') finalType = "Lend";
+      else if (formData.lendType === 'Borrow') finalType = "Borrow";
+      else if (formData.lendType === 'Return') finalType = (formData.txnDirection === 'IN') ? "They Return" : "I Return";
+
+      sheet.getRange(rowIndex, 1, 1, 6).setValues([[dateStr, finalType, formData.person, amount, formData.details, receiptUrl]]);
+      
+    } else if (formData.formType === 'expense') {
+      const sheet = ss.getSheetByName(SHEET_EXPENSES);
+      sheet.getRange(rowIndex, 1, 1, 8).setValues([[dateStr, formData.forWhom, formData.category, formData.details, formData.amount, formData.paymentMode, formData.remarks, receiptUrl]]);
+    }
+    return { success: true, message: 'Updated successfully!' };
+  } catch (e) {
+    return { success: false, message: 'Error: ' + e.toString() };
+  }
+}
+
+function getDashboardData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lendSheet = ss.getSheetByName(SHEET_LENDING);
+  const expSheet = ss.getSheetByName(SHEET_EXPENSES);
+  if (!lendSheet || !expSheet) return { error: true, message: "Run setup." };
+
+  // LENDING
+  const lendData = lendSheet.getDataRange().getValues();
+  let totalReceivable = 0, totalPayable = 0, lendingTxns = [];
+  for (let i = 1; i < lendData.length; i++) {
+    let row = lendData[i];
+    let date = parseDate(row[0]);
+    let type = String(row[1]||"").trim().toLowerCase();
+    let amt = parseAmount(row[3]);
+    let receipt = row[5] || ""; 
+    
+    if (type.includes('lend')) totalReceivable += amt; 
+    else if (type.includes('borrow')) totalPayable += amt;    
+    else if (type.includes('they return')) totalReceivable -= amt; 
+    else if (type.includes('i return')) totalPayable -= amt;    
+    else if (type.includes('forgive')) totalReceivable -= amt;
+
+    if (date) {
+      let label = type.charAt(0).toUpperCase() + type.slice(1);
+      if (type.includes('lend')) label = "Loan Given";
+      else if (type.includes('borrow')) label = "Borrowed";
+      else if (type.includes('they return')) label = "Received Return";
+      
+      lendingTxns.push({
+        date: date, cat: label, detail: row[4]||'', amt: amt, whom: row[2], 
+        isLend: true, sheet: 'lending', row: i+1, receipt: receipt,
+        rawType: row[1], rawName: row[2], rawAmt: row[3], rawRem: row[4]
+      });
+    }
+  }
+
+  // EXPENSE
+  const expData = expSheet.getDataRange().getValues();
+  let monthExpense = 0, todayExpense = 0, totalExpense = 0, expenseTxns = [];
+  const now = new Date();
+  const currM = now.getMonth(); const currY = now.getFullYear(); const currD = now.getDate();
+  
+  for (let i = 1; i < expData.length; i++) {
+    let row = expData[i];
+    let d = parseDate(row[0]); let amt = parseAmount(row[4]);
+    let receipt = row[7] || ""; 
+    
+    totalExpense += amt;
+    if (d && d.getFullYear() === currY && d.getMonth() === currM) {
+      monthExpense += amt;
+      if (d.getDate() === currD) todayExpense += amt;
+    }
+    if (d) {
+      expenseTxns.push({
+        date: d, cat: row[2], detail: row[3], amt: amt, whom: row[1],
+        isLend: false, sheet: 'expense', row: i+1, receipt: receipt,
+        rawWhom: row[1], rawCat: row[2], rawDet: row[3], rawAmt: row[4], rawMode: row[5], rawRem: row[6]
+      });
+    }
+  }
+
+  lendingTxns.sort((a, b) => b.date - a.date);
+  expenseTxns.sort((a, b) => b.date - a.date);
+  const serialize = (t) => ({ ...t, date: t.date.toISOString() });
+
+  return {
+    lending: { receivable: totalReceivable, payable: totalPayable, net: totalReceivable - totalPayable },
+    expense: { today: todayExpense, month: monthExpense, total: totalExpense },
+    recentLending: lendingTxns.slice(0, 10).map(serialize),
+    recentExpenses: expenseTxns.slice(0, 10).map(serialize),
+    searchIndex: [...lendingTxns, ...expenseTxns].sort((a,b) => b.date - a.date).map(t => {
+       return { ...t, date: t.date.toISOString(), searchStr: (t.cat + " " + t.whom + " " + t.detail + " " + t.amt).toLowerCase() };
+    })
+  };
+}
+
+function getAnalysisReport(type, startDate, endDate, filters) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const isAllTime = (startDate === 'ALL');
+  let start, end;
+  if(!isAllTime) { start = new Date(startDate); start.setHours(0,0,0,0); end = new Date(endDate); end.setHours(23,59,59,999); }
+
+  // Handle array-based filters (multi-select checkboxes)
+  const isAllSelected = (arr) => !arr || !Array.isArray(arr) || arr.length === 0 || arr.includes('All');
+  
+  const fCatArr = !isAllSelected(filters?.category) ? filters.category.map(c => c.toLowerCase()) : null;
+  const fWhomArr = !isAllSelected(filters?.forWhom) ? filters.forWhom.map(w => w.toLowerCase()) : null;
+  const fExpTypeArr = !isAllSelected(filters?.expType) ? filters.expType.map(t => t.toLowerCase()) : null;
+  const fPersonArr = !isAllSelected(filters?.person) ? filters.person.map(p => p.toLowerCase()) : null;
+
+  if (type === 'expense') {
+    const sheet = ss.getSheetByName(SHEET_EXPENSES);
+    if (!sheet) return { topItems: [], total: 0, byCategory: {}, byWhom: {} };
+    const data = sheet.getDataRange().getValues();
+    let stats = { total: 0, byCategory: {}, byWhom: {}, topItems: [] };
+
+    for (let i = 1; i < data.length; i++) {
+      let row = data[i];
+      let d = parseDate(row[0]);
+      let inDate = isAllTime ? true : (d && d >= start && d <= end);
+      
+      if (inDate) {
+        let whom = row[1] || 'Self';
+        let cat = row[2] || 'Uncategorized';
+        // Check if category matches any selected (multi-select)
+        if (fCatArr && !fCatArr.includes(cat.toLowerCase())) continue;
+        // Check if forWhom matches any selected (multi-select)
+        if (fWhomArr && !fWhomArr.includes(whom.toLowerCase())) continue;
+        
+        let amt = parseAmount(row[4]);
+        stats.total += amt;
+        stats.byCategory[cat] = (stats.byCategory[cat] || 0) + amt;
+        stats.byWhom[whom] = (stats.byWhom[whom] || 0) + amt;
+        
+        if(!stats.historyByWhom) stats.historyByWhom = {};
+        if(!stats.historyByCategory) stats.historyByCategory = {};
+        if(!stats.historyByWhom[whom]) stats.historyByWhom[whom] = [];
+        if(!stats.historyByCategory[cat]) stats.historyByCategory[cat] = [];
+
+        let receipt = row[7] || "";
+        const entry = { 
+          date: d ? d.toISOString() : "N/A", item: row[3], amount: amt, cat: cat, whom: whom, 
+          sheet: 'expense', row: i + 1, receipt: receipt,
+          type: cat, // Use category as type for renderHistoryRows compatibility
+          rawWhom: row[1], rawCat: row[2], rawDet: row[3], rawAmt: row[4], rawMode: row[5], rawRem: row[6]
+        };
+
+        stats.historyByWhom[whom].push(entry);
+        stats.historyByCategory[cat].push(entry);
+        stats.topItems.push(entry);
+      }
+    }
+    stats.topItems.sort((a,b) => b.amount - a.amount);
+    return stats;
+    
+  } else {
+    const sheet = ss.getSheetByName(SHEET_LENDING);
+    if (!sheet) return { activityLog: [], people: {}, overallReceivable: 0, overallPayable: 0 };
+    const data = sheet.getDataRange().getValues();
+    let stats = { overallReceivable: 0, overallPayable: 0, totalLent: 0, totalBorrowed: 0, people: {}, activityLog: [] };
+
+    for (let i = 1; i < data.length; i++) {
+      let row = data[i];
+      let d = parseDate(row[0]);
+      let typeStr = String(row[1] || "").trim();
+      let typeLower = typeStr.toLowerCase();
+      let person = row[2];
+      let amount = parseAmount(row[3]);
+      let receipt = row[5] || "";
+
+      // Check if expType matches any selected (multi-select)
+      if (fExpTypeArr && !fExpTypeArr.some(ft => typeLower.includes(ft))) continue;
+      // Check if person matches any selected (multi-select)
+      if (fPersonArr && !fPersonArr.includes(person.toLowerCase())) continue;
+
+      if (!stats.people[person]) stats.people[person] = { net: 0, totalLent: 0, totalBorrowed: 0 };
+      
+      let netChange = 0;
+      if (typeLower.includes('lend')) { 
+        netChange = amount; 
+        stats.overallReceivable += amount; 
+        stats.totalLent += amount;
+        stats.people[person].totalLent += amount;
+      }
+      else if (typeLower.includes('borrow')) { 
+        netChange = -amount; 
+        stats.overallPayable += amount; 
+        stats.totalBorrowed += amount;
+        stats.people[person].totalBorrowed += amount;
+      }
+      else if (typeLower.includes('they return')) { netChange = -amount; stats.overallReceivable -= amount; }
+      else if (typeLower.includes('i return')) { netChange = amount; stats.overallPayable -= amount; }
+      else if (typeLower.includes('forgive')) { netChange = -amount; stats.overallReceivable -= amount; }
+      
+      stats.people[person].net += netChange;
+      
+      if (!stats.personHistory) stats.personHistory = {};
+      if (!stats.personHistory[person]) stats.personHistory[person] = [];
+      
+      const entry = { 
+        date: d ? d.toISOString() : "N/A", person: person, type: typeStr, direction: (typeLower.includes('lend') || typeLower.includes('i return')) ? "Money Out" : "Money In", amount: amount, 
+        sheet: 'lending', row: i + 1, receipt: receipt,
+        rawType: row[1], rawName: row[2], rawAmt: row[3], rawRem: row[4]
+      };
+      
+      stats.personHistory[person].push(entry);
+
+      let inDate = isAllTime ? true : (d && d >= start && d <= end);
+      if (inDate) {
+        stats.activityLog.push(entry);
+      }
+    }
+    stats.activityLog.sort((a,b) => { let da=a.date==='N/A'?new Date(0):new Date(a.date); let db=b.date==='N/A'?new Date(0):new Date(b.date); return db-da; });
+    return stats;
+  }
+}
+
+function parseDate(d) {
+  if (!d) return null;
+  if (d instanceof Date) return d;
+  const str = String(d).trim();
+  if (str === '') return null;
+  let standardDate = new Date(str);
+  if (!isNaN(standardDate.getTime()) && str.length > 5) return standardDate;
+  const parts = str.split(/[- .:/]/); 
+  if (parts.length >= 3) {
+    let day, month, year, hour = 0, min = 0, sec = 0;
+    const monthNames = {jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11};
+    const possibleMonth = parts[1].toLowerCase().substring(0, 3);
+    if (monthNames[possibleMonth] !== undefined) { day = parseInt(parts[0], 10); month = monthNames[possibleMonth]; year = parseInt(parts[2], 10); }
+    else { day = parseInt(parts[0], 10); month = parseInt(parts[1], 10) - 1; year = parseInt(parts[2], 10); }
+    if (year < 100) year += 2000;
+    let timeIndex = 3;
+    while(timeIndex < parts.length && (isNaN(parseInt(parts[timeIndex])) || parts[timeIndex] === '')) { timeIndex++; }
+    if (timeIndex < parts.length) {
+       hour = parseInt(parts[timeIndex], 10) || 0; min = parseInt(parts[timeIndex+1], 10) || 0; sec = parseInt(parts[timeIndex+2], 10) || 0;
+       if (str.toUpperCase().includes("PM") && hour < 12) hour += 12;
+       if (str.toUpperCase().includes("AM") && hour === 12) hour = 0;
+    }
+    const finalDate = new Date(year, month, day, hour, min, sec);
+    if (!isNaN(finalDate.getTime())) return finalDate;
+  }
+  return null;
+}
+
+function parseAmount(val) {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  let cleanStr = String(val).replace(/[^0-9.-]/g, "");
+  let num = parseFloat(cleanStr);
+  return isNaN(num) ? 0 : num;
+}
+
+function deleteOptionMetadata(type, value) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheetName = '';
+    let colIndex = 0; // 1-based index
+    
+    // Determine Sheet and Column based on Type
+    // 'cat'     => Expense Sheet, Col C (3)
+    // 'whom'    => Expense Sheet, Col B (2)
+    // 'person'  => Lending Sheet, Col C (3)
+    // 'exptype' => Lending Sheet, Col B (2)
+    
+    switch (type) {
+        case 'cat': 
+            sheetName = SHEET_EXPENSES; 
+            colIndex = 3; 
+            break;
+        case 'whom':
+            sheetName = SHEET_EXPENSES;
+            colIndex = 2;
+            break;
+        case 'person':
+            sheetName = SHEET_LENDING;
+            colIndex = 3;
+            break;
+        case 'exptype':
+            sheetName = SHEET_LENDING;
+            colIndex = 2;
+            break;
+        default:
+            return { error: true, message: "Invalid option type" };
+    }
+    
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return { error: true, message: "Sheet not found" };
+    
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { count: 0 }; // Nothing to delete
+    
+    // Get ALL data for that column
+    const range = sheet.getRange(2, colIndex, lastRow - 1, 1);
+    const values = range.getValues();
+    let count = 0;
+    
+    // Iterate and clear matches
+    const updatedValues = values.map(row => {
+        if (String(row[0]).trim() === String(value).trim()) {
+            count++;
+            return ['']; // Clear cell
+        }
+        return row;
+    });
+    
+    if (count > 0) {
+        range.setValues(updatedValues);
+    }
+    
+    return { count: count };
+    
+  } catch (e) {
+    return { error: true, message: e.toString() };
+  }
+}

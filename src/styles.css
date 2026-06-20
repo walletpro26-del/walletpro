@@ -1,0 +1,3 @@
+/* Minimal global styles (kept intentionally light) */
+:root { color-scheme: light; }
+* { box-sizing: border-box; }

@@ -1,0 +1,2075 @@
+<script>
+  let appSettings = {
+    accent: 'blue',
+    theme: 'light',
+    currency: '₹',
+    startScreen: 'expense'
+  };
+
+  let currentReportType = 'expense';
+  let globalData = null;
+  let currentReportData = null; // Store for CSV download
+  let globalSearchIndex = [];
+  let currentAppMode = 'Lend'; 
+  let currentModalData = null; // Store data for current modal
+  const CREDENTIALS = { u: 'sheikhgulfam91@gmail.com', p: '212221' };
+  
+  // Will be populated from server
+  let generatedQuickFills = [];
+
+  // --- SETTINGS MODULE ---
+  function loadSettings() {
+     try {
+       const saved = localStorage.getItem('wallet_settings');
+       if(saved) {
+          appSettings = { ...appSettings, ...JSON.parse(saved) };
+       }
+     } catch(e) { console.error('Error parsing settings', e); }
+     
+     try {
+       applySettings();
+     } catch(e) { console.error('Error applying settings', e); }
+  }
+
+  function applySettings() {
+      // Apply Accent
+      const colors = {
+          blue: '#3b82f6',
+          emerald: '#10b981',
+          rose: '#f43f5e',
+          amber: '#f59e0b',
+          violet: '#8b5cf6',
+          slate: '#475569'
+      };
+      const gradients = {
+          blue: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+          emerald: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          rose: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+          amber: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          violet: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+          slate: 'linear-gradient(135deg, #475569 0%, #1e293b 100%)'
+      };
+      const root = document.documentElement;
+      const accent = colors[appSettings.accent] || colors.blue;
+      root.style.setProperty('--accent-color', accent);
+      root.style.setProperty('--primary-gradient', gradients[appSettings.accent] || gradients.blue);
+      root.style.setProperty('--shadow-premium', `0 10px 40px -10px ${accent}40`);
+      
+      // Update UI for Accent Selection
+      document.querySelectorAll('[data-color]').forEach(btn => {
+          if(btn.dataset.color === appSettings.accent) btn.classList.add('ring-offset-2', 'ring-2', 'ring-gray-300');
+          else btn.classList.remove('ring-offset-2', 'ring-2', 'ring-gray-300');
+      });
+
+      // Apply Theme
+      if(appSettings.theme === 'dark') {
+          // Dark Mode overrides
+          root.style.setProperty('--surface-bg', '#0f172a');
+          root.style.setProperty('--glass-bg', 'rgba(15, 23, 42, 0.95)');
+          root.classList.add('dark');
+          document.body.style.backgroundColor = '#1e293b';
+          document.body.style.color = '#f8fafc';
+           // Add a class to body for specific overrides if needed
+          document.body.classList.add('dark-theme');
+          
+          document.getElementById('btn-theme-dark').className = "flex-1 py-1.5 text-xs font-bold rounded-md bg-slate-700 shadow-sm text-white transition-all";
+          document.getElementById('btn-theme-light').className = "flex-1 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:bg-slate-700/50 transition-all";
+      } else {
+          // Standard Light
+           root.style.setProperty('--surface-bg', '#f8fafc');
+           root.style.setProperty('--glass-bg', 'rgba(255, 255, 255, 0.9)');
+           root.classList.remove('dark');
+           document.body.style.backgroundColor = '#cbd5e1';
+           document.body.style.color = '#0f172a';
+           document.body.classList.remove('dark-theme');
+           
+           document.getElementById('btn-theme-light').className = "flex-1 py-1.5 text-xs font-bold rounded-md bg-white shadow-sm text-slate-800 transition-all";
+           document.getElementById('btn-theme-dark').className = "flex-1 py-1.5 text-xs font-bold rounded-md text-gray-500 hover:bg-white/50 transition-all";
+      }
+      
+      // Update Inputs
+      document.getElementById('set-currency').value = appSettings.currency;
+      document.getElementById('set-start-screen').value = appSettings.startScreen;
+      
+      // Update currency placeholders where static
+      document.querySelectorAll('.currency-symbol').forEach(el => el.innerText = appSettings.currency);
+  }
+
+  function openSettings() {
+     document.getElementById('settings-modal').classList.remove('hidden');
+  }
+
+  function closeSettings() {
+     document.getElementById('settings-modal').classList.add('hidden');
+  }
+
+  function saveSettings() {
+      appSettings.currency = document.getElementById('set-currency').value;
+      appSettings.startScreen = document.getElementById('set-start-screen').value;
+      localStorage.setItem('wallet_settings', JSON.stringify(appSettings));
+      
+      applySettings();
+      closeSettings();
+      showToast('Settings Saved', 'success');
+      
+      // Refresh current view to update currency symbols
+      if(globalData) {
+         updateHeaderStats(currentReportType === 'expense' ? 'expense' : currentReportType); // Refresh headers
+         loadDashboard(); // Refresh lists
+      }
+  }
+
+  function selectAccent(color) {
+      appSettings.accent = color;
+      applySettings(); // Live preview
+  }
+
+  function setThemeMode(mode) {
+      appSettings.theme = mode;
+      applySettings(); // Live preview
+  }
+
+
+  // --- AUTHENTICATION ---
+  // --- AUTHENTICATION ---
+  function checkLogin() {
+    const isLocal = localStorage.getItem('wallet_auth');
+    const isSession = sessionStorage.getItem('wallet_auth');
+    
+    if (isLocal === 'true' || isSession === 'true') {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-container').classList.remove('hidden');
+      
+      // Ensure specific view is loaded
+      const start = appSettings.startScreen || 'expense';
+      
+      setTimeout(() => {
+          try {
+             switchTab(start);
+          } catch(e) {
+             console.error("Error switching tab: " + e.message);
+          }
+      }, 50);
+
+      setLendMode('Lend'); 
+      loadDashboard();
+      loadSuggestions(); 
+      setupGlobalSearch();
+      
+      // Background load bank data
+      setTimeout(() => {
+         if(!bankDataCache) loadBankData();
+      }, 500); // Small delay to prioritize dashboard rendering
+      
+    } else {
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('app-container').classList.add('hidden');
+    }
+  }
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const u = document.getElementById('login-email').value;
+    const p = document.getElementById('login-pw').value;
+    const keep = document.getElementById('keep-logged-in').checked;
+    
+    const btn = e.target.querySelector('button');
+    const originalText = btn.innerText;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verifying...';
+    btn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(res => {
+         btn.innerText = originalText;
+         btn.disabled = false;
+         if (res.success) {
+           if (keep) {
+               localStorage.setItem('wallet_auth', 'true');
+           } else {
+               sessionStorage.setItem('wallet_auth', 'true');
+           }
+           checkLogin();
+           showToast('Welcome back, ' + res.name + '!', 'success');
+         } else {
+           showToast(res.message, 'error');
+         }
+      })
+      .withFailureHandler(err => {
+         btn.innerText = originalText;
+         btn.disabled = false;
+         showToast("Connection failed. Please try again.", 'error');
+         console.error(err);
+      })
+      .verifyUser(u, p);
+  }
+
+  function logout() {
+    localStorage.removeItem('wallet_auth');
+    sessionStorage.removeItem('wallet_auth');
+    document.getElementById('app-container').classList.add('hidden');
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('login-pw').value = '';
+    showToast("Logged out successfully", 'success');
+  }
+
+  // --- FILE HANDLING ---
+  function updateFileLabel(id) {
+    const fileInput = document.getElementById(id);
+    const label = document.getElementById(id + '-label');
+    const removeBtn = document.getElementById(id + '-remove');
+    
+    if(fileInput && fileInput.files && fileInput.files[0]) {
+      label.innerText = fileInput.files[0].name;
+      label.classList.add('text-indigo-600');
+      if(removeBtn) removeBtn.classList.remove('hidden');
+    } else {
+      label.innerText = "None"; // Default text
+      label.classList.remove('text-indigo-600');
+      if(removeBtn) removeBtn.classList.add('hidden');
+    }
+  }
+
+  function handleDashboardClick(type) {
+    // Determine active tab context if passed generic indices (opt) or just check visibility
+    const isLending = !document.getElementById('view-lending').classList.contains('hidden');
+    
+    switchTab('reports');
+    
+    setTimeout(() => {
+        if (!isLending) {
+            // EXPENSE CONTEXT
+            if (type === 'stat1') setQuickFilter('today');      // Today
+            else if (type === 'stat2') setQuickFilter('thisMonth'); // Month
+            else if (type === 'stat3') {  // Total
+                document.getElementById('check-all-time').checked = true; 
+                toggleAllTime(); 
+                generateReport(); 
+            }
+            else if (type === 'today') setQuickFilter('today');
+            else if (type === 'month') setQuickFilter('thisMonth');
+            else if (type === 'total') { document.getElementById('check-all-time').checked = true; toggleAllTime(); generateReport(); }
+        } else {
+            // LENDING CONTEXT
+            // We want to filter the Lending Report based on the box clicked
+            // Box 1: Receivable, Box 2: Payable, Box 3: Net Position
+            setReportType('lending'); // Ensure lending report type
+            document.getElementById('check-all-time').checked = true; 
+            toggleAllTime();
+            generateReport();
+        }
+    }, 100);
+  }
+
+  function setQuickFilter(range) {
+     const startInput = document.getElementById('report-start');
+     const endInput = document.getElementById('report-end');
+     const checkAll = document.getElementById('check-all-time');
+     
+     checkAll.checked = false; 
+     toggleAllTime();
+     
+     const now = new Date();
+     let start = new Date();
+     let end = new Date();
+     
+     if (range === 'today') {
+        // Start and End depend on whether we want to capture "just today"
+        start = now; end = now;
+     } else if (range === 'yesterday') {
+        start.setDate(now.getDate() - 1);
+        end.setDate(now.getDate() - 1);
+     } else if (range === 'last7') {
+        start.setDate(now.getDate() - 6);
+        end = now;
+     } else if (range === 'thisMonth') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+     } else if (range === 'lastMonth') {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0);
+     }
+     
+     startInput.value = start.toISOString().split('T')[0];
+     endInput.value = end.toISOString().split('T')[0];
+     
+     generateReport();
+  }
+
+  function downloadCSV() {
+    if (!currentReportData) return showToast("No report data to download", "error");
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    var filename = 'Report_' + currentReportType + '_' + new Date().toISOString().split('T')[0] + '.csv';
+
+    if (currentReportType === 'expense') {
+        csvContent += "Date,Item,Category,For Whom,Amount,Receipt\n";
+        currentReportData.topItems.forEach(row => {
+            var rowStr = [
+                row.date ? new Date(row.date).toLocaleDateString() : "",
+                '"' + (row.item || '').replace(/"/g, '""') + '"',
+                '"' + (row.cat || '').replace(/"/g, '""') + '"',
+                '"' + (row.whom || '').replace(/"/g, '""') + '"',
+                row.amount,
+                row.receipt || ""
+            ].join(",");
+            csvContent += rowStr + "\n";
+        });
+    } else {
+        csvContent += "Date,Person,Action,Amount,Net Effect,Receipt\n";
+        currentReportData.activityLog.forEach(row => {
+            var rowStr = [
+                row.date ? new Date(row.date).toLocaleDateString() : "",
+                '"' + (row.person || '').replace(/"/g, '""') + '"',
+                '"' + (row.type || '').replace(/"/g, '""') + '"',
+                row.amount,
+                row.direction,
+                row.receipt || ""
+            ].join(",");
+            csvContent += rowStr + "\n";
+        });
+    }
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function shareTransaction() {
+     if (!currentModalData) return;
+     const t = currentModalData;
+     let dateStr = t.date ? new Date(t.date).toLocaleDateString() : 'N/A';
+     var text = '*Transaction Details* \u{1F9FE}\n\n';
+     
+     if (t.sheet === 'expense') {
+         text += '\u{1F4C5} *Date:* ' + dateStr + '\n';
+         text += '\u{1F3F7}\u{FE0F} *Item:* ' + t.cat + ' - ' + t.detail + '\n';
+         text += '\u{1F4B0} *Amount:* ' + appSettings.currency + t.amt + '\n';
+         text += '\u{1F464} *For:* ' + t.whom + '\n';
+     } else {
+         text += '\u{1F4C5} *Date:* ' + dateStr + '\n';
+         text += '\u{1F464} *Person:* ' + t.whom + '\n';
+         text += '\u{1F504} *Action:* ' + t.cat + '\n';
+         text += '\u{1F4B0} *Amount:* ' + appSettings.currency + t.amt + '\n';
+         if(t.detail) text += '\u{1F4DD} *Note:* ' + t.detail + '\n';
+     }
+     
+     if (t.receipt) {
+         text += '\n\u{1F4CE} *Receipt:* ' + t.receipt;
+     }
+     
+     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+
+  function clearFile(id) {
+    const fileInput = document.getElementById(id);
+    if(fileInput) {
+      fileInput.value = ''; // Clear selection
+      updateFileLabel(id);
+    }
+  }
+
+  async function readInputFile(id) {
+    const fileInput = document.getElementById(id);
+    if (!fileInput || !fileInput.files.length) return null;
+    const file = fileInput.files[0];
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result.split(',')[1];
+        resolve({
+          fileName: file.name,
+          mimeType: file.type,
+          fileData: content
+        });
+      };
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // --- QUICK FILL ---
+  function applyQuickFill(idx) {
+     if(idx === "" || !generatedQuickFills[idx]) return;
+     const t = generatedQuickFills[idx];
+     document.getElementById('exp-whom').value = t.whomFull || t.whom; // Use full name
+     document.getElementById('exp-cat').value = t.category;
+     document.getElementById('exp-details').value = t.details;
+     document.getElementById('exp-amount').value = t.amount;
+     document.getElementById('exp-mode').value = t.mode;
+     updateFloatingLabelStates(); // Update label states after filling
+  }
+
+  function loadSuggestions() {
+    google.script.run.withSuccessHandler(populateDatalists).getSuggestionData();
+  }
+  
+  
+  function populateDatalists(data) {
+    const createOpts = (list, id) => {
+      const dl = document.getElementById(id);
+      dl.innerHTML = '';
+      if(list && list.length) {
+        list.map(item => item)
+            .filter((v, i, a) => a.indexOf(v) === i && v.length > 0)
+            .sort()
+            .forEach(item => { 
+            const op = document.createElement('option'); 
+            op.value = item; 
+            dl.appendChild(op); 
+        });
+      }
+    };
+    createOpts(data.persons, 'list-persons');
+    createOpts(data.forWhom, 'list-forwhom');
+    createOpts(data.details, 'list-details');
+    createOpts(data.categories, 'list-categories'); 
+
+    // Store data for autocomplete
+    autocompleteData = {
+      persons: data.persons || [],
+      forWhom: data.forWhom || [],
+      details: data.details || [],
+      categories: data.categories || []
+    };
+    
+    // Initialize autocomplete dropdowns
+    initializeAutocomplete();
+
+    // Populate Quick Fill Dropdown from Real Data
+    // Populate Quick Fill Chips from Real Data
+    const quickContainer = document.getElementById('quick-fill-chips');
+    if(quickContainer && data.quickFills) {
+      generatedQuickFills = data.quickFills; // Store for access
+      quickContainer.innerHTML = '';
+      data.quickFills.forEach((t, i) => {
+         const btn = document.createElement('button');
+         btn.type = "button";
+         btn.className = "chip bg-white border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-xs font-bold py-2 px-3 rounded-full text-slate-600 transition-colors shadow-sm flex items-center gap-1";
+         btn.innerHTML = '<i class=\"fas fa-bolt text-amber-400 text-[10px]\"></i> ' + t.label;
+         btn.onclick = () => applyQuickFill(i);
+         quickContainer.appendChild(btn);
+      });
+    }
+
+    // Populate multi-select checkbox dropdowns
+    populateMultiSelectOptions('cat', data.categories || [], 'All Categories');
+    populateMultiSelectOptions('whom', data.forWhom || [], 'All');
+    populateMultiSelectOptions('person', data.persons || [], 'All');
+  }
+
+  // --- MULTI-SELECT CHECKBOX FUNCTIONS ---
+  function populateMultiSelectOptions(type, items, allLabel) {
+    const optionsContainer = document.getElementById(type + '-options');
+    if (!optionsContainer) return;
+    
+    optionsContainer.innerHTML = '';
+    
+    // Add Select All / Clear Controls
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'flex items-center justify-between p-2 border-b border-gray-100 bg-gray-50 text-[10px] font-bold text-indigo-600 rounded-t-lg';
+    controlsDiv.innerHTML = '<button type="button" onclick="selectAllMulti(\'' + type + '\')" class="hover:text-indigo-800 uppercase px-2 py-1 rounded hover:bg-indigo-100 transition-colors"><i class="fas fa-check-double mr-1"></i>Select All</button><button type="button" onclick="clearAllMulti(\'' + type + '\')" class="hover:text-rose-800 text-rose-600 uppercase px-2 py-1 rounded hover:bg-rose-100 transition-colors"><i class="fas fa-times mr-1"></i>Clear</button>';
+    optionsContainer.appendChild(controlsDiv);
+
+    // Add "All" option for backwards compatibility
+    const allOption = document.createElement('label');
+    allOption.className = 'multi-select-option';
+    allOption.innerHTML = '<input type="checkbox" value="All" checked onchange="handleMultiSelectChange(\'' + type + '\', this)"> <span class="font-bold"> ' + allLabel + '</span>';
+    optionsContainer.appendChild(allOption);
+    
+    // Add individual options
+    items.filter((v, i, a) => a.indexOf(v) === i && v.length > 0)
+         .sort()
+         .forEach(item => {
+      const opt = document.createElement('div');
+      opt.className = 'multi-select-option flex items-center justify-between group'; // Use flex for layout
+      
+      // Label + Checkbox wrapper
+      const labelWrap = document.createElement('label');
+      labelWrap.className = 'flex-1 flex items-center gap-2 cursor-pointer';
+      labelWrap.innerHTML = '<input type="checkbox" value="' + item + '" onchange="handleMultiSelectChange(\'' + type + '\', this)"> ' + item;
+      
+      // Delete Button (Trash Icon)
+      const delBtn = document.createElement('button');
+      delBtn.className = 'text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity';
+      delBtn.innerHTML = '<i class="fas fa-trash-alt text-[10px]"></i>';
+      delBtn.title = "Delete this option from records";
+      delBtn.onclick = (e) => {
+          e.preventDefault(); 
+          deleteOption(type, item);
+      };
+
+      opt.appendChild(labelWrap);
+      opt.appendChild(delBtn);
+      optionsContainer.appendChild(opt);
+    });
+    
+    // Add custom input field at the bottom
+    const customDiv = document.createElement('div');
+    customDiv.className = 'multi-select-custom-input';
+    customDiv.innerHTML = '<div class="flex items-center gap-2 p-2 border-t border-gray-100">' +
+        '<input type="text" id="' + type + '-custom-input" placeholder="Add new..." ' +
+               'class="flex-1 text-xs p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-400" ' +
+               'onkeydown="if(event.key===\'Enter\'){event.preventDefault();addCustomFilterOption(\'' + type + '\');}"> ' +
+        '<button type="button" onclick="addCustomFilterOption(\'' + type + '\')" ' +
+                'class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-2 rounded-lg font-bold transition-colors">' +
+          '<i class="fas fa-plus"></i>' +
+        '</button>' +
+      '</div>';
+    optionsContainer.appendChild(customDiv);
+  }
+
+  function deleteOption(type, value) {
+      if(!confirm('Delete option "' + value + '"?\n\nThis will remove "' + value + '" from ALL existing transaction records efficiently.\n\nAre you sure you want to proceed?')) return;
+      
+      showToast("Removing option...", "info");
+      
+      google.script.run
+        .withSuccessHandler((res) => {
+            if(res && res.error) {
+                showToast("Error: " + res.message, "error");
+            } else {
+                showToast('Removed "' + value + '" from ' + res.count + ' records.', 'success');
+                loadSuggestions(); // Reload to refresh lists
+                // close the dropdown
+                const options = document.getElementById(type + '-options');
+                if(options) options.classList.add('hidden');
+            }
+        })
+        .withFailureHandler(err => showToast("Failed: " + err.message, "error"))
+        .deleteOptionMetadata(type, value);
+  }
+
+  function addCustomFilterOption(type) {
+    const input = document.getElementById(type + '-custom-input');
+    const value = input.value.trim();
+    if (!value) return;
+    
+    const optionsContainer = document.getElementById(type + '-options');
+    const customDiv = optionsContainer.querySelector('.multi-select-custom-input');
+    
+    // Check if value already exists
+    const existingCheckbox = optionsContainer.querySelector('input[value="' + value + '"]');
+    if (existingCheckbox) {
+      existingCheckbox.checked = true;
+      handleMultiSelectChange(type, existingCheckbox);
+      input.value = '';
+      return;
+    }
+    
+    // Create new option and insert before the custom input div
+    // Use same structure as main list
+    const opt = document.createElement('div');
+    opt.className = 'multi-select-option flex items-center justify-between group';
+      
+    const labelWrap = document.createElement('label');
+    labelWrap.className = 'flex-1 flex items-center gap-2 cursor-pointer';
+    labelWrap.innerHTML = '<input type="checkbox" value="' + value + '" checked onchange="handleMultiSelectChange(\'' + type + '\', this)"> ' + value;
+    
+    const delBtn = document.createElement('button');
+    delBtn.className = 'text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity';
+    delBtn.innerHTML = '<i class="fas fa-trash-alt text-[10px]"></i>';
+    delBtn.title = "Delete this option from records";
+    delBtn.onclick = (e) => {
+          e.preventDefault(); 
+          deleteOption(type, value);
+    };
+
+    opt.appendChild(labelWrap);
+    opt.appendChild(delBtn);
+
+    optionsContainer.insertBefore(opt, customDiv);
+    
+    // Trigger change
+    const newCheckbox = opt.querySelector('input');
+    handleMultiSelectChange(type, newCheckbox);
+    
+    // Clear input
+    input.value = '';
+  }
+
+  function toggleMultiSelect(type) {
+    const options = document.getElementById(type + '-options');
+    const trigger = options.previousElementSibling;
+    const isHidden = options.classList.contains('hidden');
+    
+    // Close all other dropdowns first
+    document.querySelectorAll('.multi-select-options').forEach(el => {
+      el.classList.add('hidden');
+      el.previousElementSibling.classList.remove('open');
+    });
+    
+    if (isHidden) {
+      options.classList.remove('hidden');
+      trigger.classList.add('open');
+    }
+  }
+
+  function handleMultiSelectChange(type, checkbox) {
+    const optionsContainer = document.getElementById(type + '-options');
+    const allCheckbox = optionsContainer.querySelector('input[value="All"]');
+    const otherCheckboxes = optionsContainer.querySelectorAll('input:not([value="All"])');
+    
+    if (checkbox.value === 'All') {
+      // If "All" is checked, uncheck others
+      if (checkbox.checked) {
+        otherCheckboxes.forEach(cb => cb.checked = false);
+      }
+    } else {
+      // If any specific item is checked, uncheck "All"
+      if (checkbox.checked) {
+        allCheckbox.checked = false;
+      }
+      // If no specific items checked, check "All"
+      const anyChecked = Array.from(otherCheckboxes).some(cb => cb.checked);
+      if (!anyChecked) {
+        allCheckbox.checked = true;
+      }
+    }
+    
+    updateMultiSelectText(type);
+  }
+
+  function selectAllMulti(type) {
+    const optionsContainer = document.getElementById(type + '-options');
+    const allCheckbox = optionsContainer.querySelector('input[value="All"]');
+    const otherCheckboxes = optionsContainer.querySelectorAll('input:not([value="All"])');
+    otherCheckboxes.forEach(cb => cb.checked = true);
+    if(allCheckbox) allCheckbox.checked = false;
+    updateMultiSelectText(type);
+  }
+
+  function clearAllMulti(type) {
+    const optionsContainer = document.getElementById(type + '-options');
+    const allCheckbox = optionsContainer.querySelector('input[value="All"]');
+    const otherCheckboxes = optionsContainer.querySelectorAll('input:not([value="All"])');
+    otherCheckboxes.forEach(cb => cb.checked = false);
+    if(allCheckbox) allCheckbox.checked = true; // Fallback to ALL if cleared
+    updateMultiSelectText(type);
+  }
+
+  function updateMultiSelectText(type) {
+    const optionsContainer = document.getElementById(type + '-options');
+    const textSpan = document.getElementById(type + '-selected-text');
+    const allCheckbox = optionsContainer.querySelector('input[value="All"]');
+    
+    if (allCheckbox && allCheckbox.checked) {
+      const allLabels = { cat: 'All Categories', whom: 'All', exptype: 'All Types', person: 'All' };
+      textSpan.innerText = allLabels[type] || 'All';
+      return;
+    }
+    
+    const checkedLabels = Array.from(optionsContainer.querySelectorAll('input:checked'))
+      .map(cb => cb.value)
+      .filter(v => v !== 'All');
+    
+    if (checkedLabels.length === 0) {
+      textSpan.innerText = 'None selected';
+    } else if (checkedLabels.length <= 2) {
+      textSpan.innerText = checkedLabels.join(', ');
+    } else {
+      textSpan.innerText = checkedLabels.length + ' selected';
+    }
+  }
+
+  function getMultiSelectValues(type) {
+    const optionsContainer = document.getElementById(type + '-options');
+    if (!optionsContainer) return ['All'];
+    
+    const allCheckbox = optionsContainer.querySelector('input[value="All"]');
+    if (allCheckbox && allCheckbox.checked) {
+      return ['All'];
+    }
+    
+    const selected = Array.from(optionsContainer.querySelectorAll('input:checked'))
+      .map(cb => cb.value)
+      .filter(v => v !== 'All');
+    
+    return selected.length > 0 ? selected : ['All'];
+  }
+
+  // Close multi-select dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.multi-select-dropdown')) {
+      document.querySelectorAll('.multi-select-options').forEach(el => {
+        el.classList.add('hidden');
+        el.previousElementSibling.classList.remove('open');
+      });
+    }
+  });
+
+  // --- EDIT FUNCTIONS ---
+  function editRecord(dataStr) {
+    const data = JSON.parse(decodeURIComponent(dataStr));
+    
+    if (data.sheet === 'expense') {
+      switchTab('expense');
+      document.getElementById('exp-rowIndex').value = data.row;
+      document.getElementById('exp-amount').value = data.rawAmt;
+      document.getElementById('exp-whom').value = data.rawWhom;
+      document.getElementById('exp-cat').value = data.rawCat;
+      document.getElementById('exp-mode').value = data.rawMode;
+      document.getElementById('exp-details').value = data.rawDet;
+      
+      // Populate Date
+      if (data.date) {
+         document.getElementById('exp-date').value = new Date(data.date).toISOString().split('T')[0];
+      }
+
+      document.getElementById('exp-remarks').value = data.rawRem || '';
+      document.getElementById('exp-existingReceipt').value = data.receipt || '';
+      // For editing, show different label if receipt exists
+      document.getElementById('exp-file-label').innerText = data.receipt ? "Receipt Attached (Upload new to replace)" : "None";
+      // Hide remove button initially in edit mode as we can't remove server file yet, only new uploads
+      document.getElementById('exp-file-remove').classList.add('hidden');
+      
+      document.getElementById('btn-exp-submit').innerText = "Update Expense";
+      document.getElementById('btn-exp-submit').classList.replace('bg-slate-900', 'bg-amber-600');
+      document.getElementById('exp-edit-banner').classList.remove('hidden');
+      document.getElementById('view-expense').scrollIntoView({ behavior: 'smooth' });
+      updateFloatingLabelStates(); // Update label states for loaded values
+    } else {
+      switchTab('lending');
+      document.getElementById('lend-rowIndex').value = data.row;
+      document.getElementById('lend-person').value = data.rawName;
+      document.getElementById('lend-amount').value = data.rawAmt;
+      document.getElementById('lend-details').value = data.rawRem || '';
+      
+      // Populate Date
+      if (data.date) {
+         document.getElementById('lend-date').value = new Date(data.date).toISOString().split('T')[0];
+      }
+
+      document.getElementById('lend-existingReceipt').value = data.receipt || '';
+      document.getElementById('lend-file-label').innerText = data.receipt ? "Proof Attached (Upload new to replace)" : "None";
+      document.getElementById('lend-file-remove').classList.add('hidden');
+      
+      const type = (data.rawType || "").toLowerCase();
+      if (type.includes('lend')) { setLendMode('Lend'); setCompactMode('OUT'); }
+      else if (type.includes('borrow')) { setLendMode('Borrow'); setCompactMode('IN'); }
+      else if (type.includes('they return')) { setLendMode('Lend'); setCompactMode('IN'); }
+      else if (type.includes('i return')) { setLendMode('Borrow'); setCompactMode('OUT'); }
+      else if (type.includes('forgive')) { setLendMode('Lend'); setCompactMode('FORGIVE'); }
+
+      document.getElementById('btn-lend-submit').innerText = "Update Transaction";
+      document.getElementById('btn-lend-submit').classList.replace('bg-slate-800', 'bg-amber-600');
+      document.getElementById('lend-edit-banner').classList.remove('hidden');
+      document.getElementById('view-lending').scrollIntoView({ behavior: 'smooth' });
+      updateFloatingLabelStates(); // Update label states for loaded values
+    }
+  }
+
+  function cancelEdit(type) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (type === 'expense') {
+      document.getElementById('form-expense').reset();
+      document.getElementById('exp-date').value = todayStr; // Reset date to today
+      document.getElementById('exp-rowIndex').value = "";
+      document.getElementById('exp-existingReceipt').value = "";
+      
+      document.getElementById('exp-file-label').innerText = "None";
+      document.getElementById('exp-file-remove').classList.add('hidden');
+      
+      document.getElementById('btn-exp-submit').innerText = "Save Expense";
+      document.getElementById('btn-exp-submit').classList.replace('bg-amber-600', 'bg-slate-900');
+      document.getElementById('exp-edit-banner').classList.add('hidden');
+      updateFloatingLabelStates(); // Reset label states
+    } else {
+      document.getElementById('form-lending').reset();
+      document.getElementById('lend-date').value = todayStr; // Reset date to today
+      document.getElementById('lend-rowIndex').value = "";
+      document.getElementById('lend-existingReceipt').value = "";
+
+      document.getElementById('lend-file-label').innerText = "None";
+      document.getElementById('lend-file-remove').classList.add('hidden');
+
+      setLendMode('Lend'); setCompactMode('OUT'); 
+      document.getElementById('lend-edit-banner').classList.add('hidden');
+      updateFloatingLabelStates(); // Reset label states
+    }
+  }
+
+  // --- SUBMIT HANDLER ---
+  async function handleFormSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    
+    if (!btn.hasAttribute('data-original-html')) {
+        btn.setAttribute('data-original-html', btn.innerHTML);
+    }
+    const originalContent = btn.getAttribute('data-original-html');
+    
+    const isEdit = form.querySelector('input[name="rowIndex"]').value !== "";
+    const type = form.querySelector('input[name="formType"]').value;
+    const fileInputId = type === 'expense' ? 'exp-file' : 'lend-file';
+
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
+    btn.disabled = true;
+    
+    // SAFETY TIMEOUT INCREASED TO 60 SECONDS
+    const safetyTimer = setTimeout(() => {
+        if(btn.disabled) {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            showToast("Server timeout. Operation may still complete.", 'error');
+        }
+    }, 60000); 
+
+    try {
+      const formData = {};
+      new FormData(form).forEach((value, key) => formData[key] = value);
+      
+      const fileObj = await readInputFile(fileInputId);
+      if (fileObj) {
+        formData.fileData = fileObj.fileData;
+        formData.fileName = fileObj.fileName;
+        formData.mimeType = fileObj.mimeType;
+      }
+      
+      const runner = google.script.run
+        .withSuccessHandler((res) => {
+          clearTimeout(safetyTimer);
+          btn.innerHTML = originalContent;
+          btn.disabled = false;
+          
+          if (res && res.success) {
+            showToast(isEdit ? 'Updated Successfully!' : 'Entry Saved!', 'success');
+            cancelEdit(formData.formType); 
+            loadDashboard(); 
+            loadSuggestions();
+            if (!document.getElementById('view-reports').classList.contains('hidden')) generateReport();
+          } else {
+            showToast('Error: ' + (res ? res.message : 'Unknown error'), 'error');
+          }
+        })
+        .withFailureHandler(err => {
+           clearTimeout(safetyTimer);
+           btn.innerHTML = originalContent;
+           btn.disabled = false;
+           showToast("Connection Error: " + err.message, 'error');
+        });
+
+      if (isEdit) {
+        runner.updateTransaction(formData);
+      } else {
+        runner.saveData(formData);
+      }
+
+    } catch (err) {
+      clearTimeout(safetyTimer);
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
+      showToast("Client Error: " + err.message, 'error');
+    }
+  }
+
+  function deleteRecord(sheetType, rowIndex) {
+    if(confirm('Delete this entry?')) {
+      document.getElementById('loader').classList.remove('hidden');
+      google.script.run
+        .withSuccessHandler(res => {
+           document.getElementById('loader').classList.add('hidden');
+           if(res.success) { 
+             showToast('Deleted Successfully', 'success'); 
+             loadDashboard(); 
+             if(!document.getElementById('view-reports').classList.contains('hidden')) generateReport(); 
+           }
+           else showToast('Failed: ' + res.message, 'error');
+        })
+        .withFailureHandler(err => {
+           document.getElementById('loader').classList.add('hidden');
+           showToast('Connection Error: ' + err.message, 'error');
+        })
+        .deleteTransaction(sheetType, rowIndex);
+    }
+  }
+
+  function toggleAllTime() {
+    const isAll = document.getElementById('check-all-time').checked;
+    const inputs = document.getElementById('date-inputs-container');
+    if(isAll) inputs.classList.add('opacity-50', 'pointer-events-none');
+    else inputs.classList.remove('opacity-50', 'pointer-events-none');
+  }
+  
+  function setLendMode(mode) {
+    currentAppMode = mode; 
+    const btnLend = document.getElementById('btn-mode-lend');
+    const btnBorrow = document.getElementById('btn-mode-borrow');
+    const subOut = document.getElementById('sub-compact-out');
+    const subIn = document.getElementById('sub-compact-in');
+    const forgiveContainer = document.getElementById('forgive-container');
+    if (mode === 'Lend') {
+      btnLend.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white shadow-sm text-emerald-600 border border-emerald-100";
+      btnBorrow.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-gray-500 hover:bg-white hover:shadow-sm border border-transparent";
+      subOut.innerText = "I Gave"; subIn.innerText = "They Returned";
+      forgiveContainer.classList.remove('hidden'); 
+    } else {
+      btnBorrow.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all bg-white shadow-sm text-rose-600 border border-rose-100";
+      btnLend.className = "flex-1 py-2 text-xs font-bold rounded-lg transition-all text-gray-500 hover:bg-white hover:shadow-sm border border-transparent";
+      subOut.innerText = "I Repaid"; subIn.innerText = "I Took";
+      forgiveContainer.classList.add('hidden'); 
+    }
+    setCompactMode(document.getElementById('input-txnDirection').value);
+  }
+
+  function setCompactMode(dir) {
+    if (dir !== 'FORGIVE') document.getElementById('input-txnDirection').value = dir;
+    const btnOut = document.getElementById('btn-compact-out');
+    const btnIn = document.getElementById('btn-compact-in');
+    const btnForgive = document.getElementById('btn-compact-forgive');
+    const iconOut = document.getElementById('icon-compact-out');
+    const iconIn = document.getElementById('icon-compact-in');
+    
+    btnOut.className = "flex-1 py-1.5 px-2.5 rounded-lg border-2 bg-white transition-all flex items-center justify-center gap-1.5 group active:scale-95 shadow-sm";
+    btnIn.className = "flex-1 py-1.5 px-2.5 rounded-lg border-2 bg-white transition-all flex items-center justify-center gap-1.5 group active:scale-95 shadow-sm";
+    iconOut.className = "h-5 w-5 rounded-full bg-gray-50 flex items-center justify-center transition-colors text-gray-400";
+    iconIn.className = "h-5 w-5 rounded-full bg-gray-50 flex items-center justify-center transition-colors text-gray-400";
+    
+    if (btnForgive) { btnForgive.classList.remove('border-slate-400', 'text-slate-800', 'bg-slate-100'); btnForgive.classList.add('border-gray-200', 'text-slate-500', 'bg-gray-50'); }
+    document.getElementById('input-isForgive').value = 'false';
+
+    if (dir === 'OUT') {
+      btnOut.classList.add('border-rose-100', 'shadow-lg', 'shadow-rose-50', 'text-rose-600'); iconOut.classList.add('bg-rose-100', 'text-rose-600'); btnIn.classList.add('border-slate-100', 'text-slate-400');
+    } else if (dir === 'IN') {
+      btnIn.classList.add('border-emerald-100', 'shadow-lg', 'shadow-emerald-50', 'text-emerald-600'); iconIn.classList.add('bg-emerald-100', 'text-emerald-600'); btnOut.classList.add('border-slate-100', 'text-slate-400');
+    } else if (dir === 'FORGIVE') {
+      btnForgive.classList.add('border-slate-400', 'text-slate-800', 'bg-slate-100'); btnForgive.classList.remove('border-gray-200', 'text-slate-500', 'bg-gray-50');
+      btnOut.classList.add('border-slate-100', 'text-slate-400'); btnIn.classList.add('border-slate-100', 'text-slate-400');
+      document.getElementById('input-isForgive').value = 'true';
+    }
+    updateCompactUI(dir);
+  }
+
+  function updateCompactUI(activeDir) {
+    const isEdit = document.getElementById('lend-rowIndex').value !== "";
+    const dir = activeDir || document.getElementById('input-txnDirection').value;
+    const btnSubmit = document.getElementById('btn-lend-submit');
+    const inputLendType = document.getElementById('input-lendType');
+    
+    let btnText = "";
+    let btnClass = "";
+
+    if (dir === 'FORGIVE') { inputLendType.value = "Return"; btnText = "Confirm Forgive Debt"; btnClass = "w-full bg-slate-600 text-white py-4 rounded-xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all"; }
+    else if (currentAppMode === 'Lend') {
+        if (dir === 'OUT') { inputLendType.value = "Lend"; btnText = "Save Loan (I Gave)"; btnClass = "w-full bg-slate-800 text-white py-3 rounded-lg font-bold text-sm shadow-md shadow-slate-200 active:scale-[0.98] transition-all"; }
+        else { inputLendType.value = "Return"; btnText = "Save Return (They Paid)"; btnClass = "w-full bg-emerald-600 text-white py-3 rounded-lg font-bold text-sm shadow-md shadow-emerald-200 active:scale-[0.98] transition-all"; }
+    } else {
+        if (dir === 'IN') { inputLendType.value = "Borrow"; btnText = "Save Borrowing (I Took)"; btnClass = "w-full bg-slate-800 text-white py-3 rounded-lg font-bold text-sm shadow-md shadow-slate-200 active:scale-[0.98] transition-all"; }
+        else { inputLendType.value = "Return"; btnText = "Save Repayment (I Paid)"; btnClass = "w-full bg-rose-600 text-white py-3 rounded-lg font-bold text-sm shadow-md shadow-rose-200 active:scale-[0.98] transition-all"; }
+    }
+    
+    if(isEdit) {
+       btnSubmit.innerText = "Update Transaction";
+       btnSubmit.className = btnClass.replace(/bg-\w+-\d+/, 'bg-amber-600');
+    } else {
+       btnSubmit.innerText = btnText;
+       btnSubmit.className = btnClass;
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(el => { 
+        // Thoroughly reset button states, including hard-coded gradients from HTML
+        el.classList.remove('active', 'text-white', 'text-slate-800', 'shadow-md', 'shadow-lg', 'bg-gradient-to-r', 'from-slate-800', 'to-slate-900', 'bg-white'); 
+        el.classList.add('text-gray-500', 'bg-transparent'); 
+        el.style.backgroundColor = '';
+        el.style.borderColor = 'transparent';
+    });
+    
+    // Set active state using custom style and standard classes
+    const activeBtn = document.getElementById('tab-' + tab);
+    if(activeBtn) {
+      activeBtn.classList.remove('text-gray-500', 'bg-transparent');
+      activeBtn.classList.add('active', 'text-white', 'shadow-lg');
+      activeBtn.style.backgroundColor = 'var(--accent-color)';
+      activeBtn.style.borderColor = 'var(--accent-color)';
+    }
+    
+    document.getElementById('view-' + tab).classList.remove('hidden');
+    
+    // Set Default Date if empty
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (tab === 'expense') {
+        const d = document.getElementById('exp-date');
+        if(!d.value) d.value = todayStr;
+    } else if (tab === 'lending') {
+        const d = document.getElementById('lend-date');
+        if(!d.value) d.value = todayStr;
+    }
+
+    if (tab === 'reports') setReportType(currentReportType);
+    updateHeaderStats(tab);
+  }
+
+  function updateHeaderStats(activeTab) {
+    if (!globalData) return;
+    const l1 = document.getElementById('label-1'); const v1 = document.getElementById('stat-1'); const b1 = v1.parentElement;
+    const l2 = document.getElementById('label-2'); const v2 = document.getElementById('stat-2'); const b2 = v2.parentElement;
+    const l3 = document.getElementById('label-3'); const v3 = document.getElementById('stat-3'); const b3 = v3.parentElement;
+    
+    // Reset generic click handlers
+    b1.setAttribute('onclick', "handleDashboardClick('stat1')");
+    b2.setAttribute('onclick', "handleDashboardClick('stat2')");
+    b3.setAttribute('onclick', "handleDashboardClick('stat3')");
+
+    l1.className = l2.className = l3.className = "text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1";
+    
+    if (activeTab === 'expense') {
+      l1.innerText = "TODAY"; l1.classList.add('text-blue-300'); v1.innerText = appSettings.currency + globalData.expense.today.toLocaleString();
+      l2.innerText = "THIS MONTH"; l2.classList.add('text-blue-400'); v2.innerText = appSettings.currency + globalData.expense.month.toLocaleString();
+      l3.innerText = "TOTAL SPENT"; l3.classList.add('text-blue-500'); v3.innerText = appSettings.currency + globalData.expense.total.toLocaleString();
+    } else if (activeTab === 'lending') {
+      l1.innerText = "RECEIVABLE"; l1.classList.add('text-emerald-400'); v1.innerText = appSettings.currency + globalData.lending.receivable.toLocaleString();
+      l2.innerText = "PAYABLE"; l2.classList.add('text-rose-400'); v2.innerText = appSettings.currency + globalData.lending.payable.toLocaleString();
+      l3.innerText = "NET POSITION"; let net = globalData.lending.net; l3.classList.add(net >= 0 ? 'text-emerald-400' : 'text-rose-400'); v3.innerText = appSettings.currency + Math.abs(net).toLocaleString();
+    } else {
+      l1.innerText = "TOTAL SPENT"; v1.innerText = appSettings.currency + globalData.expense.total.toLocaleString();
+      l2.innerText = "NET WORTH"; v2.innerText = appSettings.currency + globalData.lending.net.toLocaleString();
+      l3.innerText = "STATUS"; v3.innerText = "Active";
+    }
+  }
+
+  function loadDashboard() {
+    google.script.run.withSuccessHandler(data => {
+      if(data.error) return;
+      globalData = data;
+      globalSearchIndex = data.searchIndex || [];
+      let activeTab = 'expense';
+      if (!document.getElementById('view-lending').classList.contains('hidden')) activeTab = 'lending';
+      if (!document.getElementById('view-reports').classList.contains('hidden')) activeTab = 'reports';
+      updateHeaderStats(activeTab);
+      
+      const renderRow = (row) => {
+        let dateStr = new Date(row.date).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+        let colorClass = 'text-slate-800';
+        let prefix = '-';
+        if(row.isLend) {
+           let isMoneyIn = row.cat.includes('Borrowed') || row.cat.includes('Received') || row.cat.includes('Return (In)');
+           colorClass = isMoneyIn ? 'text-emerald-600' : 'text-rose-600';
+           prefix = isMoneyIn ? '+' : '-';
+        }
+        
+        // Attachment thumbnail preview
+        let attachmentThumb = '';
+        if (row.receipt) {
+           const isImage = row.receipt.match(/\.(jpg|jpeg|png|gif|webp)/i) || row.receipt.includes('image') || !row.receipt.includes('pdf');
+           if (isImage) {
+              attachmentThumb = '<div class="attachment-thumb" onclick="event.stopPropagation(); openTransactionModal(\'' + encodeURIComponent(JSON.stringify(row)).replace(/'/g, "%27") + '\');"><img src="' + row.receipt + '" alt="Receipt"></div>';
+           } else {
+              attachmentThumb = '<div class="attachment-thumb" onclick="event.stopPropagation(); window.open(\'' + row.receipt + '\', \'_blank\');"><i class="fas fa-file-pdf pdf-icon"></i></div>';
+           }
+        }
+
+        const dataStr = encodeURIComponent(JSON.stringify(row)).replace(/'/g, "%27");
+        var defaultIcon = '<div class="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400"><i class="fas ' + (row.isLend ? 'fa-hand-holding-usd' : 'fa-receipt') + ' text-sm"></i></div>';
+        return '<li class="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm relative group cursor-pointer hover:bg-gray-50 transition-colors" onclick="openTransactionModal(\'' + dataStr + '\')">' +
+             '<div class="flex items-center gap-3">' +
+               (attachmentThumb || defaultIcon) +
+               '<div><div class="font-bold text-slate-700 text-sm">' + row.cat + ' <span class="text-slate-400 font-normal">(' + row.whom + ')</span></div><div class="text-[10px] text-gray-400">' + dateStr + ' &bull; ' + row.detail + '</div></div>' +
+             '</div>' +
+             '<div class="flex flex-col items-end gap-1">' +
+                '<div class="font-bold ' + colorClass + '">' + prefix + appSettings.currency + row.amt.toLocaleString() + '</div>' +
+                '<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">' +
+                   '<button onclick="event.stopPropagation(); editRecord(\'' + dataStr + '\')" class="text-gray-300 hover:text-amber-500 p-1" title="Edit"><i class="fas fa-edit text-xs"></i></button>' +
+                   '<button onclick="event.stopPropagation(); deleteRecord(\'' + row.sheet + '\', ' + row.row + ')" class="text-gray-300 hover:text-red-500 p-1" title="Delete"><i class="fas fa-trash-alt text-xs"></i></button>' +
+                '</div>' +
+             '</div>' +
+          '</li>';
+      };
+
+      const expList = document.getElementById('recent-list-expense');
+      if (expList) {
+        expList.innerHTML = '';
+        if(data.recentExpenses.length === 0) expList.innerHTML = '<li class="text-center text-xs text-gray-300">No recent expenses</li>';
+        data.recentExpenses.forEach(row => expList.innerHTML += renderRow(row));
+      }
+      const lendList = document.getElementById('recent-list-lending');
+      if (lendList) {
+        lendList.innerHTML = '';
+        if(data.recentLending.length === 0) lendList.innerHTML = '<li class="text-center text-xs text-gray-300">No recent transactions</li>';
+        data.recentLending.forEach(row => lendList.innerHTML += renderRow(row));
+      }
+    }).getDashboardData();
+  }
+
+  function setReportType(type) {
+    currentReportType = type;
+    const btnExp = document.getElementById('btn-rep-exp'); 
+    const btnLend = document.getElementById('btn-rep-lend');
+    const expFilters = ['filter-exp-cat', 'filter-exp-whom']; 
+    const lendFilters = ['filter-lend-type', 'filter-lend-person'];
+
+    // Standard Reset
+    [btnExp, btnLend].forEach(btn => {
+       if(!btn) return;
+       btn.classList.remove('bg-slate-900', 'text-white', 'border-slate-900', 'shadow-sm', 'bg-white', 'text-slate-900');
+       btn.classList.add('bg-gray-50', 'text-gray-500', 'border-gray-100');
+       btn.style.backgroundColor = '';
+       btn.style.borderColor = '';
+    });
+
+    const activeBtn = (type === 'expense' ? btnExp : btnLend);
+    if(activeBtn) {
+        activeBtn.classList.remove('bg-gray-50', 'text-gray-500', 'border-gray-100');
+        activeBtn.classList.add('text-white', 'active');
+        activeBtn.style.backgroundColor = 'var(--accent-color)';
+        activeBtn.style.borderColor = 'var(--accent-color)';
+    }
+
+    if (type === 'expense') {
+      expFilters.forEach(id => document.getElementById(id).classList.remove('hidden'));
+      lendFilters.forEach(id => document.getElementById(id).classList.add('hidden'));
+    } else {
+      lendFilters.forEach(id => document.getElementById(id).classList.remove('hidden'));
+      expFilters.forEach(id => document.getElementById(id).classList.add('hidden'));
+    }
+  }
+
+  function generateReport() {
+    const start = document.getElementById('report-start').value;
+    const end = document.getElementById('report-end').value;
+    const isAll = document.getElementById('check-all-time').checked;
+    let filters = {};
+    if (currentReportType === 'expense') {
+        filters.category = getMultiSelectValues('cat');
+        filters.forWhom = getMultiSelectValues('whom');
+    } else {
+        filters.expType = getMultiSelectValues('exptype');
+        filters.person = getMultiSelectValues('person');
+    }
+    const startDate = isAll ? 'ALL' : start;
+    document.getElementById('loader').classList.remove('hidden');
+    document.getElementById('report-output').classList.add('hidden');
+    google.script.run
+       .withSuccessHandler(renderReport)
+       .withFailureHandler(err => {
+          document.getElementById('loader').classList.add('hidden');
+          showToast("Sync Error: " + err.message, "error");
+       })
+       .getAnalysisReport(currentReportType, startDate, end, filters);
+  }
+
+  function renderReport(data) {
+    currentReportData = data; // Store for CSV export
+    document.getElementById('loader').classList.add('hidden');
+    document.getElementById('report-output').classList.remove('hidden');
+    const isAll = document.getElementById('check-all-time').checked;
+    if (isAll) document.getElementById('rep-period').innerText = 'Period: All Time (Including Missing Dates)';
+    else {
+        const startStr = new Date(document.getElementById('report-start').value).toLocaleDateString();
+        const endStr = new Date(document.getElementById('report-end').value).toLocaleDateString();
+        document.getElementById('rep-period').innerText = 'Period: ' + startStr + ' to ' + endStr;
+    }
+    
+    const renderHistoryRows = (list) => {
+        let html = '';
+        list.forEach(item => {
+            let d = item.date === "N/A" ? "N/A" : new Date(item.date).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+            const dataStr = encodeURIComponent(JSON.stringify(item)).replace(/'/g, "%27");
+            
+            let colorClass = 'text-slate-700';
+            let prefix = '';
+            const typeLower = (item.type || "").toLowerCase();
+            if (item.sheet === 'expense') { colorClass = 'text-rose-600'; prefix = '-'; }
+            else if (typeLower.includes('lend') || typeLower.includes('i return')) { colorClass = 'text-rose-600'; prefix = '-'; }
+            else { colorClass = 'text-emerald-600'; prefix = '+'; }
+
+            // Dynamic labeling: Priority given to Item Name, then Category/Type
+            let mainLabel = item.item || item.type || '-';
+            let subLabel = '';
+            if (item.sheet === 'expense') {
+                subLabel = (item.rawMode ? '<span class="text-indigo-500 font-bold">' + item.rawMode + '</span> ' : '') + 
+                           (item.rawRem ? '<span class="italic font-medium">• ' + item.rawRem + '</span>' : '');
+            } else {
+                subLabel = (item.whom ? '<span class="font-bold">' + item.whom + '</span> ' : '') + 
+                           (item.rawRem ? '<span class="italic">• ' + item.rawRem + '</span>' : '');
+            }
+
+            html += '<div class="flex items-center gap-2 py-2 border-b border-gray-50 group cursor-pointer" onclick="openTransactionModal(\'' + dataStr + '\')">' +
+                 '<div class="w-12 text-[10px] font-bold text-gray-400 shrink-0 uppercase">' + d + '</div>' +
+                 '<div class="flex-1 overflow-hidden">' +
+                    '<div class="text-[11px] font-bold text-slate-700 leading-tight truncate">' + mainLabel + '</div>' +
+                    (subLabel ? '<div class="text-[9px] text-gray-400 truncate mt-0.5">' + subLabel + '</div>' : '') +
+                 '</div>' +
+                 '<div class="text-xs font-bold ' + colorClass + ' shrink-0 ml-1">' + prefix + appSettings.currency + item.amount.toLocaleString() + '</div>' +
+               '</div>';
+        });
+        return html;
+    };
+
+    const renderTableRows = (list, forLending = false) => {
+        let html = '';
+        list.forEach(item => {
+            let d = item.date === "N/A" ? "N/A" : new Date(item.date).toLocaleDateString();
+            const dataStr = encodeURIComponent(JSON.stringify(item)).replace(/'/g, "%27");
+            
+            // Attachment Icon/Link Logic
+            let attachHtml = '';
+            if (item.receipt) {
+               const isImage = item.receipt.match(/\.(jpg|jpeg|png|gif|webp)/i) || item.receipt.includes('image') || !item.receipt.includes('pdf');
+               if (isImage) {
+                 // Tiny image icon that opens modal
+                 attachHtml = '<i class="fas fa-image text-blue-400 ml-1 text-xs hover:scale-125 transition-transform" title="View Image"></i>';
+               } else {
+                 attachHtml = '<i class="fas fa-file-pdf text-red-500 ml-1 text-xs hover:scale-125 transition-transform" title="View PDF"></i>';
+               }
+            }
+            
+            if (forLending) {
+               // Lending table has 3 columns: Date, Person/Action, Amount
+               html += '<tr class="group cursor-pointer hover:bg-gray-50 transition-colors" onclick="openTransactionModal(\'' + dataStr + '\')">' +
+                 '<td class="py-2 px-2 text-gray-500 whitespace-nowrap align-middle border-b border-gray-50">' + d + '</td>' +
+                 '<td class="py-2 px-2 align-middle border-b border-gray-50">' +
+                    '<div class="font-medium text-slate-700 leading-tight">' + (item.person || '-') + '</div>' +
+                    '<div class="flex items-center gap-1 text-[10px] text-gray-400">' +
+                        '<span>' + (item.type || item.whom || '-') + '</span>' +
+                        (item.rawRem ? '<span class="text-gray-300">•</span> <span class="italic truncate max-w-[100px]">' + item.rawRem + '</span>' : '') +
+                        attachHtml +
+                    '</div>' +
+                 '</td>' +
+                 '<td class="py-2 px-2 text-right align-middle border-b border-gray-50">' +
+                    '<div class="flex flex-col items-end gap-0.5">' +
+                       '<div class="font-bold text-slate-700">₹' + item.amount.toLocaleString() + '</div>' +
+                       '<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">' +
+                          '<button onclick="event.stopPropagation(); editRecord(\'' + dataStr + '\')" class="text-gray-300 hover:text-amber-500 p-1" title="Edit"><i class="fas fa-edit text-xs"></i></button>' +
+                          '<button onclick="event.stopPropagation(); deleteRecord(\'' + item.sheet + '\', ' + item.row + ')" class="text-gray-300 hover:text-red-500 p-1" title="Delete"><i class="fas fa-trash-alt text-xs"></i></button>' +
+                       '</div>' +
+                    '</div>' +
+                 '</td>' +
+               '</tr>';
+            } else {
+               // Expense table has 3 columns: Date, Item, Amount
+               html += '<tr class="group cursor-pointer hover:bg-gray-50 transition-colors" onclick="openTransactionModal(\'' + dataStr + '\')">' +
+                 '<td class="py-2 px-2 text-gray-500 whitespace-nowrap align-middle border-b border-gray-50">' + d + '</td>' +
+                 '<td class="py-2 px-2 align-middle border-b border-gray-50">' +
+                    '<div class="font-medium text-slate-700 leading-tight">' + (item.item || item.person || '-') + '</div>' +
+                    '<div class="flex items-center gap-1 text-[10px] text-gray-400">' +
+                        '<span class="font-semibold text-slate-500">' + item.cat + '</span> ' +
+                        '<span class="text-gray-300">•</span> ' +
+                        '<span>' + item.whom + '</span> ' +
+                        attachHtml +
+                    '</div>' +
+                    (item.rawRem ? '<div class="text-[9px] text-gray-400 truncate max-w-[200px] mt-0.5"><em>' + item.rawRem + '</em></div>' : '') +
+                 '</td>' +
+                 '<td class="py-2 px-2 text-right align-middle border-b border-gray-50">' +
+                    '<div class="flex flex-col items-end gap-0.5">' +
+                       '<div class="font-bold text-slate-700">₹' + item.amount.toLocaleString() + '</div>' +
+                       '<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">' +
+                          '<button onclick="event.stopPropagation(); editRecord(\'' + dataStr + '\')" class="text-gray-300 hover:text-amber-500 p-1" title="Edit"><i class="fas fa-edit text-xs"></i></button>' +
+                          '<button onclick="event.stopPropagation(); deleteRecord(\'' + item.sheet + '\', ' + item.row + ')" class="text-gray-300 hover:text-red-500 p-1" title="Delete"><i class="fas fa-trash-alt text-xs"></i></button>' +
+                       '</div>' +
+                    '</div>' +
+                 '</td>' +
+               '</tr>';
+            }
+        });
+        return html;
+    };
+
+    if (currentReportType === 'expense') {
+      document.getElementById('report-content-expense').classList.remove('hidden');
+      document.getElementById('report-content-lending').classList.add('hidden');
+      document.getElementById('rep-exp-total').innerText = appSettings.currency + data.total.toLocaleString();
+      
+      // Build bar chart for "Analysis by Person" with expand/collapse
+      const whomDiv = document.getElementById('rep-exp-whom'); 
+      const whomEntries = Object.entries(data.byWhom).sort((a,b)=>b[1]-a[1]);
+      const maxWhomAmt = whomEntries.length > 0 ? whomEntries[0][1] : 1;
+      let whomHtml = '';
+      whomEntries.forEach(([name, amt], idx) => {
+         const pct = Math.round((amt / maxWhomAmt) * 100);
+         const toggleId = 'exp-whom-' + idx;
+         const historyHtml = (data.historyByWhom && data.historyByWhom[name]) ? renderHistoryRows(data.historyByWhom[name]) : '';
+         whomHtml += '<div class="mb-3">' +
+           '<div class="bar-chart-item cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors group" data-toggle="' + toggleId + '" onclick="toggleExpand(\'' + toggleId + '\')">' +
+             '<div class="bar-chart-label" title="' + name + '">' + name + '</div>' +
+             '<div class="bar-chart-bar-wrapper">' +
+               '<div class="bar-chart-bar expense" style="width: ' + pct + '%"></div>' +
+             '</div>' +
+             '<div class="bar-chart-value flex items-center gap-1 font-bold">' + appSettings.currency + amt.toLocaleString() + ' <i class="fas fa-plus text-[8px] text-slate-300 group-hover:text-indigo-400 transition-colors"></i></div>' +
+           '</div>' +
+           '<div id="' + toggleId + '" class="collapsible-content ml-1 mt-1 hidden border-l-2 border-slate-200 pl-4 bg-gray-50/50 rounded-r-lg py-1">' +
+              historyHtml +
+           '</div>' +
+         '</div>';
+      });
+      whomDiv.innerHTML = whomHtml || '<div class="text-gray-400 text-xs text-center py-2">No data</div>';
+      
+      // Build bar chart for "Analysis by Category" with expand/collapse
+      const catDiv = document.getElementById('rep-exp-cats'); 
+      const catEntries = Object.entries(data.byCategory).sort((a,b)=>b[1]-a[1]);
+      const maxCatAmt = catEntries.length > 0 ? catEntries[0][1] : 1;
+      let catHtml = '';
+      catEntries.forEach(([cat, amt], idx) => {
+          const pct = data.total ? Math.round((amt/data.total)*100) : 0;
+          const barPct = Math.round((amt / maxCatAmt) * 100);
+          const toggleId = 'exp-cat-' + idx;
+          const historyHtml = (data.historyByCategory && data.historyByCategory[cat]) ? renderHistoryRows(data.historyByCategory[cat]) : '';
+          catHtml += '<div class="mb-3">' +
+            '<div class="bar-chart-item cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors group" data-toggle="' + toggleId + '" onclick="toggleExpand(\'' + toggleId + '\')">' +
+              '<div class="bar-chart-label" title="' + cat + '">' + cat + '</div>' +
+              '<div class="bar-chart-bar-wrapper">' +
+                '<div class="bar-chart-bar expense" style="width: ' + barPct + '%"></div>' +
+              '</div>' +
+              '<div class="bar-chart-value flex items-center gap-1 font-bold">' + appSettings.currency + amt.toLocaleString() + ' <span class="text-gray-400 text-[10px]">(' + pct + '%)</span> <i class="fas fa-plus text-[8px] text-slate-300 group-hover:text-indigo-400 transition-colors"></i></div>' +
+            '</div>' +
+            '<div id="' + toggleId + '" class="collapsible-content ml-1 mt-1 hidden border-l-2 border-slate-200 pl-4 bg-gray-50/50 rounded-r-lg py-1">' +
+               historyHtml +
+            '</div>' +
+          '</div>';
+      });
+      catDiv.innerHTML = catHtml || '<div class="text-gray-400 text-xs text-center py-2">No data</div>';
+      
+      document.getElementById('rep-exp-items').innerHTML = renderTableRows(data.topItems);
+    } else {
+      document.getElementById('report-content-expense').classList.add('hidden');
+      document.getElementById('report-content-lending').classList.remove('hidden');
+      document.getElementById('rep-lend-receivable').innerText = appSettings.currency + data.overallReceivable.toLocaleString();
+      document.getElementById('rep-lend-payable').innerText = appSettings.currency + data.overallPayable.toLocaleString();
+      document.getElementById('rep-lend-total-lent').innerText = appSettings.currency + data.totalLent.toLocaleString();
+      document.getElementById('rep-lend-total-borrowed').innerText = appSettings.currency + data.totalBorrowed.toLocaleString();
+      const peopleDiv = document.getElementById('rep-lend-people-container'); peopleDiv.innerHTML = '';
+      const receivables = []; const payables = [];
+      Object.entries(data.people).forEach(([name, stats]) => {
+        if(Math.abs(stats.net) < 1 && stats.totalLent < 1 && stats.totalBorrowed < 1) return;
+        if(stats.net >= 0) receivables.push({name, ...stats});
+        else payables.push({name, ...stats});
+      });
+      if (receivables.length > 0) {
+        let html = '<div class="mb-4"><h5 class="text-xs font-bold text-emerald-600 uppercase mb-2 border-b border-emerald-100 pb-1">People Who Owe You (Receivables)</h5><div class="bg-white rounded-lg border border-emerald-50 overflow-hidden">';
+        receivables.sort((a,b) => b.net - a.net).forEach((p, idx) => { 
+          const toggleId = 'recv-' + idx;
+          // Use FULL person history from the new personHistory map in backend data
+          const personTxns = (data.personHistory && data.personHistory[p.name]) || [];
+          const historyHtml = personTxns.length ? renderHistoryRows(personTxns) : '<div class="text-[10px] text-gray-400 italic p-2">No detailed history found.</div>';
+          
+          html += '<div class="p-3 border-b border-gray-50 last:border-0">' +
+            '<div class="flex justify-between items-center mb-1 cursor-pointer expand-toggle group" data-toggle="' + toggleId + '" onclick="toggleExpand(\'' + toggleId + '\')">' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="expand-toggle-icon group-hover:bg-gray-100 rounded p-0.5 transition-colors"><i class="fas fa-plus text-[8px] text-slate-400"></i></span>' +
+                '<div class="font-bold text-slate-700">' + p.name + '</div>' +
+              '</div>' +
+              '<div class="font-bold text-emerald-600">' + appSettings.currency + p.net.toLocaleString() + '</div>' +
+            '</div>' +
+            '<div class="flex gap-4 text-[9px] font-bold text-gray-400 uppercase ml-7">' +
+              (p.totalLent > 0 ? '<span>Lent: <span class="text-slate-600">' + appSettings.currency + p.totalLent.toLocaleString() + '</span></span>' : '') +
+              (p.totalBorrowed > 0 ? '<span>Borrowed: <span class="text-slate-600">' + appSettings.currency + p.totalBorrowed.toLocaleString() + '</span></span>' : '') +
+            '</div>' +
+            '<div id="' + toggleId + '" class="collapsible-content ml-1 mt-2 hidden border-l-2 border-emerald-100 pl-2">' +
+              '<div class="flex flex-col">' + historyHtml + '</div>' +
+            '</div>' +
+          '</div>'; 
+        });
+        html += '</div></div>';
+        peopleDiv.innerHTML += html;
+      }
+      if (payables.length > 0) {
+        let html = '<div class="mb-4"><h5 class="text-xs font-bold text-rose-600 uppercase mb-2 border-b border-rose-100 pb-1">People You Owe (Payables)</h5><div class="bg-white rounded-lg border border-rose-50 overflow-hidden">';
+        payables.sort((a,b) => Math.abs(b.net) - Math.abs(a.net)).forEach((p, idx) => { 
+          const toggleId = 'pay-' + idx;
+          // Use FULL person history from the new personHistory map in backend data
+          const personTxns = (data.personHistory && data.personHistory[p.name]) || [];
+          const historyHtml = personTxns.length ? renderHistoryRows(personTxns) : '<div class="text-[10px] text-gray-400 italic p-2">No detailed history found.</div>';
+
+          html += '<div class="p-3 border-b border-gray-50 last:border-0">' +
+            '<div class="flex justify-between items-center mb-1 cursor-pointer expand-toggle group" data-toggle="' + toggleId + '" onclick="toggleExpand(\'' + toggleId + '\')">' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="expand-toggle-icon group-hover:bg-gray-100 rounded p-0.5 transition-colors"><i class="fas fa-plus text-[8px] text-slate-400"></i></span>' +
+                '<div class="font-bold text-slate-700">' + p.name + '</div>' +
+              '</div>' +
+              '<div class="font-bold text-rose-600">' + appSettings.currency + Math.abs(p.net).toLocaleString() + '</div>' +
+            '</div>' +
+            '<div class="flex gap-4 text-[9px] font-bold text-gray-400 uppercase ml-7">' +
+              (p.totalLent > 0 ? '<span>Lent: <span class="text-slate-600">' + appSettings.currency + p.totalLent.toLocaleString() + '</span></span>' : '') +
+              (p.totalBorrowed > 0 ? '<span>Borrowed: <span class="text-slate-600">' + appSettings.currency + p.totalBorrowed.toLocaleString() + '</span></span>' : '') +
+            '</div>' +
+            '<div id="' + toggleId + '" class="collapsible-content ml-1 mt-2 hidden border-l-2 border-rose-100 pl-2">' +
+              '<div class="flex flex-col">' + historyHtml + '</div>' +
+            '</div>' +
+          '</div>'; 
+        });
+        html += '</div></div>';
+        peopleDiv.innerHTML += html;
+      }
+      if (receivables.length === 0 && payables.length === 0) { peopleDiv.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">No outstanding balances found.</div>'; }
+      document.getElementById('rep-lend-log').innerHTML = renderTableRows(data.activityLog, true);
+    }
+  }
+
+  // --- FLOATING LABEL STATE MANAGEMENT ---
+  function updateFloatingLabelStates() {
+    document.querySelectorAll('.floating-input').forEach(input => {
+      const label = input.nextElementSibling;
+      if (label && label.classList.contains('floating-label')) {
+        if (input.value && input.value.trim() !== '') {
+          label.classList.add('active');
+        } else {
+          label.classList.remove('active');
+        }
+      }
+    });
+  }
+
+  // --- AUTOCOMPLETE FUNCTIONALITY ---
+  let autocompleteData = {};
+  let activeAutocomplete = null;
+
+  function setupAutocomplete(inputId, dataKey) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    // Create dropdown if it doesn't exist
+    let dropdown = document.getElementById(inputId + '-autocomplete');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = inputId + '-autocomplete';
+      dropdown.className = 'autocomplete-dropdown hidden';
+      input.parentElement.style.position = 'relative';
+      input.parentElement.appendChild(dropdown);
+    }
+
+    // Input event listener
+    input.addEventListener('input', function(e) {
+      const value = this.value.toLowerCase();
+      const suggestions = autocompleteData[dataKey] || [];
+      
+      if (value.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      const filtered = suggestions.filter(item => 
+        item.toLowerCase().includes(value)
+      ).slice(0, 8); // Limit to 8 suggestions
+
+      if (filtered.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      dropdown.innerHTML = filtered.map(function(item) {
+        return '<div class="autocomplete-item" data-value="' + item + '">' + item + '</div>';
+      }).join('');
+      
+      dropdown.classList.remove('hidden');
+      activeAutocomplete = { input, dropdown };
+
+      // Add click listeners to items
+      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', function() {
+          input.value = this.dataset.value;
+          dropdown.classList.add('hidden');
+          updateFloatingLabelStates();
+        });
+      });
+    });
+
+    // Close on blur (with delay for click handling)
+    input.addEventListener('blur', function() {
+      setTimeout(() => {
+        if (dropdown) dropdown.classList.add('hidden');
+      }, 150);
+    });
+
+    // Keyboard navigation
+    input.addEventListener('keydown', function(e) {
+      if (dropdown.classList.contains('hidden')) return;
+      
+      const items = dropdown.querySelectorAll('.autocomplete-item');
+      const current = dropdown.querySelector('.autocomplete-item.highlighted');
+      let index = current ? Array.from(items).indexOf(current) : -1;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        index = Math.min(index + 1, items.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        index = Math.max(index - 1, 0);
+      } else if (e.key === 'Enter' && current) {
+        e.preventDefault();
+        current.click();
+        return;
+      } else if (e.key === 'Escape') {
+        dropdown.classList.add('hidden');
+        return;
+      } else {
+        return;
+      }
+
+      items.forEach(item => item.classList.remove('highlighted'));
+      if (items[index]) {
+        items[index].classList.add('highlighted');
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }
+
+  function initializeAutocomplete() {
+    // Setup autocomplete for various fields
+    setupAutocomplete('exp-whom', 'forWhom');
+    setupAutocomplete('exp-cat', 'categories');
+    setupAutocomplete('exp-details', 'details');
+    setupAutocomplete('exp-remarks', 'details'); // Remarks uses same suggestions as details
+    setupAutocomplete('lend-person', 'persons');
+    setupAutocomplete('lend-details', 'details'); // Lending remarks/details 
+    setupAutocomplete('report-filter-person', 'persons');
+    setupAutocomplete('report-filter-whom', 'forWhom');
+  }
+
+  // --- GLOBAL SEARCH ---
+  function setupGlobalSearch() {
+     const input = document.getElementById('global-search');
+     const results = document.getElementById('search-results-dropdown');
+     
+     if(!input || !results) return;
+
+     input.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        if(query.length < 2) {
+           results.classList.add('hidden');
+           return;
+        }
+        
+        // Google-like fuzzy search: split query into words and match ANY word
+        const queryWords = query.split(/\s+/).filter(w => w.length >= 1);
+        const scoredMatches = globalSearchIndex
+          .map(item => {
+            if (!item.searchStr) return null;
+            const searchStr = item.searchStr.toLowerCase();
+            const searchWords = searchStr.split(/\s+/);
+            let score = 0;
+            
+            queryWords.forEach(qWord => {
+              // Exact word match (highest priority)
+              if (searchWords.some(sw => sw === qWord)) {
+                score += 10;
+              }
+              // Word starts with query word (high priority)
+              else if (searchWords.some(sw => sw.startsWith(qWord))) {
+                score += 5;
+              }
+              // Word contains query word (medium priority)
+              else if (searchStr.includes(qWord)) {
+                score += 3;
+              }
+              // Partial character sequence match (lower priority)
+              else {
+                for (let sw of searchWords) {
+                  if (sw.includes(qWord.substring(0, Math.min(3, qWord.length)))) {
+                    score += 1;
+                    break;
+                  }
+                }
+              }
+            });
+            
+            return score > 0 ? { ...item, score } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 50);
+        
+        const matches = scoredMatches;
+        
+        if(matches.length === 0) {
+           results.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">No matching transactions found</div>';
+        } else {
+           let html = '';
+           matches.forEach(item => {
+               const dataStr = encodeURIComponent(JSON.stringify(item)).replace(/'/g, "%27");
+               let iconClass = item.isLend ? 'fa-hand-holding-usd text-emerald-500' : 'fa-receipt text-indigo-500';
+               let amtColor = item.isLend ? (item.amount > 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-700';
+               
+               let displayDate = new Date(item.date).toLocaleDateString([], {day:'numeric', month:'short', year:'2-digit'});
+               
+               // Attachment thumbnail for search results  
+               let thumbHtml = '<div class="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center"><i class="fas ' + iconClass + ' text-xs"></i></div>';
+               if (item.receipt) {
+                  const isImage = item.receipt.match(/\.(jpg|jpeg|png|gif|webp)/i) || item.receipt.includes('image') || !item.receipt.includes('pdf');
+                  if (isImage) {
+                     thumbHtml = '<div class="attachment-thumb" style="width:2rem;height:2rem;"><img src="' + item.receipt + '" alt=""></div>';
+                  } else {
+                     thumbHtml = '<div class="attachment-thumb" style="width:2rem;height:2rem;"><i class="fas fa-file-pdf pdf-icon text-xs"></i></div>';
+                  }
+               }
+               
+               html += '<div onclick="openTransactionModal(\'' + dataStr + '\'); document.getElementById(\'search-results-dropdown\').classList.add(\'hidden\');" class="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center group transition-colors">' +
+                  '<div class="flex items-center gap-3">' +
+                     thumbHtml +
+                     '<div>' +
+                        '<div class="text-xs font-bold text-slate-700">' + (item.cat || item.type) + ' <span class="font-normal text-gray-500">(' + item.whom + ')</span></div>' +
+                        '<div class="text-[10px] text-gray-400">' + displayDate + ' &bull; ' + (item.detail||'No details') + '</div>' +
+                     '</div>' +
+                  '</div>' +
+                  '<div class="text-right">' +
+                     '<div class="text-sm font-bold ' + amtColor + '">' + appSettings.currency + item.amt.toLocaleString() + '</div>' +
+                     '<div class="text-[9px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">Click for Details</div>' +
+                  '</div>' +
+               '</div>';
+           });
+           results.innerHTML = html;
+        }
+        results.classList.remove('hidden');
+     });
+
+     // Close when clicking outside
+     document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !results.contains(e.target)) {
+           results.classList.add('hidden');
+        }
+     });
+     
+     input.addEventListener('focus', () => {
+        if(input.value.length >= 2) results.classList.remove('hidden');
+     });
+  }
+
+  // --- TRANSACTION DETAIL MODAL ---
+  function openTransactionModal(dataStr) {
+    const data = JSON.parse(decodeURIComponent(dataStr));
+    currentModalData = data;
+    
+    const modal = document.getElementById('txn-detail-modal');
+    const isLend = data.isLend || data.sheet === 'lending';
+    const isBank = !!data.bank;
+
+    // Set icon and header color
+    const iconEl = document.getElementById('txn-modal-icon');
+    
+    if (isBank) {
+       // BANK TRANSACTION
+       const isCredit = data.credit > 0;
+       iconEl.className = 'h-10 w-10 rounded-full flex items-center justify-center ' + (isCredit ? 'bg-emerald-100' : 'bg-rose-100');
+       iconEl.innerHTML = '<i class="fas fa-university ' + (isCredit ? 'text-emerald-700' : 'text-rose-700') + '"></i>';
+    } else if (isLend) {
+      // LEND/BORROW
+      let isMoneyIn = (data.cat || '').includes('Borrowed') || (data.cat || '').includes('Received') || (data.cat || '').includes('Return (In)');
+      iconEl.className = 'h-10 w-10 rounded-full flex items-center justify-center ' + (isMoneyIn ? 'bg-emerald-100' : 'bg-rose-100');
+      iconEl.innerHTML = '<i class="fas fa-hand-holding-usd ' + (isMoneyIn ? 'text-emerald-600' : 'text-rose-600') + '"></i>';
+    } else {
+      // EXPENSE
+      iconEl.className = 'h-10 w-10 rounded-full flex items-center justify-center bg-indigo-100';
+      iconEl.innerHTML = '<i class="fas fa-receipt text-indigo-600"></i>';
+    }
+    
+    // Set title and date
+    if (isBank) {
+        document.getElementById('txn-modal-title').innerText = data.bank + ' Transaction';
+    } else {
+        document.getElementById('txn-modal-title').innerText = data.cat || data.type || 'Transaction';
+    }
+    
+    const dateStr = data.date === "N/A" ? "Date not available" : new Date(data.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    document.getElementById('txn-modal-date').innerText = dateStr;
+    
+    // Set amount with color
+    const amountEl = document.getElementById('txn-modal-amount');
+    
+    if (isBank) {
+        if (data.credit > 0) {
+            amountEl.className = 'text-3xl font-bold text-emerald-600';
+            amountEl.innerText = '+' + appSettings.currency + Number(data.credit).toLocaleString();
+        } else {
+            amountEl.className = 'text-3xl font-bold text-rose-600';
+            amountEl.innerText = '-' + appSettings.currency + Number(data.debit).toLocaleString();
+        }
+    } else if (isLend) {
+      let isMoneyIn = (data.cat || '').includes('Borrowed') || (data.cat || '').includes('Received') || (data.cat || '').includes('Return (In)');
+      const amt = data.amt || data.amount || data.rawAmt || 0;
+      amountEl.className = 'text-3xl font-bold ' + (isMoneyIn ? 'text-emerald-600' : 'text-rose-600');
+      amountEl.innerText = (isMoneyIn ? '+' : '-') + appSettings.currency + Number(amt).toLocaleString();
+    } else {
+      const amt = data.amt || data.amount || data.rawAmt || 0;
+      amountEl.className = 'text-3xl font-bold text-slate-800';
+      amountEl.innerText = '-' + appSettings.currency + Number(amt).toLocaleString();
+    }
+    
+    // Set type label
+    if (isBank) {
+        document.getElementById('txn-modal-type').innerText = 'Bank Record';
+    } else {
+        document.getElementById('txn-modal-type').innerText = isLend ? (data.rawType || data.type || 'Lend/Borrow Transaction') : 'Expense';
+    }
+    
+    // Build details grid
+    const detailsEl = document.getElementById('txn-modal-details');
+    let detailsHTML = '';
+    
+    if (isBank) {
+       detailsHTML += '<div class="detail-item col-span-2"><div class="detail-item-label">Description</div><div class="detail-item-value text-xs uppercase leading-relaxed tracking-wide">' + data.description + '</div></div>';
+       detailsHTML += '<div class="detail-item"><div class="detail-item-label">Reference No</div><div class="detail-item-value font-mono bg-gray-50 px-2 py-1 rounded inline-block">' + (data.ref || '-') + '</div></div>';
+       detailsHTML += '<div class="detail-item"><div class="detail-item-label">Closing Balance</div><div class="detail-item-value font-bold text-slate-700">' + appSettings.currency + Number(data.balance).toLocaleString() + '</div></div>';
+    } 
+    else if (isLend) {
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">Person</div><div class="detail-item-value">' + (data.whom || data.rawName || data.person || '-') + '</div></div>';
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">Type</div><div class="detail-item-value">' + (data.rawType || data.type || '-') + '</div></div>';
+      if (data.rawRem || data.detail) {
+        detailsHTML += '<div class="detail-item col-span-2"><div class="detail-item-label">Remarks</div><div class="detail-item-value">' + (data.rawRem || data.detail || '-') + '</div></div>';
+      }
+    } else {
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">For Whom</div><div class="detail-item-value">' + (data.whom || data.rawWhom || '-') + '</div></div>';
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">Category</div><div class="detail-item-value">' + (data.cat || data.rawCat || '-') + '</div></div>';
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">Payment Mode</div><div class="detail-item-value">' + (data.rawMode || '-') + '</div></div>';
+      detailsHTML += '<div class="detail-item"><div class="detail-item-label">Details</div><div class="detail-item-value">' + (data.detail || data.rawDet || '-') + '</div></div>';
+      if (data.rawRem) {
+        detailsHTML += '<div class="detail-item col-span-2"><div class="detail-item-label">Remarks</div><div class="detail-item-value">' + data.rawRem + '</div></div>';
+      }
+    }
+    detailsEl.innerHTML = detailsHTML;
+    
+    // Handle attachment
+    const attachmentContainer = document.getElementById('txn-modal-attachment');
+    const receiptLink = document.getElementById('txn-modal-receipt-link');
+    
+    if (data.receipt) {
+      attachmentContainer.classList.remove('hidden');
+      receiptLink.classList.remove('hidden');
+      receiptLink.href = data.receipt;
+      
+      const previewEl = document.getElementById('txn-modal-attachment-preview');
+      const nameEl = document.getElementById('txn-modal-attachment-name');
+      
+      // Convert Google Drive URL to preview URL
+      let previewUrl = data.receipt;
+      if (data.receipt.includes('drive.google.com')) {
+        // Extract file ID from various Google Drive URL formats
+        let fileId = '';
+        if (data.receipt.includes('/file/d/')) {
+          fileId = data.receipt.split('/file/d/')[1].split('/')[0];
+        } else if (data.receipt.includes('id=')) {
+          fileId = data.receipt.split('id=')[1].split('&')[0];
+        }
+        if (fileId) {
+          previewUrl = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w200';
+        }
+      }
+      
+      const isImage = data.receipt.match(/\.(jpg|jpeg|png|gif|webp)/i) || 
+                      data.receipt.includes('image') || 
+                      data.receipt.includes('drive.google.com') ||
+                      !data.receipt.includes('pdf');
+      
+      if (isImage) {
+        // Fix: Use string concatenation to avoid template literal parsing issues
+        previewEl.innerHTML = '<img src="' + previewUrl + '" alt="Attachment" class="w-full h-full object-cover" onerror="handleImagePreviewError(this)">';
+        nameEl.innerText = 'Image Attachment';
+      } else {
+        previewEl.innerHTML = '<i class="fas fa-file-pdf text-red-500 text-2xl"></i>';
+        nameEl.innerText = 'PDF Document';
+      }
+    } else {
+      attachmentContainer.classList.add('hidden');
+      receiptLink.classList.add('hidden');
+    }
+    
+    // ACTION BUTTONS VISIBILITY (Hide Edit/Delete for Bank)
+    const editBtn = document.querySelector('button[onclick="editFromModal()"]');
+    const delBtn = document.querySelector('button[onclick="deleteFromModal()"]');
+    
+    if (isBank) {
+        if(editBtn) editBtn.classList.add('hidden');
+        if(delBtn) delBtn.classList.add('hidden');
+    } else {
+        if(editBtn) editBtn.classList.remove('hidden');
+        if(delBtn) delBtn.classList.remove('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Helper for image error handling (avoid quote nesting issues)
+  function handleImagePreviewError(img) {
+      if (img && img.parentElement) {
+          img.parentElement.innerHTML = '<i class="fas fa-image text-gray-400 text-2xl"></i>';
+          const nameEl = document.getElementById('txn-modal-attachment-name');
+          if (nameEl) nameEl.innerText = 'Image (Unavailable)';
+      }
+  }
+
+  function closeTransactionModal() {
+    document.getElementById('txn-detail-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+    
+    // Reset buttons on close (just in case)
+    const editBtn = document.querySelector('button[onclick="editFromModal()"]');
+    const delBtn = document.querySelector('button[onclick="deleteFromModal()"]');
+    if(editBtn) editBtn.classList.remove('hidden');
+    if(delBtn) delBtn.classList.remove('hidden');
+  }
+
+  function editFromModal() {
+    if (!currentModalData) return;
+    const dataToEdit = currentModalData; // Save reference
+    currentModalData = null; // Clear it now
+    closeTransactionModal();
+    const dataStr = encodeURIComponent(JSON.stringify(dataToEdit)).replace(/'/g, "%27");
+    editRecord(dataStr);
+  }
+
+  function deleteFromModal() {
+    if (!currentModalData) return;
+    const sheet = currentModalData.sheet;
+    const row = currentModalData.row;
+    currentModalData = null; // Clear it now
+    closeTransactionModal();
+    deleteRecord(sheet, row);
+  }
+
+  function openAttachmentFullscreen() {
+    if (!currentModalData || !currentModalData.receipt) return;
+    window.open(currentModalData.receipt, '_blank');
+  }
+
+  function closeAttachmentModal() {
+    document.getElementById('attachment-modal').classList.add('hidden');
+  }
+
+  // --- EXPAND/COLLAPSE TOGGLE ---
+  function toggleExpand(id) {
+    const toggle = document.querySelector('[data-toggle="' + id + '"]');
+    const content = document.getElementById(id);
+    
+    if (toggle && content) {
+      const isOpening = content.classList.contains('hidden');
+      
+      if (isOpening) {
+        // Accordion behavior: auto-close other expanded sections in the report
+        document.querySelectorAll('.collapsible-content.expanded').forEach(other => {
+          if (other.id !== id) {
+            other.classList.add('hidden');
+            other.classList.remove('expanded');
+            const otherToggle = document.querySelector('[data-toggle="' + other.id + '"]');
+            if (otherToggle) {
+              otherToggle.classList.remove('expanded');
+              const otherIcon = otherToggle.querySelector('.fa-minus, .fa-chevron-down');
+              if (otherIcon) {
+                if(otherIcon.classList.contains('fa-minus')) { otherIcon.classList.remove('fa-minus'); otherIcon.classList.add('fa-plus'); }
+              }
+            }
+          }
+        });
+      }
+
+      toggle.classList.toggle('expanded');
+      content.classList.toggle('expanded');
+      content.classList.toggle('hidden'); // Use standard hidden class from renderReport
+      
+      const icon = toggle.querySelector('.fa-plus, .fa-minus');
+      if(icon) {
+         if(content.classList.contains('hidden')) {
+             icon.classList.remove('fa-minus'); icon.classList.add('fa-plus');
+         } else {
+             icon.classList.remove('fa-plus'); icon.classList.add('fa-minus');
+         }
+      }
+    }
+  }
+
+  function scrollQuickFill(direction) {
+    const container = document.getElementById('quick-fill-chips');
+    if (!container) return;
+    const scrollAmount = 200;
+    container.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+    });
+  }
+
+  function showToast(msg, type) {
+    const div = document.createElement('div');
+    div.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 ' + (type==='success'?'bg-slate-900':'bg-red-600') + ' text-white px-6 py-3 rounded-full shadow-2xl text-sm font-bold z-50 animate-bounce';
+    div.innerText = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+  }
+
+   // --- BANK SEARCH MODULE ---
+   let bankDataCache = null;
+   let currentBankMatches = []; // Store current filtered results
+   let bankDisplayLimit = 50;   // Items to show initially
+   const BANK_PAGE_SIZE = 50;
+
+   function openBankSearch() {
+     document.getElementById('bank-search-modal').classList.remove('hidden');
+     setTimeout(() => document.getElementById('bank-search-input').focus(), 100);
+     
+     // Reset View to Initial State
+     document.getElementById('bank-search-input').value = '';
+     document.getElementById('bank-search-results').innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-400"><i class="fas fa-search-dollar text-4xl mb-3 text-gray-200"></i><p class="text-xs">Type to search bank transactions...</p></div>';
+     currentBankMatches = []; 
+
+     // Fetch data if not already loaded (Background load usually handles this)
+     if (!bankDataCache) {
+        loadBankData();
+     }
+   }
+
+   function loadBankData() {
+      // Background load - don't disturb UI unless forced
+      google.script.run
+        .withSuccessHandler(data => {
+           if (!data.error) {
+              bankDataCache = data;
+              // Don't render automatically anymore, wait for search
+           }
+        })
+        .fetchBankRecords();
+   }
+
+   function closeBankSearch() {
+     document.getElementById('bank-search-modal').classList.add('hidden');
+   }
+
+   function handleBankSearch() {
+     const input = document.getElementById('bank-search-input');
+     let query = input.value.trim().toLowerCase();
+     
+     if (!bankDataCache) return;
+
+     if (query.length === 0) {
+         document.getElementById('bank-search-results').innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-400"><i class="fas fa-search-dollar text-4xl mb-3 text-gray-200"></i><p class="text-xs">Type to search bank transactions...</p></div>';
+         return;
+     }
+
+     // NORMALIZE QUERY: Remove commas to match numbers (e.g. "1,00,000" -> "100000")
+     const normalizedQuery = query.replace(/,/g, '');
+     const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 1);
+     
+     const scoredMatches = bankDataCache
+       .map(item => {
+           if (!item.searchStr) return null;
+           const searchStr = item.searchStr; // Already lowered in backend
+           const searchWords = searchStr.split(/\s+/);
+           let score = 0;
+
+           queryWords.forEach(qWord => {
+               // Exact match (High Priority)
+               if (searchWords.some(sw => sw === qWord)) score += 10;
+               // Starts with (Medium Priority)
+               else if (searchWords.some(sw => sw.startsWith(qWord))) score += 5;
+               // Contains (Low Priority)
+               else if (searchStr.includes(qWord)) score += 3;
+               // Fuzzy (Partial)
+               else if (qWord.length >= 3) {
+                   for (let sw of searchWords) {
+                       if (sw.includes(qWord)) { score += 1; break; }
+                   }
+               }
+           });
+
+           return score > 0 ? { ...item, score } : null;
+       })
+       .filter(Boolean)
+       .sort((a, b) => b.score - a.score);
+
+     currentBankMatches = scoredMatches;
+     bankDisplayLimit = BANK_PAGE_SIZE;
+     renderBankSearchResults();
+   }
+   
+   // Attach input listener for realtime search (with null check - element may not exist yet)
+   (function() {
+     const bankSearchInput = document.getElementById('bank-search-input');
+     if (bankSearchInput) {
+       bankSearchInput.addEventListener('input', handleBankSearch);
+     }
+   })();
+
+   function loadMoreBankResults() {
+       bankDisplayLimit += BANK_PAGE_SIZE;
+       renderBankSearchResults();
+   }
+
+   function renderBankSearchResults() {
+     const container = document.getElementById('bank-search-results');
+     const results = currentBankMatches;
+     
+     if (!results || results.length === 0) {
+       container.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-400"><i class="fas fa-ghost text-3xl mb-2 opacity-50"></i><p class="text-xs">No matching transactions found.</p></div>';
+       return;
+     }
+
+     const visibleResults = results.slice(0, bankDisplayLimit);
+     
+     let html = '<div class="divide-y divide-gray-100 bg-white">';
+     visibleResults.forEach(tx => {
+        const dateStr = new Date(tx.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' });
+        const isDebit = tx.debit && tx.debit > 0;
+        const isCredit = tx.credit && tx.credit > 0;
+        
+        // Pass FULL object to modal (encoding for safety)
+        const dataStr = encodeURIComponent(JSON.stringify(tx)).replace(/'/g, "%27");
+
+        let amountHtml = '';
+        if (isDebit) amountHtml = '<span class="text-rose-600 font-bold">-' + appSettings.currency + Number(tx.debit).toLocaleString() + '</span>';
+        else if (isCredit) amountHtml = '<span class="text-emerald-600 font-bold">+' + appSettings.currency + Number(tx.credit).toLocaleString() + '</span>';
+
+        const badgeColor = tx.bank === 'SBI' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-green-100 text-green-700 border-green-200';
+        
+        html += '<div class="p-4 hover:bg-slate-50 transition-colors group cursor-pointer" onclick="openTransactionModal(\'' + dataStr + '\')">' +
+           '<div class="flex justify-between items-start mb-1">' +
+              '<div class="flex items-center gap-2">' +
+                 '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ' + badgeColor + '">' + tx.bank + '</span>' +
+                 '<span class="text-[10px] font-bold text-gray-400">' + dateStr + '</span>' +
+              '</div>' +
+              amountHtml +
+           '</div>' +
+           '<div class="text-xs font-semibold text-slate-700 leading-normal mb-1 line-clamp-2">' + tx.description + '</div>' +
+           '<div class="flex justify-between items-center text-[9px] text-gray-400">' +
+              '<span class="bg-gray-100 px-1 rounded text-gray-500 font-mono">' + (tx.ref !== '-' ? extractRefDisplay(tx.ref) : '') + '</span>' +
+              '<span class="font-bold text-slate-500">Bal: ' + appSettings.currency + Number(tx.balance).toLocaleString() + '</span>' +
+           '</div>' +
+        '</div>';
+     });
+     html += '</div>';
+     
+     if (results.length > bankDisplayLimit) {
+         const remaining = results.length - bankDisplayLimit;
+         html += '<div class="p-4 text-center bg-gray-50 border-t border-gray-100">' +
+            '<button onclick="loadMoreBankResults()" class="text-xs font-bold text-indigo-500 hover:text-indigo-700 hover:underline transition-all">' +
+               'Load More (' + remaining + ' hidden) <i class="fas fa-chevron-down ml-1"></i>' +
+            '</button>' +
+         '</div>';
+     }
+     
+     container.innerHTML = html;
+   }
+   
+   function extractRefDisplay(ref) {
+       if(!ref || ref === '-') return '';
+       // If ref is very long, truncate
+       if(ref.length > 15) return ref.substring(0,12) + '...';
+       return ref;
+   }
+  // --- INITIALIZATION ---
+  document.addEventListener('DOMContentLoaded', function() {
+      // Update the current date right away to remove "Loading..." endless state
+      const dateEl = document.getElementById('current-date');
+      if(dateEl) dateEl.innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
+      // Small delay to ensure all DOM elements are parsed
+      setTimeout(() => {
+        try {
+            loadSettings();
+            checkLogin();
+            
+            // Attach bank search input listener after DOM is ready
+            const bankSearchInput = document.getElementById('bank-search-input');
+            if (bankSearchInput && !bankSearchInput.hasAttribute('data-listener-attached')) {
+              bankSearchInput.addEventListener('input', handleBankSearch);
+              bankSearchInput.setAttribute('data-listener-attached', 'true');
+            }
+        } catch(e) { 
+            console.error("Init Error:", e);
+            // Fallback: show auth screen if Init fails
+            document.getElementById('auth-screen').classList.remove('hidden');
+        }
+      }, 0);
+  });
+</script>
