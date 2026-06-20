@@ -5,23 +5,22 @@ export async function gasFetch(action, payload) {
     throw new Error('VITE_GAS_BASE_URL is not set')
   }
 
-  const url = new URL(VITE_GAS_BASE_URL)
-  url.searchParams.set('action', action)
+  const url = VITE_GAS_BASE_URL
 
-  // payload is sent as query param `data` (JSON) for actions that need it
+  const body = { action }
   if (payload && typeof payload === 'object') {
-    // For verifyUser we want simple params: email/password
     if (action === 'verifyUser') {
-      if (payload.email != null) url.searchParams.set('email', payload.email)
-      if (payload.password != null) url.searchParams.set('password', payload.password)
+      if (payload.email != null) body.email = payload.email
+      if (payload.password != null) body.password = payload.password
     } else {
-      url.searchParams.set('data', JSON.stringify(payload))
+      body.data = payload
     }
   }
 
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   })
 
   if (!res.ok) {

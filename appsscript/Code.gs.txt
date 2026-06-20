@@ -1,12 +1,38 @@
 // --- CONFIGURATION ---
-const SHEET_LENDING = 'LendingBorrowing';
-const SHEET_EXPENSES = 'HomeExpenses';
-const SHEET_USERS = 'users';
-const UPLOAD_ROOT_FOLDER_ID = '14xbaBzrRHcKaraAie0H-zczC4VfaNn-y'; // User provided ID
+// Read optional overrides from Script Properties for safer secret management.
+const SCRIPT_PROPS = PropertiesService.getScriptProperties();
+const SHEET_LENDING = SCRIPT_PROPS.getProperty('SHEET_LENDING') || 'LendingBorrowing';
+const SHEET_EXPENSES = SCRIPT_PROPS.getProperty('SHEET_EXPENSES') || 'HomeExpenses';
+const SHEET_USERS = SCRIPT_PROPS.getProperty('SHEET_USERS') || 'users';
+const UPLOAD_ROOT_FOLDER_ID = SCRIPT_PROPS.getProperty('UPLOAD_ROOT_FOLDER_ID') || '14xbaBzrRHcKaraAie0H-zczC4VfaNn-y'; // User provided ID
 
 // --- ADMIN CREDENTIALS ---
-const ADMIN_EMAIL = 'sheikhgulfam91@gmail.com';
-const ADMIN_PASS_RAW = '212221';
+const ADMIN_EMAIL = SCRIPT_PROPS.getProperty('ADMIN_EMAIL') || 'walletpro26@gmail.com';
+const ADMIN_PASS_RAW = SCRIPT_PROPS.getProperty('ADMIN_PASS_RAW') || '212221';
+
+// Accept POST requests with JSON bodies so clients/proxies can send payloads safely.
+function doPost(e) {
+  try {
+    var body = {};
+    if (e && e.postData && e.postData.type && e.postData.type.indexOf('json') !== -1) {
+      body = JSON.parse(e.postData.contents || '{}');
+    } else if (e && e.parameter) {
+      body = e.parameter;
+    }
+
+    var action = body && body.action ? String(body.action) : (e && e.parameter && e.parameter.action ? String(e.parameter.action) : '');
+    if (action) {
+      // Create a fake event object with parameter mapping to keep existing handlers unchanged
+      var fakeE = { parameter: body };
+      var out = handleApiAction(action, fakeE);
+      return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'No action provided' })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: String(err) })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
 function doGet(e) {
   // JSON API mode: ?action=someEndpoint
