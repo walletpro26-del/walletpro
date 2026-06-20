@@ -4,4 +4,4 @@
 
 [context.production.environment]
   # Set this in Netlify UI or replace the value here with your deployed GAS webapp URL
-  VITE_GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbzqpuavUCpdz3-CeiNv6dh4cZbz85KXUOanbe37FOEq/dev"
+  VITE_GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbyA0Us0SIe-yXZyFvLGXBU11sL5EnZLjz3GqOpm9MRYsrRlPhl7iu6r6K7zBh8tN-NcPg/exec"
