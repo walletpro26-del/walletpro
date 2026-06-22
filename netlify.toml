@@ -1,10 +1,9 @@
 [build]
   command = "npm run build"
   publish = "dist"
-  functions = "netlify/functions"
 
-[context.production.environment]
-  # Set this in Netlify UI or replace the value here with your deployed GAS webapp URL
-  # In production we want the frontend to call the Netlify function proxy; set VITE_GAS_BASE_URL accordingly
-  VITE_GAS_BASE_URL = "/.netlify/functions/gas-proxy"
-  GAS_BASE_URL = "https://script.google.com/macros/s/AKfycbyA0Us0SIe-yXZyFvLGXBU11sL5EnZLjz3GqOpm9MRYsrRlPhl7iu6r6K7zBh8tN-NcPg/exec"
+# SPA: redirect all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
