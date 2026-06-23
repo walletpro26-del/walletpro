@@ -3,10 +3,23 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth'
 
 export async function signIn(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email, password)
+  return {
+    success: true,
+    uid: cred.user.uid,
+    email: cred.user.email,
+    name: cred.user.displayName || cred.user.email.split('@')[0],
+  }
+}
+
+export async function signInWithGoogle() {
+  const provider = new GoogleAuthProvider()
+  const cred = await signInWithPopup(auth, provider)
   return {
     success: true,
     uid: cred.user.uid,

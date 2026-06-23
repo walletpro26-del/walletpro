@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signIn } from '../api/auth'
+import { signIn, signInWithGoogle } from '../api/auth'
 
 export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -22,6 +22,21 @@ export default function LoginScreen({ onLogin }) {
         setError('Too many attempts. Please try again later.')
       } else {
         setError(err?.message || 'Login failed')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setError('')
+    setLoading(true)
+    try {
+      const res = await signInWithGoogle()
+      if (res.success) onLogin(res)
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError(err?.message || 'Google Login failed')
       }
     } finally {
       setLoading(false)
@@ -76,6 +91,19 @@ export default function LoginScreen({ onLogin }) {
 
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Signing in...' : 'Access Wallet'}
+          </button>
+          
+          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', margin: '4px 0' }}>OR</div>
+          
+          <button type="button" onClick={handleGoogleLogin} disabled={loading} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', padding: '12px', borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+            color: 'var(--text-primary)', fontWeight: 600, fontSize: 14,
+            cursor: 'pointer', transition: 'all 0.2s'
+          }}>
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Logo" style={{ width: 18, height: 18 }} />
+            Sign in with Google
           </button>
         </form>
       </div>

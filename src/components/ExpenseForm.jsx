@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { compressImage } from '../api/attachments'
+import MultiSelectCombobox from './MultiSelectCombobox'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -133,40 +134,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         </div>
 
         {/* For Whom */}
-        <div className="float-group">
-          <input
-            type="text"
-            className="float-input"
-            placeholder=" "
-            value={form.forWhom}
-            onChange={(e) => set('forWhom', e.target.value)}
-            list="list-forwhom"
-          />
-          <label className="float-label">For Whom? (e.g. Self, Home)</label>
-          {suggestions?.forWhom?.length > 0 && (
-            <datalist id="list-forwhom">
-              {suggestions.forWhom.map((w, i) => <option key={i} value={w} />)}
-            </datalist>
-          )}
-        </div>
+        <MultiSelectCombobox 
+          label="For Whom? (e.g. Self, Home)"
+          value={form.forWhom}
+          onChange={(val) => set('forWhom', val)}
+          suggestions={suggestions?.forWhom || []}
+        />
 
         {/* Category + Payment Mode */}
         <div style={{ display: 'flex', gap: 10 }}>
-          <div className="float-group" style={{ flex: 1 }}>
-            <input
-              type="text"
-              className="float-input"
-              placeholder=" "
+          <div style={{ flex: 1 }}>
+            <MultiSelectCombobox 
+              label="Category"
               value={form.category}
-              onChange={(e) => set('category', e.target.value)}
-              list="list-categories"
+              onChange={(val) => set('category', val)}
+              suggestions={suggestions?.categories || []}
             />
-            <label className="float-label">Category</label>
-            {suggestions?.categories?.length > 0 && (
-              <datalist id="list-categories">
-                {suggestions.categories.map((c, i) => <option key={i} value={c} />)}
-              </datalist>
-            )}
           </div>
           <div className="float-group" style={{ flex: 1 }}>
             <select className="float-input" value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)}>
@@ -181,22 +164,12 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         </div>
 
         {/* Details */}
-        <div className="float-group">
-          <input
-            type="text"
-            className="float-input"
-            placeholder=" "
-            value={form.details}
-            onChange={(e) => set('details', e.target.value)}
-            list="list-details"
-          />
-          <label className="float-label">Details (e.g. Lunch)</label>
-          {suggestions?.details?.length > 0 && (
-            <datalist id="list-details">
-              {suggestions.details.map((d, i) => <option key={i} value={d} />)}
-            </datalist>
-          )}
-        </div>
+        <MultiSelectCombobox 
+          label="Details (e.g. Lunch)"
+          value={form.details}
+          onChange={(val) => set('details', val)}
+          suggestions={suggestions?.details || []}
+        />
 
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? 'Saving...' : editData ? 'Update Expense' : 'Save Expense'}

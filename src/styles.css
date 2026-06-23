@@ -70,6 +70,34 @@
   --shadow-premium: 0 0 0 1px rgba(255,255,255,0.04), 0 12px 24px rgba(0,0,0,0.3);
 }
 
+/* --- Midnight Theme --- */
+[data-theme="midnight"] {
+  --bg-body: #020617;
+  --bg-card: #0b1120;
+  --bg-input: #1e293b;
+  --border-color: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --primary-gradient: linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e1b4b 100%);
+  --shadow-premium: 0 0 0 1px rgba(255,255,255,0.02), 0 12px 24px rgba(0,0,0,0.4);
+}
+
+/* --- Forest Theme --- */
+[data-theme="forest"] {
+  --bg-body: #064e3b;
+  --bg-card: #022c22;
+  --bg-input: #065f46;
+  --border-color: #065f46;
+  --text-primary: #ecfdf5;
+  --text-secondary: #6ee7b7;
+  --text-muted: #34d399;
+  --primary-gradient: linear-gradient(135deg, #022c22 0%, #064e3b 40%, #065f46 100%);
+  --shadow-premium: 0 0 0 1px rgba(255,255,255,0.02), 0 12px 24px rgba(0,0,0,0.4);
+  --accent-50: #022c22;
+  --accent-500: #10b981;
+}
+
 /* --- Reset & Base --- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -122,10 +150,16 @@ body {
 .app-header {
   position: relative;
   padding: 28px 20px 20px;
+}
+.header-bg {
+  position: absolute;
+  inset: 0;
   background: var(--primary-gradient);
   overflow: hidden;
+  z-index: 0;
+  border-radius: inherit;
 }
-.app-header::before {
+.header-bg::before {
   content: '';
   position: absolute;
   top: -60px; right: -40px;
@@ -135,7 +169,7 @@ body {
   filter: blur(40px);
   pointer-events: none;
 }
-.app-header::after {
+.header-bg::after {
   content: '';
   position: absolute;
   bottom: -40px; left: -30px;

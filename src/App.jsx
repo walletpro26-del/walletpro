@@ -296,7 +296,7 @@ export default function App() {
         )}
 
         <div className="app-footer">
-          <p>© NextLifTechnologies (<a href="mailto:sheikhgulfam91@gmail.com">sheikhgulfam91@gmail.com</a>)</p>
+          <p>© NextLifTechnologies (<a href="mailto:walletpro26@gmail.com">walletpro26@gmail.com</a>)</p>
         </div>
       </div>
 

@@ -50,6 +50,7 @@ export default function Header({
 
   return (
     <header className="app-header">
+      <div className="header-bg"></div>
       <div className="header-top">
         <div className="header-brand">
           <h1><i className="fas fa-wallet"></i> Wallet<span>Pro</span></h1>

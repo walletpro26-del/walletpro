@@ -47,9 +47,11 @@ export default function SettingsModal({ onClose, onSave, onMigrate }) {
             <h4><i className="fas fa-palette" style={{ color: 'var(--slate-300)' }}></i> Appearance</h4>
             <div style={{ background: 'var(--slate-50)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Theme Style</div>
-              <div className="theme-toggle">
-                <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>Standard Light</button>
-                <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>Deep Dark</button>
+              <div className="theme-toggle" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')} style={{ flex: 1, minWidth: 100 }}>Standard Light</button>
+                <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')} style={{ flex: 1, minWidth: 100 }}>Deep Dark</button>
+                <button className={theme === 'midnight' ? 'active' : ''} onClick={() => setTheme('midnight')} style={{ flex: 1, minWidth: 100 }}>Midnight Blue</button>
+                <button className={theme === 'forest' ? 'active' : ''} onClick={() => setTheme('forest')} style={{ flex: 1, minWidth: 100 }}>Forest Green</button>
               </div>
             </div>
           </div>

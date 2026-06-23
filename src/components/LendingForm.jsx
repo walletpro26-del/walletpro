@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { compressImage } from '../api/attachments'
+import MultiSelectCombobox from './MultiSelectCombobox'
 
 export default function LendingForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -170,23 +171,12 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
         </div>
 
         {/* Person */}
-        <div className="float-group">
-          <input
-            type="text"
-            className="float-input"
-            placeholder=" "
-            value={form.person}
-            onChange={(e) => set('person', e.target.value)}
-            required
-            list="list-persons"
-          />
-          <label className="float-label">Person Name</label>
-          {suggestions?.persons?.length > 0 && (
-            <datalist id="list-persons">
-              {suggestions.persons.map((p, i) => <option key={i} value={p} />)}
-            </datalist>
-          )}
-        </div>
+        <MultiSelectCombobox 
+          label="Person Name"
+          value={form.person}
+          onChange={(val) => set('person', val)}
+          suggestions={suggestions?.persons || []}
+        />
 
         {/* Remarks */}
         <div className="float-group">
