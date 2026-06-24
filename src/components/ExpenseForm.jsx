@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { compressImage } from '../api/attachments'
+import { useState, useRef, useEffect } from 'react'
+import { compressImage, getAttachment } from '../api/attachments'
 import MultiSelectCombobox from './MultiSelectCombobox'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
@@ -17,7 +17,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
     mimeType: '',
   })
   const [fileLabel, setFileLabel] = useState(editData?.fileName ? (editData.fileName.length > 6 ? editData.fileName.slice(0, 6) + '…' : editData.fileName) : 'File')
+  const [existingAttachmentPreview, setExistingAttachmentPreview] = useState(null)
+  const [loadingAttachment, setLoadingAttachment] = useState(false)
   const chipsRef = useRef(null)
+
+  // Load existing attachment preview when editing
+  useEffect(() => {
+    if (editData?.hasAttachment && !editData?.fileData) {
+      setLoadingAttachment(true)
+      getAttachment('expenses', editData.id)
+        .then((data) => setExistingAttachmentPreview(data))
+        .catch(() => {})
+        .finally(() => setLoadingAttachment(false))
+    } else if (editData?.fileData) {
+      setExistingAttachmentPreview(editData.fileData)
+    }
+  }, [editData?.id])
 
   function set(key, val) { setForm((s) => ({ ...s, [key]: val })) }
 
@@ -132,6 +147,29 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
             )}
           </label>
         </div>
+
+        {/* Existing Attachment Preview when Editing */}
+        {editData && (existingAttachmentPreview || loadingAttachment) && (
+          <div style={{ marginTop: 12, padding: 10, background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Current Attachment
+            </div>
+            {loadingAttachment ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading...</div>
+            ) : existingAttachmentPreview ? (
+              <div style={{ borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                {existingAttachmentPreview.includes('application/pdf') ? (
+                  <div style={{ padding: 12, textAlign: 'center', background: '#fff' }}>
+                    <i className="fas fa-file-pdf" style={{ fontSize: 28, color: 'var(--red-500)' }}></i>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>{editData.fileName || 'PDF'}</div>
+                  </div>
+                ) : (
+                  <img src={existingAttachmentPreview} alt="Existing receipt" style={{ width: '100%', maxHeight: 150, objectFit: 'cover' }} />
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* For Whom */}
         <MultiSelectCombobox 

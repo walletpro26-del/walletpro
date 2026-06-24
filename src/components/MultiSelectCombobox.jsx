@@ -5,8 +5,14 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
   const [search, setSearch] = useState('')
   const containerRef = useRef(null)
 
-  // Parse value into array
-  const selected = value ? value.split('-').map(s => s.trim()).filter(Boolean) : []
+  // Parse value into array using unique separator to avoid issues with hyphens in values
+  const SEPARATOR = '|||'
+  // For backward compatibility: only use new separator if value contains it, otherwise treat as single value
+  const selected = value ? (
+    value.includes(SEPARATOR) ? 
+      value.split(SEPARATOR).map(s => s.trim()).filter(Boolean) :
+      [value.trim()]
+  ) : []
 
   // Close when clicking outside
   useEffect(() => {
@@ -27,7 +33,7 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
     } else {
       newSelected = [...selected, item]
     }
-    onChange(newSelected.join('-'))
+    onChange(newSelected.join(SEPARATOR))
   }
 
   function handleKeyDown(e) {
@@ -36,7 +42,7 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
       if (search.trim()) {
         if (!selected.includes(search.trim())) {
           const newSelected = [...selected, search.trim()]
-          onChange(newSelected.join('-'))
+          onChange(newSelected.join(SEPARATOR))
         }
         setSearch('')
       } else {
@@ -45,7 +51,7 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
     }
   }
 
-  const displayValue = selected.join('-')
+  const displayValue = selected.join(' - ')
   
   // Filter suggestions based on search
   const filteredSuggestions = suggestions.filter(s => s.toLowerCase().includes(search.toLowerCase()))
@@ -100,6 +106,32 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
               No matches found
             </div>
           )}
+          
+          {/* OK Button to close dropdown */}
+          <div style={{ borderTop: '1px solid var(--border-color)', padding: '8px 10px', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setSearch('')
+              }}
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                background: 'var(--accent-600)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <i className="fas fa-check"></i> OK
+            </button>
+          </div>
         </div>
       )}
     </div>
