@@ -58,6 +58,20 @@ export default function TransactionList({ items = [], title, onSelect }) {
               <div className={`txn-icon ${icon.cls}`}>
                 <i className={`fas ${icon.icon}`}></i>
               </div>
+
+              {/* Small attachment preview / icon */}
+              <div style={{ width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                {item.fileData ? (
+                  item.fileData.includes('application/pdf') ? (
+                    <i className="fas fa-file-pdf" style={{ fontSize: 18, color: 'var(--red-500)' }}></i>
+                  ) : (
+                    <img src={item.fileData} alt="preview" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
+                  )
+                ) : item.hasAttachment ? (
+                  <i className="fas fa-paperclip" style={{ fontSize: 16, color: 'var(--text-muted)' }}></i>
+                ) : null}
+              </div>
+
               <div className="txn-info">
                 <div className="txn-title">{title}</div>
                 <div className="txn-sub">{formatDate(item.date)} · {sub}</div>

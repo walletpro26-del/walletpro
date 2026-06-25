@@ -36,6 +36,14 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
     onChange(newSelected.join(SEPARATOR))
   }
 
+  // Allow editing an already-selected item: put it into the input for modification
+  function editItem(item) {
+    setSearch(item)
+    setOpen(true)
+    const newSelected = selected.filter(s => s !== item)
+    onChange(newSelected.join(SEPARATOR))
+  }
+
   function handleKeyDown(e) {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -98,7 +106,11 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
                 onChange={() => toggleSelect(item)}
                 style={{ accentColor: 'var(--accent-600)', width: 14, height: 14 }}
               />
-              <span style={{ flex: 1, fontSize: 13, fontWeight: selected.includes(item) ? 700 : 500 }}>{item}</span>
+              <span
+                onClick={(e) => { e.stopPropagation(); editItem(item) }}
+                style={{ flex: 1, fontSize: 13, fontWeight: selected.includes(item) ? 700 : 500, cursor: 'text' }}
+                title="Click to edit"
+              >{item}</span>
             </label>
           ))}
           {filteredSuggestions.length === 0 && !showAddOption && (
