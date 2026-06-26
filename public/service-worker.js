@@ -1,30 +1,81 @@
-/* Simple service worker for PWA installability.
-   Netlify hosting: keep caching minimal to avoid stale data issues. */
+/* WalletVibe Service Worker
+   - Network-first with cache fallback for static assets
+   - Version detection: polls /version.json and notifies clients on change
+   - Posts SW_UPDATED message to all clients when a new SW activates
+*/
 
-const CACHE_NAME = 'walletvibe-cache-v1'
+const CACHE_NAME = 'walletvibe-cache-v4'
+const VERSION_KEY = 'wv-deployed-version'
 
+// On install — cache shell assets
 self.addEventListener('install', (event) => {
+  self.skipWaiting() // activate immediately
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll([]))
-      .catch(() => {})
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(['/'])
+    ).catch(() => {})
   )
 })
 
+// On activate — clean old caches, check version, notify clients
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      // Clean old caches
+      const keys = await caches.keys()
+      await Promise.all(
+        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+      )
+      // Claim clients
+      await self.clients.claim()
+
+      // Notify all clients that SW updated
+      const allClients = await self.clients.matchAll({ includeUncontrolled: true })
+      allClients.forEach((client) =>
+        client.postMessage({ type: 'SW_ACTIVATED' })
+      )
+
+      // Check version.json for app content updates
+      try {
+        const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+        if (res.ok) {
+          const { version } = await res.json()
+          const stored = await getStoredVersion()
+          if (stored && stored !== version) {
+            // New app version deployed — notify clients
+            allClients.forEach((client) =>
+              client.postMessage({ type: 'APP_UPDATED', version })
+            )
+          }
+          await storeVersion(version)
+        }
+      } catch (_) {}
+    })()
+  )
+})
+
+// Fetch handler — network first, cache fallback
 self.addEventListener('fetch', (event) => {
-  // Network-first for API calls; cache only for successful GETs to non-API static assets.
   const req = event.request
   if (req.method !== 'GET') return
+
+  // Don't intercept Firebase/API calls
+  const url = new URL(req.url)
+  const isFirebase = url.hostname.includes('googleapis') || url.hostname.includes('firebaseio') || url.hostname.includes('firestore')
+  if (isFirebase) return
+
+  // Don't cache version.json (always fresh)
+  if (url.pathname === '/version.json') {
+    event.respondWith(fetch(req).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } })))
+    return
+  }
 
   event.respondWith(
     fetch(req)
       .then((res) => {
         if (res && res.ok) {
-          const url = new URL(req.url)
           const isSameOrigin = url.origin === self.location.origin
-          const isApi = url.searchParams.get('action')
-          if (isSameOrigin && !isApi) {
+          if (isSameOrigin) {
             const copy = res.clone()
             caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {})
           }
@@ -34,3 +85,43 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(req))
   )
 })
+
+// Periodic version check message from app
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'CHECK_VERSION') {
+    checkAndNotifyVersion(event.source)
+  }
+})
+
+async function checkAndNotifyVersion(client) {
+  try {
+    const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+    if (!res.ok) return
+    const { version } = await res.json()
+    const stored = await getStoredVersion()
+    if (stored && stored !== version) {
+      const target = client || (await self.clients.matchAll({ includeUncontrolled: true }))[0]
+      if (target) target.postMessage({ type: 'APP_UPDATED', version })
+      await storeVersion(version)
+    } else if (!stored) {
+      await storeVersion(version)
+    }
+  } catch (_) {}
+}
+
+// IDB-lite: store version in Cache Storage metadata
+async function getStoredVersion() {
+  try {
+    const cache = await caches.open('wv-meta')
+    const res = await cache.match('/__version')
+    if (!res) return null
+    return await res.text()
+  } catch { return null }
+}
+
+async function storeVersion(v) {
+  try {
+    const cache = await caches.open('wv-meta')
+    await cache.put('/__version', new Response(v, { headers: { 'Content-Type': 'text/plain' } }))
+  } catch {}
+}

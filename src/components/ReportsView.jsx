@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { getAllExpenses } from '../api/expenses'
 import { getAllLending, normalizeLendingType } from '../api/lending'
 import { jsPDF } from 'jspdf'
@@ -421,135 +421,83 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
   return (
     <div className="animate-fade-in">
       <div className="report-card">
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <h3 style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-            <i className="fas fa-chart-pie" style={{ color: 'var(--accent-500)' }}></i> Report Generator
+        {/* ── Compact Header Row ── */}
+        <div className="report-compact-header">
+          <h3 className="report-title">
+            <i className="fas fa-chart-pie"></i> Report Generator
           </h3>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button 
+          <div className="report-header-actions">
+            <button
               type="button"
               onClick={() => window.print()}
-              className="btn-outline"
-              title="Open browser print dialogue to save/print as PDF"
-              style={{ 
-                padding: '6px 12px', 
-                fontSize: 11, 
-                fontWeight: 700, 
-                color: 'var(--accent-600)', 
-                borderColor: 'var(--accent-200)',
-                background: 'var(--bg-card)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
-              }}
+              className="report-icon-btn"
+              title="Print / Save as PDF"
             >
-              <i className="fas fa-print"></i> Print
+              <i className="fas fa-print"></i>
             </button>
-            <button 
+            <button
               type="button"
               onClick={handleDownloadPDF}
-              className="btn-outline"
+              className="report-icon-btn report-icon-btn--green"
               disabled={downloading}
-              title="Download PDF directly to Downloads folder"
-              style={{ 
-                padding: '6px 12px', 
-                fontSize: 11, 
-                fontWeight: 700, 
-                color: 'var(--emerald-600)', 
-                borderColor: '#a7f3d0',
-                background: 'var(--bg-card)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                cursor: downloading ? 'not-allowed' : 'pointer'
-              }}
+              title={downloading ? 'Generating PDF...' : 'Download PDF'}
             >
-              <i className="fas fa-download"></i> {downloading ? 'Downloading...' : 'Download PDF'}
+              <i className={downloading ? 'fas fa-spinner fa-spin' : 'fas fa-file-pdf'}></i>
             </button>
           </div>
         </div>
 
-        {/* PDF Export Settings */}
-        <div style={{ 
-          border: '1px solid var(--border-color)', 
-          borderRadius: 'var(--radius-md)', 
-          padding: 10, 
-          background: 'var(--bg-subtle)', 
-          marginBottom: 16 
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <i className="fas fa-cog"></i> PDF & Report Settings
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              <input 
-                type="checkbox" 
-                checked={pdfSettings.showStats} 
-                onChange={(e) => setPdfSettings(s => ({ ...s, showStats: e.target.checked }))}
-                style={{ accentColor: 'var(--accent-600)' }}
-              />
-              Summary Cards
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              <input 
-                type="checkbox" 
-                checked={pdfSettings.showBreakdown} 
-                onChange={(e) => setPdfSettings(s => ({ ...s, showBreakdown: e.target.checked }))}
-                style={{ accentColor: 'var(--accent-600)' }}
-              />
-              Breakdown Summary
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              <input 
-                type="checkbox" 
-                checked={pdfSettings.showLedger} 
-                onChange={(e) => setPdfSettings(s => ({ ...s, showLedger: e.target.checked }))}
-                style={{ accentColor: 'var(--accent-600)' }}
-              />
-              Details Ledger
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
-              <input 
-                type="checkbox" 
-                checked={pdfSettings.showRemarks} 
-                onChange={(e) => setPdfSettings(s => ({ ...s, showRemarks: e.target.checked }))}
-                style={{ accentColor: 'var(--accent-600)' }}
-              />
-              Show Comments/Remarks
-            </label>
-          </div>
+        {/* ── PDF Settings as chip toggles ── */}
+        <div className="pdf-settings-row">
+          <span className="pdf-settings-label"><i className="fas fa-sliders-h"></i> PDF:</span>
+          {[
+            { key: 'showStats', icon: 'fa-chart-bar', label: 'Summary' },
+            { key: 'showBreakdown', icon: 'fa-layer-group', label: 'Breakdown' },
+            { key: 'showLedger', icon: 'fa-list', label: 'Ledger' },
+            { key: 'showRemarks', icon: 'fa-comment-alt', label: 'Remarks' },
+          ].map(({ key, icon, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={`pdf-chip ${pdfSettings[key] ? 'active' : ''}`}
+              onClick={() => setPdfSettings(s => ({ ...s, [key]: !s[key] }))}
+              title={`${pdfSettings[key] ? 'Hide' : 'Show'} ${label} in PDF`}
+            >
+              <i className={`fas ${icon}`}></i>
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
 
-        {/* Type Switcher */}
+        {/* ── Type Switcher ── */}
         <div className="report-type-switcher">
           <button className={`report-type-btn ${reportType === 'expense' ? 'active' : ''}`} onClick={() => setReportType('expense')}>Expense</button>
           <button className={`report-type-btn ${reportType === 'lending' ? 'active' : ''}`} onClick={() => setReportType('lending')}>Lend / Borrow</button>
         </div>
 
-        {/* Date Range */}
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, marginBottom: 8, cursor: 'pointer' }}>
+        {/* ── Date Range ── */}
+        <div className="report-date-row">
+          <label className="report-alltime-toggle">
             <input type="checkbox" checked={isAllTime} onChange={() => setIsAllTime(!isAllTime)} style={{ accentColor: 'var(--accent-600)' }} />
             All Time
           </label>
           {!isAllTime && (
             <div className="date-range-row">
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>to</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>to</span>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           )}
         </div>
 
-        {/* Filters */}
+        {/* ── Filters ── */}
         {reportType === 'expense' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             <MultiSelect
               label="Category"
               options={catOptions}
               selected={selectedCats}
-              onToggle={(v) => toggleFilter(selectedCats, setSelectedCats, v)}
-              onClear={() => setSelectedCats([])}
+              onChange={setSelectedCats}
               open={showCatDropdown}
               setOpen={setShowCatDropdown}
             />
@@ -557,21 +505,19 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
               label="For Whom"
               options={whomOptions}
               selected={selectedWhom}
-              onToggle={(v) => toggleFilter(selectedWhom, setSelectedWhom, v)}
-              onClear={() => setSelectedWhom([])}
+              onChange={setSelectedWhom}
               open={showWhomDropdown}
               setOpen={setShowWhomDropdown}
             />
           </div>
         )}
         {reportType === 'lending' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             <MultiSelect
               label="Type"
               options={typeOptions}
               selected={selectedTypes}
-              onToggle={(v) => toggleFilter(selectedTypes, setSelectedTypes, v)}
-              onClear={() => setSelectedTypes([])}
+              onChange={setSelectedTypes}
               open={showTypeDropdown}
               setOpen={setShowTypeDropdown}
             />
@@ -579,8 +525,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
               label="Person"
               options={personOptions}
               selected={selectedPersons}
-              onToggle={(v) => toggleFilter(selectedPersons, setSelectedPersons, v)}
-              onClear={() => setSelectedPersons([])}
+              onChange={setSelectedPersons}
               open={showPersonDropdown}
               setOpen={setShowPersonDropdown}
             />
@@ -925,39 +870,160 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
   )
 }
 
-function MultiSelect({ label, options, selected, onToggle, onClear, open, setOpen }) {
+function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
+  const containerRef = useRef(null)
+  const [multiMode, setMultiMode] = useState(false)
+
+  // Sync multiMode with selected length on open
+  useEffect(() => {
+    if (open) {
+      setMultiMode(selected.length > 1)
+    }
+  }, [open, selected])
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open, setOpen])
+
   const pluralize = (word) => {
     const lower = word.toLowerCase()
     if (lower === 'category') return 'Categories'
     if (lower === 'person') return 'People'
     if (lower === 'for whom') return 'For Whom'
-    if (lower.endsWith('s') || lower.endsWith('sh') || lower.endsWith('ch') || lower.endsWith('x') || lower.endsWith('z')) return word + 'es'
-    if (lower.endsWith('y') && !['a','e','i','o','u'].includes(lower[lower.length - 2])) return word.slice(0, -1) + 'ies'
     return word + 's'
   }
-  const displayText = selected.length === 0 ? `All ${pluralize(label)}` : selected.join(', ')
+
+  const displayText = selected.length === 0
+    ? `All ${pluralize(label)}`
+    : selected.length === 1
+      ? selected[0]
+      : `${selected[0]} +${selected.length - 1}`
+
+  function handleOptionClick(opt) {
+    if (multiMode) {
+      if (selected.includes(opt)) {
+        onChange(selected.filter((x) => x !== opt))
+      } else {
+        onChange([...selected, opt])
+      }
+    } else {
+      onChange([opt])
+      setOpen(false)
+    }
+  }
+
   return (
-    <div className="multi-select">
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+    <div className="multi-select" ref={containerRef} style={{ position: 'relative' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{label}</div>
       <div className="multi-select-trigger" onClick={() => setOpen(!open)}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displayText}</span>
-        <i className="fas fa-chevron-down" style={{ fontSize: 10 }}></i>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: 12, fontWeight: selected.length ? 700 : 500, color: selected.length ? 'var(--accent-600)' : 'var(--text-secondary)' }}>{displayText}</span>
+        <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 9, color: 'var(--text-muted)' }}></i>
       </div>
       {open && (
-        <div className="multi-select-options custom-scrollbar">
-          <div className="multi-select-option" onClick={onClear} style={{ color: 'var(--accent-600)', fontWeight: 700 }}>
-            ✓ All
+        <div className="multi-select-options custom-scrollbar" style={{ animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)', zIndex: 100 }}>
+          {/* Header: label + multi toggle */}
+          <div style={{
+            borderBottom: '1px solid var(--border-color)',
+            padding: '5px 8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'var(--bg-subtle)',
+          }}>
+            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {multiMode ? 'Multi-select' : 'Single-select'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMultiMode(m => !m)}
+              style={{
+                padding: '2px 6px',
+                fontSize: 9,
+                fontWeight: 700,
+                background: multiMode ? 'var(--accent-600)' : 'var(--bg-card)',
+                color: multiMode ? '#fff' : 'var(--accent-600)',
+                border: '1px solid var(--accent-300)',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+              }}
+            >
+              <i className={multiMode ? 'fas fa-check-square' : 'fas fa-th-large'} style={{ fontSize: 8 }} />
+              {multiMode ? 'Multi' : '⊞ Multi'}
+            </button>
           </div>
-          {options.map((opt) => (
-            <label key={opt} className="multi-select-option">
-              <input
-                type="checkbox"
-                checked={selected.includes(opt)}
-                onChange={() => onToggle(opt)}
-              />
-              {opt}
-            </label>
-          ))}
+
+          <div className="custom-scrollbar" style={{ maxHeight: 150, overflowY: 'auto' }}>
+            {/* All option */}
+            <div
+              className={`multi-select-option${selected.length === 0 ? ' selected' : ''}`}
+              onClick={() => { onChange([]); setOpen(false); setMultiMode(false) }}
+            >
+              {selected.length === 0 && <i className="fas fa-check" style={{ fontSize: 9, color: 'var(--accent-500)', marginRight: 4 }}></i>}
+              <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>All {pluralize(label)}</span>
+            </div>
+            {options.map((opt) => (
+              <div
+                key={opt}
+                className={`multi-select-option${selected.includes(opt) ? ' selected' : ''}`}
+                onClick={() => handleOptionClick(opt)}
+                style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+              >
+                {multiMode ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => {}}
+                    style={{ accentColor: 'var(--accent-600)', width: 12, height: 12, cursor: 'pointer' }}
+                  />
+                ) : (
+                  selected.includes(opt)
+                    ? <i className="fas fa-check" style={{ fontSize: 9, color: 'var(--accent-500)', width: 12 }} />
+                    : <span style={{ display: 'inline-block', width: 12 }} />
+                )}
+                <span>{opt}</span>
+              </div>
+            ))}
+          </div>
+
+          {selected.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border-color)', padding: '5px 8px', background: 'var(--bg-subtle)', display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => { onChange([]); setOpen(false); setMultiMode(false) }}
+                style={{ fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                ✕ Clear all
+              </button>
+              {multiMode && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    background: 'var(--accent-gradient)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Done
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

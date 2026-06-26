@@ -4,6 +4,7 @@ import {
   query, orderBy, limit, Timestamp, where,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
+import { saveSnapshot, loadSnapshot, addPending } from './localCache'
 
 const COL = 'lending'
 
@@ -68,29 +69,85 @@ function fromFirestore(docSnap) {
 
 export async function addLending(data) {
   const fsData = toFirestore(data)
-  const docRef = await addDoc(collection(db, COL), fsData)
-  if (data.fileData) {
-    await saveAttachment(COL, docRef.id, data.fileData)
+  try {
+    const docRef = await addDoc(collection(db, COL), fsData)
+    if (data.fileData) {
+      await saveAttachment(COL, docRef.id, data.fileData)
+    }
+    return { success: true, id: docRef.id }
+  } catch (err) {
+    if (!navigator.onLine || err?.code === 'unavailable') {
+      const tempId = addPending({
+        type: 'add',
+        collection: COL,
+        data: { ...data, _offline: true },
+      })
+      // Optimistically update snapshot
+      const snapshot = loadSnapshot('lending') || []
+      const norm = normalizeLendingType(data.type || 'Lend')
+      let label = data.type || 'Loan Given'
+      if (norm === 'LEND') label = 'Loan Given'
+      else if (norm === 'BORROW') label = 'Borrowed'
+      else if (norm === 'THEY_RETURN') label = 'Received Return'
+      else if (norm === 'I_RETURN') label = 'I Returned'
+      else if (norm === 'FORGIVE') label = 'Forgiven'
+      const optimistic = {
+        id: tempId,
+        date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
+        dateObj: data.date ? new Date(data.date) : new Date(),
+        type: data.type || 'Lend',
+        label,
+        person: data.person || '',
+        amount: Math.abs(parseFloat(data.amount)) || 0,
+        remarks: data.remarks || '',
+        fileName: '',
+        mimeType: '',
+        hasAttachment: false,
+        hasChunkedAttachment: false,
+        isLend: true,
+        sheet: 'lending',
+        _pending: true,
+      }
+      snapshot.unshift(optimistic)
+      saveSnapshot('lending', snapshot)
+      return { success: true, id: tempId, offline: true }
+    }
+    throw err
   }
-  return { success: true, id: docRef.id }
 }
 
 export async function updateLending(id, data) {
   const ref = doc(db, COL, id)
   const fsData = toFirestore(data)
   delete fsData.fileData
-  await updateDoc(ref, fsData)
-  if (data.fileData) {
-    await deleteAttachmentChunks(COL, id)
-    await saveAttachment(COL, id, data.fileData)
+  try {
+    await updateDoc(ref, fsData)
+    if (data.fileData) {
+      await deleteAttachmentChunks(COL, id)
+      await saveAttachment(COL, id, data.fileData)
+    }
+    return { success: true }
+  } catch (err) {
+    if (!navigator.onLine || err?.code === 'unavailable') {
+      addPending({ type: 'update', collection: COL, id, data })
+      return { success: true, offline: true }
+    }
+    throw err
   }
-  return { success: true }
 }
 
 export async function deleteLending(id) {
-  await deleteAttachmentChunks(COL, id)
-  await deleteDoc(doc(db, COL, id))
-  return { success: true }
+  try {
+    await deleteAttachmentChunks(COL, id)
+    await deleteDoc(doc(db, COL, id))
+    return { success: true }
+  } catch (err) {
+    if (!navigator.onLine || err?.code === 'unavailable') {
+      addPending({ type: 'delete', collection: COL, id })
+      return { success: true, offline: true }
+    }
+    throw err
+  }
 }
 
 export async function getRecentLending(n = 20) {
@@ -121,9 +178,13 @@ export async function getAllLending() {
       })
     }
 
-    return items.sort((a, b) => b.dateObj - a.dateObj)
+    const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
+    saveSnapshot('lending', sorted)
+    return sorted
   } catch (err) {
-    console.error('Error fetching lending:', err)
+    console.warn('Lending fetch failed, using local cache:', err?.message)
+    const cached = loadSnapshot('lending')
+    if (cached) return cached.sort((a, b) => new Date(b.date) - new Date(a.date))
     return []
   }
 }

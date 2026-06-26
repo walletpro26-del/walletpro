@@ -11,6 +11,8 @@ import {
 
 import LoginScreen from './components/LoginScreen'
 import InstallBanner from './components/InstallBanner'
+import UpdateBanner from './components/UpdateBanner'
+import OfflineSyncBanner from './components/OfflineSyncBanner'
 import Header from './components/Header'
 import ExpenseForm from './components/ExpenseForm'
 import LendingForm from './components/LendingForm'
@@ -20,6 +22,10 @@ import ReportsView from './components/ReportsView'
 import SettingsModal from './components/SettingsModal'
 import BankSearchModal from './components/BankSearchModal'
 import MigrationTool from './components/MigrationTool'
+import WalletVibeLogo from './components/WalletVibeLogo'
+
+// Record when the app opened (for update banner age check)
+window.__wv_open_time = Date.now()
 
 export default function App() {
   // Auth
@@ -29,6 +35,7 @@ export default function App() {
   // Navigation
   const startScreen = localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense'
   const [activeTab, setActiveTab] = useState(startScreen)
+  const [tabTransition, setTabTransition] = useState(false)
 
   // Data
   const [stats, setStats] = useState({ expense: { today: 0, month: 0, total: 0 }, lending: { receivable: 0, payable: 0, net: 0 } })
@@ -108,9 +115,19 @@ export default function App() {
     }
   }, [])
 
-  function showToast(msg) {
-    setToast(msg)
+  function showToast(msg, isOffline = false) {
+    setToast({ msg, isOffline })
     setTimeout(() => setToast(''), 3000)
+  }
+
+  // Animated tab switch
+  function switchTab(tab) {
+    if (tab === activeTab) return
+    setTabTransition(true)
+    setTimeout(() => {
+      setActiveTab(tab)
+      setTabTransition(false)
+    }, 150)
   }
 
   // Expense save
@@ -119,11 +136,11 @@ export default function App() {
     setError('')
     try {
       if (data.id) {
-        await updateExpense(data.id, data)
-        showToast('Expense updated!')
+        const result = await updateExpense(data.id, data)
+        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Expense updated!', result.offline)
       } else {
-        await addExpense(data)
-        showToast('Expense saved!')
+        const result = await addExpense(data)
+        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Expense saved!', result.offline)
       }
       setEditExpense(null)
       await loadDashboard()
@@ -140,11 +157,11 @@ export default function App() {
     setError('')
     try {
       if (data.id) {
-        await updateLending(data.id, data)
-        showToast('Record updated!')
+        const result = await updateLending(data.id, data)
+        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Record updated!', result.offline)
       } else {
-        await addLending(data)
-        showToast('Record saved!')
+        const result = await addLending(data)
+        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Record saved!', result.offline)
       }
       setEditLending(null)
       await loadDashboard()
@@ -195,13 +212,22 @@ export default function App() {
     setAllLending([])
   }
 
-  // Not ready yet
+  // ─── Splash screen (auth not ready) ────────────────────────────────────────
   if (!authReady) {
     return (
-      <div className="app-shell">
-        <div className="loader-wrap" style={{ minHeight: '100vh' }}>
-          <div className="loader-spinner"></div>
-          <div className="loader-text">Loading</div>
+      <div className="splash-screen">
+        <div className="splash-orb splash-orb-1" />
+        <div className="splash-orb splash-orb-2" />
+        <div className="splash-content">
+          <WalletVibeLogo size={72} variant="icon" animate={true} />
+          <div className="splash-name">
+            <span className="splash-wallet">Wallet</span>
+            <span className="splash-vibe">Vibe</span>
+          </div>
+          <div className="splash-tagline">Personal Finance, Simplified</div>
+          <div className="splash-loader">
+            <div className="splash-loader-bar" />
+          </div>
         </div>
       </div>
     )
@@ -214,6 +240,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {/* Banners */}
+      <UpdateBanner />
+      <OfflineSyncBanner onSyncComplete={loadDashboard} />
       <InstallBanner />
 
       <Header
@@ -231,13 +260,25 @@ export default function App() {
       {/* Tab Bar */}
       <div className="tab-bar">
         <div className="tab-bar-inner">
-          <button className={`tab-btn ${activeTab === 'expense' ? 'active' : ''}`} onClick={() => setActiveTab('expense')}>
+          <button
+            className={`tab-btn ${activeTab === 'expense' ? 'active' : ''}`}
+            onClick={() => switchTab('expense')}
+          >
+            <i className="fas fa-receipt" style={{ marginRight: 5, fontSize: 10 }}></i>
             Expenses
           </button>
-          <button className={`tab-btn ${activeTab === 'lending' ? 'active' : ''}`} onClick={() => setActiveTab('lending')}>
+          <button
+            className={`tab-btn ${activeTab === 'lending' ? 'active' : ''}`}
+            onClick={() => switchTab('lending')}
+          >
+            <i className="fas fa-handshake" style={{ marginRight: 5, fontSize: 10 }}></i>
             Lend/Borrow
           </button>
-          <button className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
+          <button
+            className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+            onClick={() => switchTab('reports')}
+          >
+            <i className="fas fa-chart-bar" style={{ marginRight: 5, fontSize: 10 }}></i>
             Reports
           </button>
         </div>
@@ -248,14 +289,13 @@ export default function App() {
 
       {/* Loading */}
       {loading && (
-        <div className="loader-wrap" style={{ padding: '24px 0' }}>
-          <div className="loader-spinner"></div>
-          <div className="loader-text">Syncing</div>
+        <div className="loading-strip">
+          <div className="loading-strip-bar" />
         </div>
       )}
 
       {/* Content */}
-      <div className="content-area custom-scrollbar">
+      <div className={`content-area custom-scrollbar${tabTransition ? ' tab-exit' : ' tab-enter'}`}>
         {activeTab === 'expense' && (
           <>
             <ExpenseForm
@@ -293,9 +333,9 @@ export default function App() {
         )}
 
         {activeTab === 'reports' && (
-          <ReportsView 
-            allExpenses={allExpenses} 
-            allLending={allLending} 
+          <ReportsView
+            allExpenses={allExpenses}
+            allLending={allLending}
             onSelectTxn={setSelectedTxn}
           />
         )}
@@ -338,7 +378,11 @@ export default function App() {
       )}
 
       {/* Toast */}
-      {toast && <div className="success-toast">{toast}</div>}
+      {toast && (
+        <div className={`success-toast ${toast.isOffline ? 'toast-offline' : ''}`}>
+          {toast.msg || toast}
+        </div>
+      )}
     </div>
   )
 }

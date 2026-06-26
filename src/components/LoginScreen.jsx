@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { signIn, signInWithGoogle } from '../api/auth'
+import WalletVibeLogo from './WalletVibeLogo'
 
 export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -46,11 +47,17 @@ export default function LoginScreen({ onLogin }) {
   return (
     <div className="login-overlay">
       <div className="login-card">
-        <div className="login-logo">
-          <i className="fas fa-wallet"></i>
+        {/* Logo */}
+        <div className="login-logo-wrap">
+          <div className="login-logo-glow" />
+          <WalletVibeLogo size={64} variant="icon" animate={true} className="login-logo-svg" />
         </div>
+
         <div className="login-title">
-          <h2>Welcome Back</h2>
+          <h2>
+            <span className="login-brand-wallet">Wallet</span>
+            <span className="login-brand-vibe">Vibe</span>
+          </h2>
           <p>Secure Personal Finance</p>
         </div>
 
@@ -90,18 +97,21 @@ export default function LoginScreen({ onLogin }) {
           </div>
 
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Signing in...' : 'Access Wallet'}
+            {loading ? (
+              <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Signing in...</>
+            ) : (
+              <><i className="fas fa-unlock-alt" style={{ marginRight: 6 }} />Access Wallet</>
+            )}
           </button>
-          
-          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', margin: '4px 0' }}>OR</div>
-          
-          <button type="button" onClick={handleGoogleLogin} disabled={loading} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            width: '100%', padding: '12px', borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border-color)', background: 'var(--bg-card)',
-            color: 'var(--text-primary)', fontWeight: 600, fontSize: 14,
-            cursor: 'pointer', transition: 'all 0.2s'
-          }}>
+
+          <div className="login-divider"><span>OR</span></div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="google-signin-btn"
+          >
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Logo" style={{ width: 18, height: 18 }} />
             Sign in with Google
           </button>

@@ -1098,6 +1098,170 @@ select.float-input { padding-right: 32px; }
   box-shadow: var(--shadow-lg);
   margin-bottom: 20px;
 }
+
+.report-compact-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.report-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.report-title i {
+  color: var(--accent-500);
+}
+
+.report-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.report-icon-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: var(--accent-300);
+  transform: translateY(-1px);
+}
+
+.report-icon-btn:active {
+  transform: translateY(0);
+}
+
+.report-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.report-icon-btn--green {
+  color: var(--emerald-600);
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.report-icon-btn--green:hover {
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--emerald-600);
+  border-color: var(--emerald-500);
+}
+
+.pdf-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.pdf-settings-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pdf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--font-body);
+}
+
+.pdf-chip i {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.pdf-chip:hover {
+  border-color: var(--accent-300);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.pdf-chip.active {
+  background: var(--accent-600);
+  border-color: var(--accent-600);
+  color: #ffffff;
+}
+
+.pdf-chip.active i {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.report-date-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.report-alltime-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.report-alltime-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+@media (min-width: 480px) {
+  .report-date-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
 .report-type-switcher {
   display: flex;
   gap: 6px;
@@ -1659,6 +1823,31 @@ select.float-input { padding-right: 32px; }
 /* Hover style for clickable transaction rows in reports view */
 .report-txn-row:hover {
   background: var(--bg-subtle);
+}
+
+/* Micro-animations and springy dropdowns */
+@keyframes dropdown-spring {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.logo-float {
+  animation: logoFloat 3.5s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

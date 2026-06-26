@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import WalletVibeLogo from './WalletVibeLogo'
 
 export default function Header({
   auth, stats, activeTab, searchIndex,
@@ -66,12 +67,11 @@ export default function Header({
       <div className="header-top">
         <div className="header-brand">
           <h1 className="brand-glow">
-            <i className="fas fa-wallet"></i> Wallet<span>Vibe</span>
-            <span className={`net-indicator ${isOnline ? 'online' : 'offline'}`} title={isOnline ? 'Online — Synced' : 'Offline — Auto-syncing in background'}>
-              <i className={isOnline ? "fas fa-circle" : "fas fa-exclamation-circle"}></i>
-            </span>
+            <WalletVibeLogo size={28} variant="light" animate={false} />
+            <span className="brand-name">Wallet<span>Vibe</span></span>
           </h1>
           <div className="header-date">{dateStr}</div>
+
         </div>
         <div className="header-actions">
           <button className="header-btn" onClick={onBankSearch} title="Bank Search">
@@ -93,7 +93,7 @@ export default function Header({
         <i className="fas fa-search"></i>
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search transactions..."
           value={searchTerm}
           onChange={(e) => handleSearch(e.target.value)}
           onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
