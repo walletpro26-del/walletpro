@@ -1,7 +1,7 @@
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, getDocs,
-  query, orderBy, limit, Timestamp,
+  query, orderBy, limit, Timestamp, where,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
 
@@ -11,6 +11,7 @@ function toFirestore(data) {
   const ts = data.date ? new Date(data.date) : new Date()
   return {
     timestamp: Timestamp.fromDate(ts),
+    userId: auth.currentUser?.uid || '',
     type: data.type || data.lendType || 'Lend',
     person: data.person || '',
     amount: Math.abs(parseFloat(data.amount)) || 0,
@@ -93,23 +94,45 @@ export async function deleteLending(id) {
 }
 
 export async function getRecentLending(n = 20) {
-  const q = query(collection(db, COL), orderBy('timestamp', 'desc'), limit(n))
-  const snap = await getDocs(q)
-  return snap.docs.map(fromFirestore)
+  const all = await getAllLending()
+  return all.slice(0, n)
 }
 
 export async function getAllLending() {
-  const q = query(collection(db, COL), orderBy('timestamp', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.map(fromFirestore)
+  const currentUid = auth.currentUser?.uid || ''
+  if (!currentUid) return []
+
+  try {
+    // 1. Fetch scoped lending
+    const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
+    const snapScoped = await getDocs(qScoped)
+    let items = snapScoped.docs.map(fromFirestore)
+
+    // 2. Fetch all to find legacy items (without userId) to migrate
+    const qAll = query(collection(db, COL))
+    const snapAll = await getDocs(qAll)
+    const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
+
+    if (legacyDocs.length > 0) {
+      legacyDocs.forEach((d) => {
+        const ref = doc(db, COL, d.id)
+        updateDoc(ref, { userId: currentUid }).catch((err) => console.error('Migration error:', err))
+        items.push(fromFirestore(d))
+      })
+    }
+
+    return items.sort((a, b) => b.dateObj - a.dateObj)
+  } catch (err) {
+    console.error('Error fetching lending:', err)
+    return []
+  }
 }
 
 export async function getLendingAttachment(id) {
   return getAttachment(COL, id)
 }
 
-export async function getLendingStats() {
-  const all = await getAllLending()
+export function computeLendingStatsLocally(all) {
   let receivable = 0, payable = 0
 
   for (const t of all) {
@@ -122,4 +145,9 @@ export async function getLendingStats() {
   }
 
   return { receivable, payable, net: receivable - payable }
+}
+
+export async function getLendingStats() {
+  const all = await getAllLending()
+  return computeLendingStatsLocally(all)
 }

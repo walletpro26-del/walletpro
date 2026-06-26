@@ -1,5 +1,5 @@
 {
-  "name": "walletpro-react",
+  "name": "walletvibe-react",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "firebase": "^12.15.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -1,7 +1,7 @@
 /* Simple service worker for PWA installability.
    Netlify hosting: keep caching minimal to avoid stale data issues. */
 
-const CACHE_NAME = 'walletpro-cache-v1'
+const CACHE_NAME = 'walletvibe-cache-v1'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

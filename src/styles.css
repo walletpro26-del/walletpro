@@ -219,8 +219,37 @@ body {
   align-items: center;
   gap: 8px;
 }
-.header-brand h1 .fa-wallet { color: var(--slate-300); font-size: 16px; }
-.header-brand h1 span { color: var(--slate-300); }
+.header-brand h1 .fa-wallet {
+  color: #a5b4fc;
+  font-size: 16px;
+  filter: drop-shadow(0 0 8px rgba(165,180,252,0.4));
+}
+.header-brand h1 span {
+  background: linear-gradient(135deg, #cbd5e1 0%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+}
+.brand-glow span {
+  text-shadow: 0 0 16px rgba(165,180,252,0.25);
+}
+.net-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  font-size: 6px;
+  vertical-align: middle;
+  transition: all 0.3s ease;
+}
+.net-indicator.online {
+  color: #10b981;
+  filter: drop-shadow(0 0 4px rgba(16,185,129,0.8));
+}
+.net-indicator.offline {
+  color: #ef4444;
+  filter: drop-shadow(0 0 4px rgba(239,68,68,0.8));
+  animation: pulse 1.5s infinite;
+}
 .header-brand .header-date {
   font-size: 10px;
   color: var(--slate-400);
@@ -455,33 +484,31 @@ body {
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-muted);
   pointer-events: none;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
-  padding: 0 2px;
+  padding: 0 4px;
+  transform-origin: left top;
 }
 .float-input:focus + .float-label,
 .float-input:not(:placeholder-shown) + .float-label,
-.float-label.active {
-  top: 6px;
-  transform: translateY(0);
-  font-size: 9px;
+.float-label.active,
+select.float-input + .float-label {
+  top: 0;
+  transform: translateY(-50%) scale(0.85);
+  font-size: 11px;
   font-weight: 700;
-  color: var(--accent-600);
+  color: var(--text-muted);
+  background: var(--bg-card);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-select.float-input + .float-label {
-  top: 6px;
-  transform: translateY(0);
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.float-input:focus + .float-label,
+.float-label.active {
+  color: var(--accent-600);
 }
 select.float-input { padding-right: 32px; }
 .select-chevron {
@@ -1543,3 +1570,191 @@ select.float-input { padding-right: 32px; }
   .content-area { padding: 0 !important; overflow: visible !important; }
   .app-shell { box-shadow: none; border: none; max-width: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   WalletVibe Premium UI/Design Enhancements & Micro-Animations
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Smooth sliding & scaling entry animation when tab components change */
+.content-area > * {
+  animation: tabFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Subtle transitions for cards */
+.card, .card-premium {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover, .card-premium:hover {
+  border-color: var(--accent-300);
+  box-shadow: var(--shadow-premium), 0 8px 24px rgba(99, 102, 241, 0.04);
+}
+
+/* Interactive Quick Fill Chips */
+.chip {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chip:hover {
+  transform: translateY(-1.5px) scale(1.03);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+  border-color: var(--accent-400);
+}
+
+/* Transaction List Item sliding hover effect */
+.txn-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.txn-item:hover {
+  transform: translateX(6px);
+  background: var(--bg-subtle);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Dynamic Primary Button animation */
+.btn-primary {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -4px rgba(99, 102, 241, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.985);
+}
+
+/* Glassmorphism overlays on modals */
+.modal-backdrop {
+  backdrop-filter: blur(16px);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+/* Input Fields Focus scaling and ring colors */
+.float-input {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.float-input:focus {
+  border-color: var(--accent-400);
+  box-shadow: 0 0 0 4px var(--accent-50);
+}
+
+/* Hover style for clickable transaction rows in reports view */
+.report-txn-row:hover {
+  background: var(--bg-subtle);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WalletVibe High-Fidelity Print & PDF Styles
+   ═══════════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0d172a !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 10pt !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Strip all screen constraints from the App Shell and content area */
+  .app-shell {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .content-area {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all screen-only UI components */
+  .app-header,
+  .error-banner,
+  .loader-wrap,
+  .tab-nav,
+  .report-card,
+  .report-summary,
+  .breakdown-group,
+  .section-title,
+  .app-footer,
+  .modal-overlay,
+  .install-banner,
+  .chips-wrapper,
+  form,
+  button,
+  .select-chevron {
+    display: none !important;
+  }
+
+  /* Display print document structure */
+  .print-only {
+    display: block !important;
+    width: 100% !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* Table rules for page division */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  /* Prevent page cuts on headers and sections */
+  h1, h2, h3, h4, .print-section-header {
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+
+/* Screen mode layout override */
+.print-only {
+  display: none;
+}
+

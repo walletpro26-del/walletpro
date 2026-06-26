@@ -59,25 +59,53 @@ export default function TransactionList({ items = [], title, onSelect }) {
                 <i className={`fas ${icon.icon}`}></i>
               </div>
 
-              {/* Small attachment preview / icon */}
-              <div style={{ width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-                {item.fileData ? (
-                  item.fileData.includes('application/pdf') ? (
-                    <i className="fas fa-file-pdf" style={{ fontSize: 18, color: 'var(--red-500)' }}></i>
-                  ) : (
-                    <img src={item.fileData} alt="preview" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
-                  )
-                ) : item.hasAttachment ? (
-                  <i className="fas fa-paperclip" style={{ fontSize: 16, color: 'var(--text-muted)' }}></i>
-                ) : null}
-              </div>
-
               <div className="txn-info">
                 <div className="txn-title">{title}</div>
                 <div className="txn-sub">{formatDate(item.date)} · {sub}</div>
               </div>
-              <div className={`txn-amount ${amtInfo.cls}`}>
-                {amtInfo.text}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <div className={`txn-amount ${amtInfo.cls}`} style={{ textAlign: 'right' }}>
+                  {amtInfo.text}
+                </div>
+
+                {/* Small attachment preview / icon at the right extreme */}
+                {(item.fileData || item.hasAttachment) && (
+                  <div 
+                    title={item.fileName || "View attachment"}
+                    style={{ 
+                      width: 32, 
+                      height: 32, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      background: 'var(--bg-subtle)', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: 'var(--radius-sm)', 
+                      marginLeft: 6, 
+                      flexShrink: 0, 
+                      overflow: 'hidden' 
+                    }}
+                  >
+                    {item.fileData ? (
+                      item.fileData.includes('application/pdf') ? (
+                        <i className="fas fa-file-pdf" style={{ fontSize: 14, color: 'var(--red-500)' }}></i>
+                      ) : (
+                        <img src={item.fileData} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      )
+                    ) : item.mimeType ? (
+                      item.mimeType.includes('pdf') || item.mimeType.includes('application/pdf') ? (
+                        <i className="fas fa-file-pdf" style={{ fontSize: 14, color: 'var(--red-500)' }}></i>
+                      ) : item.mimeType.includes('image') ? (
+                        <i className="fas fa-image" style={{ fontSize: 14, color: 'var(--accent-500)' }}></i>
+                      ) : (
+                        <i className="fas fa-paperclip" style={{ fontSize: 12, color: 'var(--text-muted)' }}></i>
+                      )
+                    ) : item.hasAttachment ? (
+                      <i className="fas fa-paperclip" style={{ fontSize: 12, color: 'var(--text-muted)' }}></i>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </li>
           )

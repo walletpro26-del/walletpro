@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react'
 
 export default function SettingsModal({ onClose, onSave, onMigrate }) {
-  const [theme, setTheme] = useState(localStorage.getItem('wp_theme') || 'light')
-  const [currency, setCurrency] = useState(localStorage.getItem('wp_currency') || '₹')
-  const [startScreen, setStartScreen] = useState(localStorage.getItem('wp_startScreen') || 'expense')
-  const [gasUrl, setGasUrl] = useState(localStorage.getItem('wp_gas_url') || import.meta.env.VITE_GAS_URL || '')
+  const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
+  const [currency, setCurrency] = useState(localStorage.getItem('wv_currency') || localStorage.getItem('wp_currency') || '₹')
+  const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
+  const [gasUrl, setGasUrl] = useState(localStorage.getItem('wv_gas_url') || localStorage.getItem('wp_gas_url') || import.meta.env.VITE_GAS_URL || '')
   
   // Confirmations
   const [confirmStep, setConfirmStep] = useState(0) // 0: none, 1: warn 1, 2: warn 2, 3: type text
   const [confirmInput, setConfirmInput] = useState('')
 
   function handleSave() {
-    localStorage.setItem('wp_theme', theme)
-    localStorage.setItem('wp_currency', currency)
-    localStorage.setItem('wp_startScreen', startScreen)
-    localStorage.setItem('wp_gas_url', gasUrl)
+    localStorage.setItem('wv_theme', theme)
+    localStorage.setItem('wv_currency', currency)
+    localStorage.setItem('wv_startScreen', startScreen)
+    localStorage.setItem('wv_gas_url', gasUrl)
     document.documentElement.setAttribute('data-theme', theme)
     onSave?.({ theme, currency, startScreen, gasUrl })
     onClose()

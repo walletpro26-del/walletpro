@@ -1,4 +1,4 @@
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, getDocs,
   query, orderBy, limit, where, Timestamp,
@@ -11,6 +11,7 @@ function toFirestore(data) {
   const ts = data.date ? new Date(data.date) : new Date()
   return {
     timestamp: Timestamp.fromDate(ts),
+    userId: auth.currentUser?.uid || '',
     forWhom: data.forWhom || 'Self',
     category: data.category || '',
     details: data.details || '',
@@ -75,23 +76,45 @@ export async function deleteExpense(id) {
 }
 
 export async function getRecentExpenses(n = 20) {
-  const q = query(collection(db, COL), orderBy('timestamp', 'desc'), limit(n))
-  const snap = await getDocs(q)
-  return snap.docs.map(fromFirestore)
+  const all = await getAllExpenses()
+  return all.slice(0, n)
 }
 
 export async function getAllExpenses() {
-  const q = query(collection(db, COL), orderBy('timestamp', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.map(fromFirestore)
+  const currentUid = auth.currentUser?.uid || ''
+  if (!currentUid) return []
+
+  try {
+    // 1. Fetch scoped expenses
+    const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
+    const snapScoped = await getDocs(qScoped)
+    let items = snapScoped.docs.map(fromFirestore)
+
+    // 2. Fetch all to find legacy items (without userId) to migrate
+    const qAll = query(collection(db, COL))
+    const snapAll = await getDocs(qAll)
+    const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
+
+    if (legacyDocs.length > 0) {
+      legacyDocs.forEach((d) => {
+        const ref = doc(db, COL, d.id)
+        updateDoc(ref, { userId: currentUid }).catch((err) => console.error('Migration error:', err))
+        items.push(fromFirestore(d))
+      })
+    }
+
+    return items.sort((a, b) => b.dateObj - a.dateObj)
+  } catch (err) {
+    console.error('Error fetching expenses:', err)
+    return []
+  }
 }
 
 export async function getExpenseAttachment(id) {
   return getAttachment(COL, id)
 }
 
-export async function getExpenseStats() {
-  const all = await getAllExpenses()
+export function computeExpenseStatsLocally(all) {
   const now = new Date()
   const currM = now.getMonth()
   const currY = now.getFullYear()
@@ -108,6 +131,11 @@ export async function getExpenseStats() {
   }
 
   return { today, month, total }
+}
+
+export async function getExpenseStats() {
+  const all = await getAllExpenses()
+  return computeExpenseStatsLocally(all)
 }
 
 export function computeSuggestions(expenses) {

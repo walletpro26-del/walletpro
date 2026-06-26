@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 export default function Header({
   auth, stats, activeTab, searchIndex,
@@ -8,7 +8,19 @@ export default function Header({
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
   const searchRef = useRef(null)
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-IN', {
@@ -53,7 +65,12 @@ export default function Header({
       <div className="header-bg"></div>
       <div className="header-top">
         <div className="header-brand">
-          <h1><i className="fas fa-wallet"></i> Wallet<span>Pro</span></h1>
+          <h1 className="brand-glow">
+            <i className="fas fa-wallet"></i> Wallet<span>Vibe</span>
+            <span className={`net-indicator ${isOnline ? 'online' : 'offline'}`} title={isOnline ? 'Online — Synced' : 'Offline — Auto-syncing in background'}>
+              <i className={isOnline ? "fas fa-circle" : "fas fa-exclamation-circle"}></i>
+            </span>
+          </h1>
           <div className="header-date">{dateStr}</div>
         </div>
         <div className="header-actions">

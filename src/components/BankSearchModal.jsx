@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, where, updateDoc, doc } from 'firebase/firestore'
 
-export default function BankSearchModal({ onClose }) {
+export default function BankSearchModal({ uid, onClose }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [allRecords, setAllRecords] = useState(null)
   const [filtered, setFiltered] = useState([])
@@ -14,9 +14,10 @@ export default function BankSearchModal({ onClose }) {
     setLoading(true)
     setError('')
     try {
-      const q = query(collection(db, 'bankTransactions'), orderBy('date', 'desc'))
-      const snap = await getDocs(q)
-      const records = snap.docs.map((d) => {
+      // 1. Fetch user-scoped bank transactions
+      const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', uid || ''))
+      const snapScoped = await getDocs(qScoped)
+      let records = snapScoped.docs.map((d) => {
         const data = d.data()
         const dateObj = data.date?.toDate?.() || new Date(data.date)
         return {
@@ -30,6 +31,31 @@ export default function BankSearchModal({ onClose }) {
           searchStr: `${dateObj.toLocaleDateString('en-IN')} ${data.description || ''} ${data.bank || ''} ${data.debit || ''} ${data.credit || ''} ${data.balance || ''}`.toLowerCase(),
         }
       })
+
+      // 2. Fetch all bank transactions to find legacy records to migrate
+      const qAll = query(collection(db, 'bankTransactions'))
+      const snapAll = await getDocs(qAll)
+      const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
+      if (legacyDocs.length > 0) {
+        legacyDocs.forEach((d) => {
+          const ref = doc(db, 'bankTransactions', d.id)
+          updateDoc(ref, { userId: uid || '' }).catch((err) => console.error('Migration error:', err))
+          const data = d.data()
+          const dateObj = data.date?.toDate?.() || new Date(data.date)
+          records.push({
+            id: d.id,
+            bank: data.bank || '',
+            date: dateObj,
+            description: data.description || '',
+            debit: data.debit || 0,
+            credit: data.credit || 0,
+            balance: data.balance || 0,
+            searchStr: `${dateObj.toLocaleDateString('en-IN')} ${data.description || ''} ${data.bank || ''} ${data.debit || ''} ${data.credit || ''} ${data.balance || ''}`.toLowerCase(),
+          })
+        })
+      }
+
+      records.sort((a, b) => b.date - a.date)
       setAllRecords(records)
       setLoading(false)
       return records

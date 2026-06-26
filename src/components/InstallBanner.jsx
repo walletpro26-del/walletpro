@@ -54,7 +54,7 @@ export default function InstallBanner() {
     <div style={{ padding: 12, margin: 16, borderRadius: 12, background: '#eef2ff', border: '1px solid #e0e7ff' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <div style={{ fontWeight: 900, marginBottom: 2 }}>Install Wallet Pro</div>
+          <div style={{ fontWeight: 900, marginBottom: 2 }}>Install WalletVibe</div>
           <div style={{ fontSize: 13, color: '#4f46e5' }}>Get an app-like experience on your device.</div>
         </div>
         <button

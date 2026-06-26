@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { onAuthChange, signOut } from './api/auth'
 import {
   addExpense, updateExpense, deleteExpense,
-  getRecentExpenses, getAllExpenses, getExpenseStats, computeSuggestions,
+  getAllExpenses, computeSuggestions, computeExpenseStatsLocally,
 } from './api/expenses'
 import {
   addLending, updateLending, deleteLending,
-  getRecentLending, getAllLending, getLendingStats,
+  getAllLending, computeLendingStatsLocally,
 } from './api/lending'
 
 import LoginScreen from './components/LoginScreen'
@@ -27,7 +27,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
 
   // Navigation
-  const startScreen = localStorage.getItem('wp_startScreen') || 'expense'
+  const startScreen = localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense'
   const [activeTab, setActiveTab] = useState(startScreen)
 
   // Data
@@ -66,7 +66,7 @@ export default function App() {
 
   // Apply saved theme
   useEffect(() => {
-    const theme = localStorage.getItem('wp_theme') || 'light'
+    const theme = localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light'
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
@@ -79,14 +79,15 @@ export default function App() {
     setLoading(true)
     setError('')
     try {
-      const [expStats, lendStats, recent, recentL, allExp, allL] = await Promise.all([
-        getExpenseStats(),
-        getLendingStats(),
-        getRecentExpenses(20),
-        getRecentLending(20),
+      const [allExp, allL] = await Promise.all([
         getAllExpenses(),
         getAllLending(),
       ])
+      const expStats = computeExpenseStatsLocally(allExp)
+      const lendStats = computeLendingStatsLocally(allL)
+      const recent = allExp.slice(0, 20)
+      const recentL = allL.slice(0, 20)
+
       setStats({ expense: expStats, lending: lendStats })
       setRecentExpenses(recent)
       setRecentLending(recentL)
@@ -292,7 +293,11 @@ export default function App() {
         )}
 
         {activeTab === 'reports' && (
-          <ReportsView allExpenses={allExpenses} allLending={allLending} />
+          <ReportsView 
+            allExpenses={allExpenses} 
+            allLending={allLending} 
+            onSelectTxn={setSelectedTxn}
+          />
         )}
 
         <div className="app-footer">
@@ -321,10 +326,11 @@ export default function App() {
         />
       )}
       {showBankSearch && (
-        <BankSearchModal onClose={() => setShowBankSearch(false)} />
+        <BankSearchModal uid={authState.uid} onClose={() => setShowBankSearch(false)} />
       )}
       {showMigration && (
         <MigrationTool
+          uid={authState.uid}
           gasUrl={migrationUrl}
           onClose={() => setShowMigration(false)}
           onComplete={loadDashboard}

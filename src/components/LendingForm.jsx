@@ -92,7 +92,7 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
       {editData && (
         <div className="edit-banner">
           <span><i className="fas fa-edit"></i> Editing Record</span>

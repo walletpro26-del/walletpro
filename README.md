@@ -1,4 +1,4 @@
-# Wallet Pro (React)
+# WalletVibe (React)
 
 This repo contains a React (Vite) frontend that interacts with a Google Apps Script backend (in the `appsscript/` folder).
 

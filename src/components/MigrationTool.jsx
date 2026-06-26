@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { db } from '../firebase'
-import { collection, addDoc, Timestamp, writeBatch, doc, getDocs, query } from 'firebase/firestore'
+import { collection, addDoc, Timestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore'
 
-export default function MigrationTool({ gasUrl, onClose, onComplete }) {
+export default function MigrationTool({ uid, gasUrl, onClose, onComplete }) {
   const [status, setStatus] = useState('idle') // idle | running | done | error
   const [log, setLog] = useState([])
   const [progress, setProgress] = useState(0)
@@ -76,7 +76,7 @@ export default function MigrationTool({ gasUrl, onClose, onComplete }) {
       addLog('Clearing existing data from Firestore to prevent duplicates...')
       const collectionsToClear = ['expenses', 'lending', 'bankTransactions']
       for (const colName of collectionsToClear) {
-        const q = query(collection(db, colName))
+        const q = query(collection(db, colName), where('userId', '==', uid || ''))
         const snap = await getDocs(q)
         if (!snap.empty) {
           addLog(`  Deleting ${snap.size} old records from ${colName}...`)
@@ -116,6 +116,7 @@ export default function MigrationTool({ gasUrl, onClose, onComplete }) {
           const docRef = doc(collection(db, 'expenses'))
           batch.set(docRef, {
             timestamp: Timestamp.fromDate(ts),
+            userId: uid || '',
             forWhom: e.rawWhom || e.whom || '',
             category: e.rawCat || e.cat || '',
             details: e.rawDet || e.detail || '',
@@ -150,6 +151,7 @@ export default function MigrationTool({ gasUrl, onClose, onComplete }) {
           const docRef = doc(collection(db, 'lending'))
           batch.set(docRef, {
             timestamp: Timestamp.fromDate(ts),
+            userId: uid || '',
             type: l.rawType || l.cat || '',
             person: l.rawName || l.whom || '',
             amount: parseAmount(l.rawAmt || l.amt),
@@ -188,6 +190,7 @@ export default function MigrationTool({ gasUrl, onClose, onComplete }) {
             const docRef = doc(collection(db, 'bankTransactions'))
             batch.set(docRef, {
               bank: b.bank || '',
+              userId: uid || '',
               date: Timestamp.fromDate(ts),
               description: b.description || '',
               debit: parseAmount(b.debit),
