@@ -17,7 +17,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
     showRemarks: true,
   })
   const [downloading, setDownloading] = useState(false)
-
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
   const handleDownloadPDF = () => {
     setDownloading(true)
     try {
@@ -426,7 +426,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           <h3 className="report-title">
             <i className="fas fa-chart-pie"></i> Report Generator
           </h3>
-          <div className="report-header-actions">
+          <div className="report-header-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               type="button"
               onClick={() => window.print()}
@@ -435,38 +435,89 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
             >
               <i className="fas fa-print"></i>
             </button>
-            <button
-              type="button"
-              onClick={handleDownloadPDF}
-              className="report-icon-btn report-icon-btn--green"
-              disabled={downloading}
-              title={downloading ? 'Generating PDF...' : 'Download PDF'}
-            >
-              <i className={downloading ? 'fas fa-spinner fa-spin' : 'fas fa-file-pdf'}></i>
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
+                className="report-icon-btn report-icon-btn--green"
+                title="PDF Download & Settings"
+              >
+                <i className="fas fa-file-pdf"></i>
+                <i className="fas fa-caret-down" style={{ fontSize: '0.75em', marginLeft: 6 }}></i>
+              </button>
+              
+              {pdfMenuOpen && (
+                <>
+                  <div className="dropdown-overlay" onClick={() => setPdfMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                  <div className="pdf-dropdown-menu" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    boxShadow: 'var(--shadow-lg)',
+                    minWidth: '200px',
+                    zIndex: 100,
+                    padding: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Include in PDF
+                    </div>
+                    {[
+                      { key: 'showStats', icon: 'fa-chart-bar', label: 'Summary' },
+                      { key: 'showBreakdown', icon: 'fa-layer-group', label: 'Breakdown' },
+                      { key: 'showLedger', icon: 'fa-list', label: 'Ledger' },
+                      { key: 'showRemarks', icon: 'fa-comment-alt', label: 'Remarks' },
+                    ].map(({ key, icon, label }) => (
+                      <label key={key} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        color: 'var(--text-primary)',
+                        transition: 'background-color 0.2s',
+                        userSelect: 'none'
+                      }} className="pdf-dropdown-item-hover">
+                        <input
+                          type="checkbox"
+                          checked={pdfSettings[key]}
+                          onChange={() => setPdfSettings(s => ({ ...s, [key]: !s[key] }))}
+                          style={{ margin: 0, width: '14px', height: '14px', accentColor: 'var(--primary)' }}
+                        />
+                        <i className={`fas ${icon}`} style={{ color: 'var(--text-secondary)', width: '16px', textAlign: 'center' }}></i>
+                        {label}
+                      </label>
+                    ))}
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }}></div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPdfMenuOpen(false)
+                        handleDownloadPDF()
+                      }}
+                      disabled={downloading}
+                      className="btn-primary"
+                      style={{ padding: '8px', fontSize: '13px', justifyContent: 'center' }}
+                    >
+                      {downloading ? (
+                        <><i className="fas fa-spinner fa-spin"></i> Generating...</>
+                      ) : (
+                        <><i className="fas fa-download"></i> Download PDF</>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* ── PDF Settings as chip toggles ── */}
-        <div className="pdf-settings-row">
-          <span className="pdf-settings-label"><i className="fas fa-sliders-h"></i> PDF:</span>
-          {[
-            { key: 'showStats', icon: 'fa-chart-bar', label: 'Summary' },
-            { key: 'showBreakdown', icon: 'fa-layer-group', label: 'Breakdown' },
-            { key: 'showLedger', icon: 'fa-list', label: 'Ledger' },
-            { key: 'showRemarks', icon: 'fa-comment-alt', label: 'Remarks' },
-          ].map(({ key, icon, label }) => (
-            <button
-              key={key}
-              type="button"
-              className={`pdf-chip ${pdfSettings[key] ? 'active' : ''}`}
-              onClick={() => setPdfSettings(s => ({ ...s, [key]: !s[key] }))}
-              title={`${pdfSettings[key] ? 'Hide' : 'Show'} ${label} in PDF`}
-            >
-              <i className={`fas ${icon}`}></i>
-              <span>{label}</span>
-            </button>
-          ))}
         </div>
 
         {/* ── Type Switcher ── */}

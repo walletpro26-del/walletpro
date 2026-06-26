@@ -46,11 +46,47 @@ export default function Header({
       setShowDropdown(false)
       return
     }
-    const lc = term.toLowerCase()
-    const results = searchIndex.filter((t) => {
-      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.amount}`.toLowerCase()
-      return str.includes(lc)
-    }).slice(0, 15)
+    const lc = term.toLowerCase().trim()
+    const terms = lc.split(/\s+/)
+    
+    const scoredResults = searchIndex.map(t => {
+      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.amount || ''}`.toLowerCase()
+      
+      let match = true
+      let score = 0
+      
+      for (const keyword of terms) {
+        if (!str.includes(keyword)) {
+          match = false
+          break
+        }
+        
+        // Exact match of a word
+        if (str.includes(` ${keyword} `) || str.startsWith(`${keyword} `) || str.endsWith(` ${keyword}`) || str === keyword) {
+          score += 2
+        } else {
+          score += 1
+        }
+      }
+      
+      if (!match) return null
+      
+      // Bonus points for full exact string match
+      if (str.includes(lc)) {
+        score += 5
+      }
+      
+      // Bonus points if it's matching the amount exactly
+      if (terms.includes(String(t.amount))) {
+        score += 3
+      }
+      
+      return { item: t, score }
+    }).filter(Boolean)
+    
+    scoredResults.sort((a, b) => b.score - a.score)
+    const results = scoredResults.slice(0, 15).map(r => r.item)
+    
     setSearchResults(results)
     setShowDropdown(results.length > 0)
   }

@@ -1947,6 +1947,10 @@ select.float-input { padding-right: 32px; }
   display: none;
 }
 
+.pdf-dropdown-item-hover:hover {
+  background-color: var(--bg-subtle) !important;
+}
+
 /* ─── Splash Screen ──────────────────────────────────────── */
 .splash-screen {
   position: fixed;

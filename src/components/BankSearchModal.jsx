@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, getDocs, query, where, updateDoc, doc } from 'firebase/firestore'
 
@@ -66,16 +66,24 @@ export default function BankSearchModal({ uid, onClose }) {
     }
   }
 
-  async function handleSearch() {
-    const records = await loadRecords()
-    if (!searchTerm.trim()) {
-      setFiltered(records.slice(0, 50))
-      return
+  useEffect(() => {
+    let active = true
+    async function doSearch() {
+      const records = await loadRecords()
+      if (!active) return
+      
+      if (!searchTerm.trim()) {
+        setFiltered(records.slice(0, 50))
+        return
+      }
+      const terms = searchTerm.toLowerCase().split(/\s+/)
+      const results = records.filter((r) => terms.every((t) => r.searchStr.includes(t)))
+      setFiltered(results.slice(0, 100))
     }
-    const terms = searchTerm.toLowerCase().split(/\s+/)
-    const results = records.filter((r) => terms.every((t) => r.searchStr.includes(t)))
-    setFiltered(results.slice(0, 100))
-  }
+    doSearch()
+    return () => { active = false }
+  }, [searchTerm, uid])
+
 
   function formatDate(d) {
     try { return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) }
@@ -108,24 +116,12 @@ export default function BankSearchModal({ uid, onClose }) {
               placeholder="Search amount, date, desc..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               style={{
-                width: '100%', padding: '12px 90px 12px 38px', border: '2px solid var(--border-color)',
+                width: '100%', padding: '12px 16px 12px 38px', border: '2px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
                 color: 'var(--text-primary)', background: 'var(--bg-input)', outline: 'none',
               }}
             />
-            <button
-              onClick={handleSearch}
-              style={{
-                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                padding: '8px 14px', borderRadius: 'var(--radius-sm)', border: 'none',
-                background: 'var(--accent-600)', color: '#fff', fontWeight: 700, fontSize: 12,
-                cursor: 'pointer', fontFamily: 'var(--font-body)',
-              }}
-            >
-              Search
-            </button>
           </div>
         </div>
 
