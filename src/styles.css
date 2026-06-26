@@ -1947,3 +1947,100 @@ select.float-input { padding-right: 32px; }
   display: none;
 }
 
+/* ─── Splash Screen ──────────────────────────────────────── */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface);
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.splash-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  z-index: 0;
+}
+
+.splash-orb-1 {
+  top: -10%;
+  left: -10%;
+  width: 50vw;
+  height: 50vw;
+  background: var(--primary-light);
+  animation: float 8s ease-in-out infinite alternate;
+}
+
+.splash-orb-2 {
+  bottom: -10%;
+  right: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: var(--accent);
+  animation: float 12s ease-in-out infinite alternate-reverse;
+}
+
+.splash-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.splash-name {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-top: 1.5rem;
+  letter-spacing: -0.05em;
+}
+
+.splash-wallet {
+  color: var(--text-primary);
+}
+
+.splash-vibe {
+  color: var(--primary);
+}
+
+.splash-tagline {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.splash-loader {
+  width: 120px;
+  height: 4px;
+  background-color: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.splash-loader-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background-color: var(--primary);
+  border-radius: 4px;
+  animation: load 1.5s ease-in-out infinite;
+}
+
+@keyframes load {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+@keyframes float {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(20px) scale(1.05); }
+}
