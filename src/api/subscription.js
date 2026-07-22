@@ -1,11 +1,28 @@
-import { db, auth } from '../firebase'
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'
+import { db } from '../firebase'
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+  updateDoc,
+} from 'firebase/firestore'
 
 // List of Admin Emails that have free lifetime access
 export const ADMIN_EMAILS = [
   'walletpro26@gmail.com',
   'sheikhgulfam91@gmail.com',
 ]
+
+// Default Merchant UPI credentials (linked to HDFC Bank & Axis Bank)
+export const DEFAULT_MERCHANT_UPI = 'sheikhgulfam91-1@okhdfcbank'
+export const SECONDARY_MERCHANT_UPI = 'sheikhgulfam91@okaxis'
+export const MERCHANT_NAME = 'Sheikh Gulfam'
+export const MERCHANT_PHONE = '9682547458'
 
 /**
  * Check if a given email is an admin
@@ -15,23 +32,6 @@ export const ADMIN_EMAILS = [
 export function isAdminEmail(email) {
   if (!email) return false
   return ADMIN_EMAILS.includes(email.toLowerCase().trim())
-}
-
-/**
- * Load Razorpay Checkout SDK dynamically if not already loaded
- */
-export function loadRazorpaySDK() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true)
-      return
-    }
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.body.appendChild(script)
-  })
 }
 
 /**
@@ -67,15 +67,17 @@ export async function getSubscriptionStatus(user) {
 
       return {
         active: isActive,
-        status: isActive ? 'active' : 'expired',
+        status: isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired'),
         plan: data.plan || 'monthly',
         expiresAt,
         isAdmin: false,
         paymentId: data.paymentId || '',
+        utr: data.utr || '',
+        revocationReason: data.revocationReason || '',
       }
     }
   } catch (err) {
-    console.warn('[subscription] Failed to fetch subscription doc:', err?.message)
+    console.warn('[subscription] Failed to fetch subscription status:', err?.message)
   }
 
   return {
@@ -88,26 +90,196 @@ export async function getSubscriptionStatus(user) {
 }
 
 /**
- * Activate subscription in Firestore after successful Razorpay payment
- * @param {{ uid: string, email: string }} user
- * @param {'monthly'|'yearly'} plan
- * @param {string} paymentId
- * @returns {Promise<{ success: boolean, expiresAt: Date }>}
+ * Submit dynamic UPI UTR payment with INSTANT AUTOMATIC ACTIVATION
+ * @param {{ user: { uid: string, email: string, name?: string }, plan: 'monthly'|'yearly', amount: number, utr: string }} params
+ * @returns {Promise<{ success: boolean, orderId: string, expiresAt: Date, message: string }>}
+ */
+export async function submitUpiPayment({ user, plan, amount, utr }) {
+  if (!user || !user.uid) throw new Error('User not logged in')
+
+  const cleanUtr = String(utr || '').trim()
+  if (cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
+    throw new Error('Please enter a valid 12-digit UTR / Bank Reference Number.')
+  }
+
+  // Check if this UTR has already been submitted in Firestore
+  const utrCheckQ = query(collection(db, 'upi_payments'), where('utr', '==', cleanUtr))
+  const utrSnap = await getDocs(utrCheckQ)
+  if (!utrSnap.empty) {
+    throw new Error('This 12-digit UTR has already been used. Please check your bank transaction receipt or contact support.')
+  }
+
+  const orderId = `WV_ORD_${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`
+  const now = new Date()
+  const nowTs = Timestamp.now()
+
+  let expiresAt = new Date()
+  let finalAmount = Number(amount) || (plan === 'yearly' ? 150 : 20)
+
+  if (plan === 'yearly') {
+    expiresAt.setFullYear(now.getFullYear() + 1)
+  } else {
+    expiresAt.setDate(now.getDate() + 30)
+  }
+
+  // 1. Save UTR payment record in upi_payments
+  const paymentData = {
+    orderId,
+    userId: user.uid,
+    userEmail: user.email || '',
+    userName: user.name || '',
+    utr: cleanUtr,
+    amount: finalAmount,
+    plan: plan || 'monthly',
+    merchantPhone: MERCHANT_PHONE,
+    status: 'AUTO_ACTIVATED',
+    submittedAt: nowTs,
+    updatedAt: nowTs,
+    expiresAt: Timestamp.fromDate(expiresAt),
+  }
+
+  const docRef = doc(db, 'upi_payments', orderId)
+  await setDoc(docRef, paymentData)
+
+  // 2. INSTANTLY Activate User Subscription in subscriptions collection
+  const subRef = doc(db, 'subscriptions', user.uid)
+  const subscriptionData = {
+    userId: user.uid,
+    email: user.email || '',
+    status: 'active',
+    plan: plan || 'monthly',
+    amountPaid: finalAmount,
+    currency: 'INR',
+    paidAt: Timestamp.fromDate(now),
+    expiresAt: Timestamp.fromDate(expiresAt),
+    paymentId: `UPI_UTR_${cleanUtr}`,
+    gateway: 'upi_auto_instant',
+    utr: cleanUtr,
+    orderId,
+    updatedAt: nowTs,
+  }
+
+  await setDoc(subRef, subscriptionData, { merge: true })
+
+  return {
+    success: true,
+    orderId,
+    expiresAt,
+    message: '🎉 Subscription Activated Successfully!',
+  }
+}
+
+/**
+ * Fetch all UPI payment submissions for Admin Panel audit
+ * @returns {Promise<Array<object>>}
+ */
+export async function getAllUpiPayments() {
+  try {
+    const q = query(collection(db, 'upi_payments'), orderBy('submittedAt', 'desc'))
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  } catch (err) {
+    console.warn('[subscription] Failed to fetch UPI payments:', err?.message)
+    try {
+      const snap = await getDocs(collection(db, 'upi_payments'))
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    } catch (e) {
+      return []
+    }
+  }
+}
+
+/**
+ * Revoke / Deactivate a user subscription if fake/tampered UTR is detected by Admin
+ * @param {string} userId
+ * @param {string} orderId
+ * @param {string} adminEmail
+ * @param {string} reason
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function revokeSubscription(userId, orderId, adminEmail, reason = '') {
+  if (!userId) throw new Error('User ID required')
+
+  const nowTs = Timestamp.now()
+
+  // 1. Immediately Deactivate User Subscription in subscriptions collection
+  const subRef = doc(db, 'subscriptions', userId)
+  await updateDoc(subRef, {
+    status: 'revoked',
+    expiresAt: nowTs,
+    revokedBy: adminEmail || 'admin',
+    revocationReason: reason || 'Payment UTR verification failed or unpaid',
+    updatedAt: nowTs,
+  })
+
+  // 2. Mark UPI Payment log as REVOKED in upi_payments
+  if (orderId) {
+    try {
+      const payRef = doc(db, 'upi_payments', orderId)
+      await updateDoc(payRef, {
+        status: 'REVOKED',
+        revokedBy: adminEmail || 'admin',
+        revocationReason: reason || 'Payment UTR verification failed or unpaid',
+        updatedAt: nowTs,
+      })
+    } catch (err) {
+      console.warn('[subscription] Could not update upi_payments doc:', err?.message)
+    }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Reactivate a previously revoked user subscription
+ * @param {string} userId
+ * @param {string} orderId
+ * @param {string} adminEmail
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function reactivateSubscription(userId, orderId, adminEmail) {
+  if (!userId) throw new Error('User ID required')
+
+  const now = new Date()
+  const nowTs = Timestamp.now()
+  const expiresAt = new Date()
+  expiresAt.setDate(now.getDate() + 30) // Default 30 days extension
+
+  const subRef = doc(db, 'subscriptions', userId)
+  await updateDoc(subRef, {
+    status: 'active',
+    expiresAt: Timestamp.fromDate(expiresAt),
+    reactivatedBy: adminEmail || 'admin',
+    updatedAt: nowTs,
+  })
+
+  if (orderId) {
+    try {
+      const payRef = doc(db, 'upi_payments', orderId)
+      await updateDoc(payRef, {
+        status: 'AUTO_ACTIVATED',
+        updatedAt: nowTs,
+      })
+    } catch (e) {}
+  }
+
+  return { success: true }
+}
+
+/**
+ * Direct Manual Subscription Activation helper
  */
 export async function activateSubscription(user, plan, paymentId) {
   if (!user || !user.uid) throw new Error('User not logged in')
 
   const now = new Date()
   let expiresAt = new Date()
-  let amount = 20
+  let amount = plan === 'yearly' ? 150 : 20
 
   if (plan === 'yearly') {
     expiresAt.setFullYear(now.getFullYear() + 1)
-    amount = 150
   } else {
-    // Default: monthly (30 days)
     expiresAt.setDate(now.getDate() + 30)
-    amount = 20
   }
 
   const subRef = doc(db, 'subscriptions', user.uid)
@@ -120,11 +292,11 @@ export async function activateSubscription(user, plan, paymentId) {
     currency: 'INR',
     paidAt: Timestamp.fromDate(now),
     expiresAt: Timestamp.fromDate(expiresAt),
-    paymentId: paymentId || '',
+    paymentId: paymentId || 'ADMIN_MANUAL',
+    gateway: 'admin_granted',
     updatedAt: Timestamp.fromDate(now),
   }
 
   await setDoc(subRef, payload, { merge: true })
-
   return { success: true, expiresAt, plan }
 }

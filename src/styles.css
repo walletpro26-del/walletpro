@@ -1758,19 +1758,65 @@ select.float-input { padding-right: 32px; }
 /* --- Footer --- */
 .app-footer {
   text-align: center;
-  padding: 24px 0 16px;
+  padding: 24px 16px 20px;
   margin-top: 32px;
+  border-top: 1px solid var(--border-color);
 }
 .app-footer p {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 500;
+  margin-bottom: 8px;
 }
 .app-footer a {
   color: var(--accent-500);
   text-decoration: none;
 }
 .app-footer a:hover { text-decoration: underline; }
+
+.footer-legal-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.footer-legal-links a {
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+.footer-legal-links a:hover {
+  color: var(--accent-500);
+  text-decoration: underline;
+}
+.footer-divider {
+  color: var(--border-color);
+  font-size: 10px;
+}
+
+.login-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+.login-footer-links a {
+  color: rgba(148, 163, 184, 0.75);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.login-footer-links a:hover {
+  color: #818cf8;
+  text-decoration: underline;
+}
 
 /* --- Animations --- */
 @keyframes slideUp {

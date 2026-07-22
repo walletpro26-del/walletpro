@@ -1,10 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signInWithGoogle } from '../api/auth'
 import WalletVibeLogo from './WalletVibeLogo'
+import LegalModal from './LegalModal'
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [legalModalTab, setLegalModalTab] = useState(null)
+
+  function closeLegalModal() {
+    setLegalModalTab(null)
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }
+
+  useEffect(() => {
+    function handleHashOrQuery() {
+      const hash = window.location.hash.replace('#', '').toLowerCase()
+      const search = new URLSearchParams(window.location.search).get('page')
+      const target = hash || search
+      if (['privacy', 'terms', 'refund', 'contact'].includes(target)) {
+        setLegalModalTab(target)
+        if (hash) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search)
+        }
+      }
+    }
+    handleHashOrQuery()
+    window.addEventListener('hashchange', handleHashOrQuery)
+    return () => window.removeEventListener('hashchange', handleHashOrQuery)
+  }, [])
 
   async function handleGoogleLogin() {
     setError('')
@@ -102,9 +128,26 @@ export default function LoginScreen() {
       </div>
 
       {/* Footer */}
-      <div className="login-footer">
-        © NextLifTechnologies
+      <div className="login-footer" style={{ textAlign: 'center', width: '100%', padding: '0 16px' }}>
+        <div>© {new Date().getFullYear()} <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>NextLifTechnologies</a></div>
+        <div className="login-footer-links">
+          <a href="#privacy" onClick={(e) => { e.preventDefault(); setLegalModalTab('privacy') }}>Privacy Policy</a>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <a href="#terms" onClick={(e) => { e.preventDefault(); setLegalModalTab('terms') }}>Terms &amp; Conditions</a>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <a href="#refund" onClick={(e) => { e.preventDefault(); setLegalModalTab('refund') }}>Refund Policy</a>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <a href="#contact" onClick={(e) => { e.preventDefault(); setLegalModalTab('contact') }}>Contact Us</a>
+        </div>
       </div>
+
+      {/* Legal Modal */}
+      {legalModalTab && (
+        <LegalModal
+          initialTab={legalModalTab}
+          onClose={closeLegalModal}
+        />
+      )}
     </div>
   )
 }

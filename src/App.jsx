@@ -28,6 +28,7 @@ import SettingsModal from './components/SettingsModal'
 import BankSearchModal from './components/BankSearchModal'
 import MigrationTool from './components/MigrationTool'
 import WalletVibeLogo from './components/WalletVibeLogo'
+import LegalModal from './components/LegalModal'
 
 // Record when the app opened (for update banner age check)
 window.__wv_open_time = Date.now()
@@ -70,6 +71,31 @@ export default function App() {
   const [showBankSearch, setShowBankSearch] = useState(false)
   const [showMigration, setShowMigration] = useState(false)
   const [migrationUrl, setMigrationUrl] = useState('')
+  function closeLegalModal() {
+    setLegalModalTab(null)
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }
+
+  // URL Hash or Query parameter listener for legal documents
+  useEffect(() => {
+    function handleHashOrQuery() {
+      const hash = window.location.hash.replace('#', '').toLowerCase()
+      const search = new URLSearchParams(window.location.search).get('page')
+      const target = hash || search
+      if (['privacy', 'terms', 'refund', 'contact'].includes(target)) {
+        setLegalModalTab(target)
+        // Clean up hash from address bar so refreshing won't re-open the modal automatically
+        if (hash) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search)
+        }
+      }
+    }
+    handleHashOrQuery()
+    window.addEventListener('hashchange', handleHashOrQuery)
+    return () => window.removeEventListener('hashchange', handleHashOrQuery)
+  }, [])
 
   // Edit state
   const [editExpense, setEditExpense] = useState(null)
@@ -411,7 +437,16 @@ export default function App() {
         )}
 
         <div className="app-footer">
-          <p>© NextLifTechnologies (<a href="mailto:walletpro26@gmail.com">walletpro26@gmail.com</a>)</p>
+          <p>© {new Date().getFullYear()} <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer">NextLifTechnologies</a> (<a href="mailto:walletpro26@gmail.com">walletpro26@gmail.com</a>)</p>
+          <div className="footer-legal-links">
+            <a href="#privacy" onClick={(e) => { e.preventDefault(); setLegalModalTab('privacy') }}>Privacy Policy</a>
+            <span className="footer-divider">•</span>
+            <a href="#terms" onClick={(e) => { e.preventDefault(); setLegalModalTab('terms') }}>Terms &amp; Conditions</a>
+            <span className="footer-divider">•</span>
+            <a href="#refund" onClick={(e) => { e.preventDefault(); setLegalModalTab('refund') }}>Refund Policy</a>
+            <span className="footer-divider">•</span>
+            <a href="#contact" onClick={(e) => { e.preventDefault(); setLegalModalTab('contact') }}>Contact Us</a>
+          </div>
         </div>
       </div>
 
@@ -446,6 +481,7 @@ export default function App() {
           appConfig={appConfig}
           isBlocking={!subscriptionState.active && !subscriptionState.isAdmin}
           onClose={() => setShowSubscriptionModal(false)}
+          onLogout={handleLogout}
           onSubscriptionSuccess={() => {
             checkSubscription(authState)
             setToast('🎉 Subscription activated successfully!')
@@ -468,6 +504,12 @@ export default function App() {
           gasUrl={migrationUrl}
           onClose={() => setShowMigration(false)}
           onComplete={loadDashboard}
+        />
+      )}
+      {legalModalTab && (
+        <LegalModal
+          initialTab={legalModalTab}
+          onClose={closeLegalModal}
         />
       )}
 

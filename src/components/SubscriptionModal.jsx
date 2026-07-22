@@ -1,81 +1,74 @@
-import { useState } from 'react'
-import { loadRazorpaySDK, activateSubscription } from '../api/subscription'
+import { useState, useEffect } from 'react'
+import {
+  submitUpiPayment,
+  DEFAULT_MERCHANT_UPI,
+  MERCHANT_NAME,
+  MERCHANT_PHONE,
+} from '../api/subscription'
 
 export default function SubscriptionModal({
   user,
   subscription,
   appConfig,
   onClose,
+  onLogout,
   onSubscriptionSuccess,
   isBlocking = false,
 }) {
-  const [loadingPlan, setLoadingPlan] = useState('')
-  const [error, setError] = useState('')
-
-  // Dynamic pricing from admin config (fallback to defaults)
+  const [selectedPlan, setSelectedPlan] = useState('yearly') // 'monthly' | 'yearly'
+  const [step, setStep] = useState('select') // 'select' | 'success'
+  
+  // Custom UPI merchant ID from config or default
+  const merchantUpi = appConfig?.merchantUpi || DEFAULT_MERCHANT_UPI
   const monthlyPrice = appConfig?.monthlyPrice || 20
   const yearlyPrice = appConfig?.yearlyPrice || 150
 
-  async function handleSubscribe(plan) {
+  const amount = selectedPlan === 'yearly' ? yearlyPrice : monthlyPrice
+
+  // Generate unique Order ID
+  const [orderId, setOrderId] = useState('')
+  useEffect(() => {
+    setOrderId(`WV_ORD_${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`)
+  }, [selectedPlan])
+
+  // UTR Form State
+  const [utr, setUtr] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [activationResult, setActivationResult] = useState(null)
+
+  // Build standard UPI Deep Link URL & Dynamic QR Code
+  const upiUri = `upi://pay?pa=${encodeURIComponent(merchantUpi)}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${amount}&tn=${encodeURIComponent(orderId)}&cu=INR`
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiUri)}`
+
+  async function handleSubmitUTR(e) {
+    e?.preventDefault()
     setError('')
-    setLoadingPlan(plan)
 
+    const cleanUtr = String(utr || '').trim()
+    if (cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
+      setError('Please enter a valid 12-digit UTR / Bank Reference Number.')
+      return
+    }
+
+    setSubmitting(true)
     try {
-      const sdkLoaded = await loadRazorpaySDK()
-      if (!sdkLoaded) {
-        throw new Error('Failed to load Razorpay SDK. Please check your internet connection.')
-      }
-
-      const isYearly = plan === 'yearly'
-      const amount = isYearly ? yearlyPrice : monthlyPrice
-      const amountPaise = Math.round(amount * 100)
-      const planTitle = isYearly ? `WalletVibe Yearly Subscription (₹${yearlyPrice}/year)` : `WalletVibe Monthly Subscription (₹${monthlyPrice}/month)`
-      const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_walletvibe'
-
-      const options = {
-        key: razorpayKey,
-        amount: amountPaise,
-        currency: 'INR',
-        name: 'WalletVibe',
-        description: planTitle,
-        image: '/favicon.ico',
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-        },
-        theme: {
-          color: '#6366f1',
-        },
-        handler: async function (response) {
-          try {
-            setLoadingPlan('activating')
-            const result = await activateSubscription(user, plan, response.razorpay_payment_id)
-            if (result.success) {
-              onSubscriptionSuccess?.(result)
-              onClose?.()
-            }
-          } catch (err) {
-            setError('Payment succeeded but activation failed: ' + err?.message)
-          } finally {
-            setLoadingPlan('')
-          }
-        },
-        modal: {
-          ondismiss: function () {
-            setLoadingPlan('')
-          },
-        },
-      }
-
-      const rzp = new window.Razorpay(options)
-      rzp.on('payment.failed', function (resp) {
-        setError('Payment Failed: ' + (resp?.error?.description || 'Transaction cancelled'))
-        setLoadingPlan('')
+      const res = await submitUpiPayment({
+        user,
+        plan: selectedPlan,
+        amount,
+        utr: cleanUtr,
       })
-      rzp.open()
+
+      if (res.success) {
+        setActivationResult(res)
+        setStep('success')
+        onSubscriptionSuccess?.(res)
+      }
     } catch (err) {
-      setError(err?.message || 'Payment initiation failed')
-      setLoadingPlan('')
+      setError(err?.message || 'Failed to submit UTR. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -89,17 +82,17 @@ export default function SubscriptionModal({
           if (!isBlocking) onClose?.()
         }}
       />
-      <div className="modal-container" style={{ maxWidth: 440, padding: 0, overflow: 'hidden' }}>
+      <div className="modal-container custom-scrollbar" style={{ maxWidth: 460, padding: 0, overflow: 'hidden', borderRadius: 16 }}>
         {/* Header */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)',
-            padding: '24px 20px',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
+            padding: '22px 20px',
             color: '#fff',
             position: 'relative',
           }}
         >
-          {!isBlocking && (
+          {!isBlocking || step === 'success' ? (
             <button
               className="modal-close"
               style={{
@@ -108,12 +101,48 @@ export default function SubscriptionModal({
                 right: 16,
                 background: 'rgba(255,255,255,0.12)',
                 color: '#fff',
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
               onClick={onClose}
+              aria-label="Close subscription modal"
             >
               <i className="fas fa-times" />
             </button>
-          )}
+          ) : onLogout ? (
+            <button
+              onClick={() => {
+                onClose?.()
+                onLogout()
+              }}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: 'rgba(239, 68, 68, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                color: '#fff',
+                padding: '4px 10px',
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+              title="Log out and sign in with another email"
+            >
+              <i className="fas fa-sign-out-alt" />
+              Log Out
+            </button>
+          ) : null}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
@@ -128,199 +157,368 @@ export default function SubscriptionModal({
                 fontSize: 20,
               }}
             >
-              {isAdmin ? '👑' : '⭐'}
+              {isAdmin ? '👑' : step === 'success' ? '🎉' : '⚡'}
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#fff' }}>
-                {isAdmin ? 'Admin Lifetime Access' : 'WalletVibe Pro Subscription'}
+                {isAdmin
+                  ? 'Admin Lifetime Access'
+                  : step === 'success'
+                  ? 'Subscription Active!'
+                  : 'WalletVibe Instant UPI Access'}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: 12, color: '#a5b4fc' }}>
                 {isAdmin
                   ? 'Unlimited free access granted to Admin email.'
-                  : 'Unlock unlimited tracking, cloud backup, and PDF statements.'}
+                  : step === 'success'
+                  ? 'Your account has been fully upgraded.'
+                  : 'Instant Activation &bull; 0% Commission Direct UPI'}
               </p>
             </div>
           </div>
         </div>
 
         {/* Body */}
-        <div style={{ padding: 20 }}>
+        <div style={{ padding: '20px 22px' }}>
+          {/* User Account & Switch Email Bar */}
+          {user?.email && step !== 'success' && (
+            <div
+              style={{
+                background: 'var(--bg-body, #f8fafc)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                fontSize: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                <i className="fas fa-user-circle" style={{ fontSize: 16, color: '#6366f1', flexShrink: 0 }} />
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--text-muted, #64748b)', fontSize: 11 }}>Logged in as: </span>
+                  <strong style={{ color: 'var(--text-primary, #1e293b)' }}>{user.email}</strong>
+                </div>
+              </div>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose?.()
+                    onLogout()
+                  }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    padding: '5px 10px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    flexShrink: 0,
+                  }}
+                  title="Log out and switch to another Google account"
+                >
+                  <i className="fas fa-sign-out-alt" />
+                  Switch Email
+                </button>
+              )}
+            </div>
+          )}
+
           {error && (
-            <div className="login-error" style={{ marginBottom: 16 }}>
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                fontSize: 13,
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
               <i className="fas fa-exclamation-circle" />
               {error}
             </div>
           )}
 
+          {/* ADMIN DISPLAY */}
           {isAdmin ? (
             <div
               style={{
                 textAlign: 'center',
-                padding: '20px 16px',
-                background: 'var(--emerald-50)',
-                border: '1px solid var(--emerald-500)',
-                borderRadius: 'var(--radius-lg)',
+                padding: '24px 16px',
+                background: 'var(--emerald-50, #ecfdf5)',
+                border: '1px solid var(--emerald-500, #10b981)',
+                borderRadius: 12,
               }}
             >
-              <i className="fas fa-shield-alt" style={{ fontSize: 32, color: 'var(--emerald-600)', marginBottom: 8 }} />
-              <h4 style={{ margin: '0 0 4px', color: 'var(--emerald-600)', fontWeight: 800 }}>
+              <i className="fas fa-shield-alt" style={{ fontSize: 36, color: '#059669', marginBottom: 8 }} />
+              <h4 style={{ margin: '0 0 4px', color: '#047857', fontWeight: 800 }}>
                 Free Lifetime Admin Account
               </h4>
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
-                Logged in as <strong>{user?.email}</strong>. No payments required.
+              <p style={{ margin: 0, fontSize: 12, color: '#065f46' }}>
+                Logged in as <strong>{user?.email}</strong>. Full unrestricted access enabled.
               </p>
+            </div>
+          ) : step === 'success' ? (
+            /* INSTANT ACTIVATION SUCCESS SCREEN */
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '20px 16px',
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: 12,
+              }}
+            >
+              <div style={{ fontSize: 44, marginBottom: 8 }}>🎉</div>
+              <h4 style={{ margin: '0 0 6px', color: '#047857', fontWeight: 800, fontSize: 18 }}>
+                Subscription Activated!
+              </h4>
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: '#065f46', lineHeight: 1.5 }}>
+                Your account is now fully active with unlimited access to all features.
+              </p>
+
+              <div style={{ background: '#ffffff', padding: '12px 16px', borderRadius: 10, fontSize: 12, display: 'inline-block', color: '#1e293b', border: '1px solid #a7f3d0', textAlign: 'left', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748b' }}>Plan:</span>
+                  <strong>{selectedPlan.toUpperCase()} PASS</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748b' }}>Order ID:</span>
+                  <strong>{activationResult?.orderId || orderId}</strong>
+                </div>
+                {activationResult?.expiresAt && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b' }}>Expires On:</span>
+                    <strong>{new Date(activationResult.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                <button
+                  onClick={onClose}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: 14,
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <i className="fas fa-rocket" style={{ marginRight: 8 }} />
+                  Start Using WalletVibe
+                </button>
+              </div>
             </div>
           ) : (
             <>
-              {/* Feature list */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 8,
-                  marginBottom: 20,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="fas fa-check-circle" style={{ color: '#10b981' }} />
-                  Unlimited Expenses & Lending
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="fas fa-check-circle" style={{ color: '#10b981' }} />
-                  WhatsApp & Email Ledger PDFs
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="fas fa-check-circle" style={{ color: '#10b981' }} />
-                  Bank Statement Search & Import
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="fas fa-check-circle" style={{ color: '#10b981' }} />
-                  Secure Multi-Device Cloud Sync
+              {/* STEP 1: SELECT PLAN */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary, #475569)', display: 'block', marginBottom: 8 }}>
+                  1. Select Subscription Plan:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {/* Monthly Plan */}
+                  <div
+                    onClick={() => setSelectedPlan('monthly')}
+                    style={{
+                      border: `2px solid ${selectedPlan === 'monthly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'monthly' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>Monthly Pass</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{monthlyPrice} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/ 30 days</span>
+                    </div>
+                  </div>
+
+                  {/* Yearly Plan */}
+                  <div
+                    onClick={() => setSelectedPlan('yearly')}
+                    style={{
+                      border: `2px solid ${selectedPlan === 'yearly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'yearly' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: -8, right: 8, background: '#10b981', color: '#fff', fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 99 }}>
+                      SAVE {Math.round((1 - (yearlyPrice / (monthlyPrice * 12))) * 100)}%
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>Annual Saver</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{yearlyPrice} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/ 1 Year</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Plans Grid */}
-              <div style={{ display: 'grid', gap: 12 }}>
-                {/* Monthly Plan */}
-                <div
-                  style={{
-                    border: '2px solid var(--border-color)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: 16,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: 'var(--bg-card)',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                      Monthly Pass
-                    </div>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', marginTop: 2 }}>
-                      ₹{monthlyPrice} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ month</span>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                      30 days full access
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleSubscribe('monthly')}
-                    disabled={!!loadingPlan}
-                    className="btn-primary"
-                    style={{ padding: '10px 16px', fontSize: 13 }}
-                  >
-                    {loadingPlan === 'monthly' ? (
-                      <i className="fas fa-spinner fa-spin" />
-                    ) : (
-                      'Subscribe'
-                    )}
-                  </button>
+              {/* PAYMENT SECTION */}
+              <div
+                style={{
+                  background: 'var(--bg-body, #f8fafc)',
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
+                    2. Pay ₹{amount} via any UPI App
+                  </span>
+                  <span style={{ fontSize: 10, background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                    Order: {orderId}
+                  </span>
                 </div>
 
-                {/* Yearly Plan (BEST VALUE) */}
-                <div
-                  style={{
-                    border: '2px solid #6366f1',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: 16,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(124,58,237,0.06) 100%)',
-                    position: 'relative',
-                  }}
-                >
-                  <div
+                {/* Mobile Intent Button */}
+                <div style={{ marginBottom: 14 }}>
+                  <a
+                    href={upiUri}
                     style={{
-                      position: 'absolute',
-                      top: -10,
-                      right: 16,
-                      background: '#6366f1',
-                      color: '#fff',
-                      fontSize: 9,
-                      fontWeight: 800,
-                      padding: '2px 8px',
-                      borderRadius: 99,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      width: '100%',
+                      padding: '12px',
+                      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                      color: '#ffffff',
+                      textAlign: 'center',
+                      borderRadius: 10,
+                      textDecoration: 'none',
+                      fontWeight: 700,
+                      fontSize: 14,
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
                     }}
                   >
-                    Best Value &middot; Save ₹{(monthlyPrice * 12) - yearlyPrice}
-                  </div>
+                    <i className="fas fa-mobile-alt" style={{ fontSize: 16 }} />
+                    Pay via UPI App (GPay / PhonePe / Paytm / BHIM)
+                  </a>
+                </div>
 
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>
-                      Annual Saver
-                    </div>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', marginTop: 2 }}>
-                      ₹{yearlyPrice} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ year</span>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                      365 days full access (just ₹{(yearlyPrice / 12).toFixed(1)}/mo)
-                    </div>
-                  </div>
+                <div style={{ textAlign: 'center', margin: '12px 0', color: '#94a3b8', fontSize: 11, fontWeight: 600 }}>
+                  — OR SCAN DYNAMIC QR CODE ON DESKTOP —
+                </div>
 
+                {/* QR Display */}
+                <div style={{ textAlign: 'center', margin: '12px 0' }}>
+                  <img
+                    src={qrCodeUrl}
+                    alt="UPI Payment Dynamic QR Code"
+                    width="190"
+                    height="190"
+                    style={{
+                      border: '2px solid #e2e8f0',
+                      borderRadius: 12,
+                      padding: 8,
+                      background: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    }}
+                  />
+                  <p style={{ fontSize: 11, color: '#64748b', marginTop: 6, margin: 0 }}>
+                    Merchant UPI ID: <strong style={{ color: '#1e293b' }}>{merchantUpi}</strong>
+                  </p>
+                </div>
+
+                {/* UTR Form */}
+                <form onSubmit={handleSubmitUTR} style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 14, marginTop: 14 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
+                    3. Enter 12-Digit Transaction UTR / Ref No:
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="e.g. 420192837465"
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value.replace(/\D/g, ''))}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      marginBottom: 10,
+                      fontSize: 14,
+                      letterSpacing: '1px',
+                      fontWeight: 600,
+                      boxSizing: 'border-box',
+                    }}
+                  />
                   <button
-                    onClick={() => handleSubscribe('yearly')}
-                    disabled={!!loadingPlan}
+                    type="submit"
+                    disabled={submitting}
                     className="btn-primary"
                     style={{
-                      padding: '10px 16px',
-                      fontSize: 13,
-                      background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                      width: '100%',
+                      padding: '11px',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      fontSize: 14,
+                      borderRadius: 8,
                     }}
                   >
-                    {loadingPlan === 'yearly' ? (
-                      <i className="fas fa-spinner fa-spin" />
+                    {submitting ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />
+                        Activating Instant Access...
+                      </>
                     ) : (
-                      'Subscribe'
+                      '⚡ Submit UTR & Activate Instantly'
                     )}
                   </button>
-                </div>
+                </form>
               </div>
             </>
           )}
 
+          {/* Legal Footer Links */}
           <div
             style={{
               textAlign: 'center',
-              marginTop: 16,
+              marginTop: 12,
               fontSize: 10,
-              color: 'var(--text-muted)',
+              color: 'var(--text-muted, #64748b)',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 4,
             }}
           >
-            <i className="fas fa-lock" style={{ fontSize: 9 }} />
-            256-bit encrypted checkout by Razorpay (UPI, GPay, PhonePe, Cards, NetBanking)
+            <div>
+              <i className="fas fa-shield-alt" style={{ fontSize: 9, marginRight: 4, color: '#10b981' }} />
+              Instant 0% Fee UPI Activation &bull; Managed by Sheikh Gulfam
+            </div>
+            <div style={{ marginTop: 2, opacity: 0.85 }}>
+              By subscribing, you agree to our{' '}
+              <a href="#terms" onClick={(e) => { e.preventDefault(); window.location.hash = '#terms' }} style={{ color: '#6366f1' }}>Terms</a>,{' '}
+              <a href="#privacy" onClick={(e) => { e.preventDefault(); window.location.hash = '#privacy' }} style={{ color: '#6366f1' }}>Privacy</a> &amp;{' '}
+              <a href="#refund" onClick={(e) => { e.preventDefault(); window.location.hash = '#refund' }} style={{ color: '#6366f1' }}>Refund Policy</a>.
+            </div>
           </div>
         </div>
       </div>

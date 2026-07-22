@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
-import { isAdminEmail, ADMIN_EMAILS } from '../api/subscription'
+import {
+  isAdminEmail,
+  ADMIN_EMAILS,
+  getAllUpiPayments,
+  revokeSubscription,
+  reactivateSubscription,
+} from '../api/subscription'
 
 export default function AdminPanel({ auth, onClose }) {
   const [config, setConfig] = useState(null)
@@ -9,6 +15,10 @@ export default function AdminPanel({ auth, onClose }) {
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
 
+  // UPI Payments state
+  const [upiPayments, setUpiPayments] = useState([])
+  const [upiLoading, setUpiLoading] = useState(false)
+
   // Editable fields
   const [monthlyPrice, setMonthlyPrice] = useState('')
   const [yearlyPrice, setYearlyPrice] = useState('')
@@ -16,11 +26,57 @@ export default function AdminPanel({ auth, onClose }) {
   const [announcement, setAnnouncement] = useState('')
   const [announcementType, setAnnouncementType] = useState('info')
   const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const [razorpayEnabled, setRazorpayEnabled] = useState(true)
+  const [razorpayEnabled, setRazorpayEnabled] = useState(false)
 
   useEffect(() => {
     loadConfig()
+    loadUpiPayments()
   }, [])
+
+  async function loadUpiPayments() {
+    setUpiLoading(true)
+    try {
+      const list = await getAllUpiPayments()
+      setUpiPayments(list)
+    } catch (err) {
+      console.warn('[AdminPanel] Failed to load UPI payments:', err?.message)
+    } finally {
+      setUpiLoading(false)
+    }
+  }
+
+  async function handleRevoke(userId, orderId, userEmail) {
+    if (!userId) return
+    const reason = window.prompt(`Deactivate/Revoke subscription for ${userEmail || 'user'}? Enter reason (e.g. Fake/unpaid UTR in bank statement):`, 'Fake or unpaid UTR submitted')
+    if (reason === null) return
+
+    setSaving(true)
+    try {
+      await revokeSubscription(userId, orderId, auth?.email, reason)
+      setToast('🚨 Subscription revoked and user account deactivated!')
+      setTimeout(() => setToast(''), 4000)
+      await loadUpiPayments()
+    } catch (err) {
+      setError(err?.message || 'Revoke failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleReactivate(userId, orderId) {
+    if (!userId) return
+    setSaving(true)
+    try {
+      await reactivateSubscription(userId, orderId, auth?.email)
+      setToast('✅ Subscription re-activated.')
+      setTimeout(() => setToast(''), 3000)
+      await loadUpiPayments()
+    } catch (err) {
+      setError(err?.message || 'Reactivation failed')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function loadConfig() {
     setLoading(true)
@@ -348,6 +404,118 @@ export default function AdminPanel({ auth, onClose }) {
                 <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                   Leave blank to hide the banner. This appears on the login and main screens.
                 </p>
+              </div>
+
+              {/* UPI Payment Audit & Revocation Manager */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <h4 style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}>
+                    <i className="fas fa-qrcode" style={{ color: '#10b981' }} />
+                    Direct UPI Payments Audit ({upiPayments.length} Total)
+                  </h4>
+                  <button
+                    onClick={loadUpiPayments}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-500)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <i className={`fas fa-sync-alt ${upiLoading ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} />
+                    Refresh Logs
+                  </button>
+                </div>
+
+                {upiPayments.length === 0 ? (
+                  <div style={{ padding: 16, textAlign: 'center', background: 'var(--bg-subtle)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                    No UPI payment submissions logged yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }} className="custom-scrollbar">
+                    {upiPayments.map((pay) => {
+                      const isRevoked = pay.status === 'REVOKED' || pay.status === 'REJECTED'
+                      return (
+                        <div
+                          key={pay.id || pay.orderId}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            border: isRevoked ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--border-color)',
+                            background: isRevoked ? 'rgba(239,68,68,0.06)' : 'var(--bg-subtle)',
+                            fontSize: 12,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <div>
+                              <strong style={{ color: 'var(--text-primary)' }}>{pay.userEmail}</strong>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                Plan: <strong>{pay.plan?.toUpperCase()}</strong> (₹{pay.amount}) &bull; Order: {pay.orderId}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: 99,
+                                textTransform: 'uppercase',
+                                background: isRevoked ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                                color: isRevoked ? '#ef4444' : '#10b981',
+                              }}
+                            >
+                              {isRevoked ? 'REVOKED / INACTIVE' : 'AUTO ACTIVATED ⚡'}
+                            </span>
+                          </div>
+
+                          <div style={{ background: 'var(--bg-card)', padding: '6px 8px', borderRadius: 6, fontSize: 11, margin: '6px 0', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>12-Digit UTR: <strong style={{ letterSpacing: '0.5px', color: '#6366f1' }}>{pay.utr}</strong></span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                              {pay.submittedAt?.seconds ? new Date(pay.submittedAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                            {!isRevoked ? (
+                              <button
+                                onClick={() => handleRevoke(pay.userId, pay.orderId, pay.userEmail)}
+                                disabled={saving}
+                                className="btn-outline"
+                                style={{ padding: '4px 10px', fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', flex: 1 }}
+                                title="Click to instantly deactivate user subscription if payment was not received or fake UTR was submitted"
+                              >
+                                <i className="fas fa-ban" style={{ marginRight: 4 }} />
+                                Deactivate / Revoke Subscription
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleReactivate(pay.userId, pay.orderId)}
+                                disabled={saving}
+                                className="btn-primary"
+                                style={{ padding: '4px 10px', fontSize: 11, background: '#10b981', flex: 1 }}
+                              >
+                                <i className="fas fa-check-circle" style={{ marginRight: 4 }} />
+                                Re-activate Access
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Toggles */}
