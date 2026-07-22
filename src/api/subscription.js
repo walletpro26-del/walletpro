@@ -423,6 +423,21 @@ export async function getAllSubscriptions() {
 }
 
 /**
+ * Real-time listener for all subscriptions (Admin use)
+ * @param {function} callback
+ * @returns {function} unsubscribe function
+ */
+export function listenAllSubscriptions(callback) {
+  const q = collection(db, 'subscriptions')
+  return onSnapshot(q, (snap) => {
+    const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    callback(subs)
+  }, (err) => {
+    console.warn('[subscription] Subscriptions listener error:', err?.message)
+  })
+}
+
+/**
  * Admin direct manual activation or deactivation of any user account by Email or UID
  * @param {string} targetInput - User email or UID
  * @param {'active'|'revoked'|'expired'} status
