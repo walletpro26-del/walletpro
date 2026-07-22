@@ -71,6 +71,8 @@ export default function App() {
   const [showBankSearch, setShowBankSearch] = useState(false)
   const [showMigration, setShowMigration] = useState(false)
   const [migrationUrl, setMigrationUrl] = useState('')
+  const [legalModalTab, setLegalModalTab] = useState(null)
+
   function closeLegalModal() {
     setLegalModalTab(null)
     if (window.location.hash) {
