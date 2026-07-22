@@ -16,7 +16,7 @@ export default function BankSearchModal({ uid, onClose }) {
     if (allRecords) return allRecords
     
     // Check local cache first for instant display
-    const cached = loadSnapshot('bank')
+    const cached = loadSnapshot('bank', uid)
     if (cached && cached.length > 0) {
       const rehydrated = cached.map((r) => ({
         ...r,
@@ -49,14 +49,14 @@ export default function BankSearchModal({ uid, onClose }) {
 
       records.sort((a, b) => b.date - a.date)
       setAllRecords(records)
-      saveSnapshot('bank', records)
+      saveSnapshot('bank', records, uid)
       setLoading(false)
       return records
     } catch (err) {
       console.warn('Bank records fetch error, using cache:', err?.message)
-      const cached = loadSnapshot('bank')
-      if (cached) {
-        const rehydrated = cached.map((r) => ({
+      const cached2 = loadSnapshot('bank', uid)
+      if (cached2) {
+        const rehydrated = cached2.map((r) => ({
           ...r,
           date: r.date ? new Date(r.date) : new Date(),
         }))

@@ -9,8 +9,10 @@ import {
   getAllLending, computeLendingStatsLocally,
 } from './api/lending'
 
-import { getSubscriptionStatus } from './api/subscription'
+import { getSubscriptionStatus, isAdminEmail } from './api/subscription'
+import { getAppConfig } from './api/appConfig'
 import SubscriptionModal from './components/SubscriptionModal'
+import AdminPanel from './components/AdminPanel'
 
 import LoginScreen from './components/LoginScreen'
 import InstallBanner from './components/InstallBanner'
@@ -76,6 +78,10 @@ export default function App() {
   // Subscription state
   const [subscriptionState, setSubscriptionState] = useState({ active: true, isAdmin: false, status: 'checking', plan: 'none' })
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+
+  // App configuration (dynamic pricing, announcement, etc.)
+  const [appConfig, setAppConfig] = useState(null)
 
   // Auth listener
   useEffect(() => {
@@ -92,13 +98,23 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
-  // Load data & subscription when logged in
+  // Load data, subscription, and config when logged in
   useEffect(() => {
     if (authState.loggedIn) {
       checkSubscription(authState)
       loadDashboard()
+      loadAppConfig()
     }
   }, [authState.loggedIn, authState.uid])
+
+  const loadAppConfig = useCallback(async () => {
+    try {
+      const cfg = await getAppConfig()
+      setAppConfig(cfg)
+    } catch (err) {
+      console.warn('[App] Failed to load config:', err?.message)
+    }
+  }, [])
 
   const checkSubscription = useCallback(async (user) => {
     try {
@@ -285,7 +301,29 @@ export default function App() {
         onBankSearch={() => setShowBankSearch(true)}
         onSearchSelect={(item) => setSelectedTxn(item)}
         onManageSubscription={() => setShowSubscriptionModal(true)}
+        onAdminPanel={() => setShowAdminPanel(true)}
       />
+
+      {/* Admin Announcement Banner */}
+      {appConfig?.announcement && (
+        <div style={{
+          background: appConfig.announcementType === 'warning' ? 'rgba(245, 158, 11, 0.15)' : appConfig.announcementType === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+          borderBottom: `1px solid ${appConfig.announcementType === 'warning' ? 'rgba(245, 158, 11, 0.3)' : appConfig.announcementType === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
+          color: appConfig.announcementType === 'warning' ? '#f59e0b' : appConfig.announcementType === 'success' ? '#10b981' : '#6366f1',
+          padding: '8px 16px',
+          fontSize: '12px',
+          fontWeight: 600,
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          zIndex: 10,
+        }}>
+          <i className={`fas ${appConfig.announcementType === 'warning' ? 'fa-exclamation-triangle' : appConfig.announcementType === 'success' ? 'fa-check-circle' : 'fa-bullhorn'}`} />
+          {appConfig.announcement}
+        </div>
+      )}
 
       {/* Tab Bar */}
       <div className="tab-bar">
@@ -405,6 +443,7 @@ export default function App() {
         <SubscriptionModal
           user={authState}
           subscription={subscriptionState}
+          appConfig={appConfig}
           isBlocking={!subscriptionState.active && !subscriptionState.isAdmin}
           onClose={() => setShowSubscriptionModal(false)}
           onSubscriptionSuccess={() => {
@@ -412,6 +451,12 @@ export default function App() {
             setToast('🎉 Subscription activated successfully!')
             setTimeout(() => setToast(''), 4000)
           }}
+        />
+      )}
+      {showAdminPanel && (
+        <AdminPanel
+          auth={authState}
+          onClose={() => { setShowAdminPanel(false); loadAppConfig() }}
         />
       )}
       {showBankSearch && (

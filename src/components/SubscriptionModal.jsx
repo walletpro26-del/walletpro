@@ -4,12 +4,17 @@ import { loadRazorpaySDK, activateSubscription } from '../api/subscription'
 export default function SubscriptionModal({
   user,
   subscription,
+  appConfig,
   onClose,
   onSubscriptionSuccess,
   isBlocking = false,
 }) {
   const [loadingPlan, setLoadingPlan] = useState('')
   const [error, setError] = useState('')
+
+  // Dynamic pricing from admin config (fallback to defaults)
+  const monthlyPrice = appConfig?.monthlyPrice || 20
+  const yearlyPrice = appConfig?.yearlyPrice || 150
 
   async function handleSubscribe(plan) {
     setError('')
@@ -22,8 +27,9 @@ export default function SubscriptionModal({
       }
 
       const isYearly = plan === 'yearly'
-      const amountPaise = isYearly ? 15000 : 2000 // ₹150 or ₹20 in paise
-      const planTitle = isYearly ? 'WalletVibe Yearly Subscription (₹150/year)' : 'WalletVibe Monthly Subscription (₹20/month)'
+      const amount = isYearly ? yearlyPrice : monthlyPrice
+      const amountPaise = Math.round(amount * 100)
+      const planTitle = isYearly ? `WalletVibe Yearly Subscription (₹${yearlyPrice}/year)` : `WalletVibe Monthly Subscription (₹${monthlyPrice}/month)`
       const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_walletvibe'
 
       const options = {
@@ -216,7 +222,7 @@ export default function SubscriptionModal({
                       Monthly Pass
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', marginTop: 2 }}>
-                      ₹20 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ month</span>
+                      ₹{monthlyPrice} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ month</span>
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                       30 days full access
@@ -265,7 +271,7 @@ export default function SubscriptionModal({
                       letterSpacing: '0.5px',
                     }}
                   >
-                    Best Value &middot; Save ₹90
+                    Best Value &middot; Save ₹{(monthlyPrice * 12) - yearlyPrice}
                   </div>
 
                   <div>
@@ -273,10 +279,10 @@ export default function SubscriptionModal({
                       Annual Saver
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)', marginTop: 2 }}>
-                      ₹150 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ year</span>
+                      ₹{yearlyPrice} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>/ year</span>
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                      365 days full access (just ₹12.5/mo)
+                      365 days full access (just ₹{(yearlyPrice / 12).toFixed(1)}/mo)
                     </div>
                   </div>
 

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import WalletVibeLogo from './WalletVibeLogo'
+import { isAdminEmail } from '../api/subscription'
 
 export default function Header({
   auth, stats, activeTab, searchIndex, subscription,
   onLogout, onRefresh, onSettings, onBankSearch,
-  onSearchSelect, onManageSubscription,
+  onSearchSelect, onManageSubscription, onAdminPanel,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -131,6 +132,20 @@ export default function Header({
           <button className="header-btn" onClick={onBankSearch} title="Bank Search">
             <i className="fas fa-university"></i>
           </button>
+          {isAdminEmail(auth?.email) && (
+            <button
+              className="header-btn"
+              onClick={onAdminPanel}
+              title="Admin Control Panel"
+              style={{
+                background: 'rgba(139, 92, 246, 0.2)',
+                color: '#c4b5fd',
+                borderColor: 'rgba(139, 92, 246, 0.4)',
+              }}
+            >
+              <i className="fas fa-shield-alt"></i>
+            </button>
+          )}
           <button className="header-btn text-amber" onClick={onSettings} title="Settings">
             <i className="fas fa-cog"></i>
           </button>
