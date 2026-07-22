@@ -4,7 +4,7 @@
    - Posts SW_UPDATED message to all clients when a new SW activates
 */
 
-const CACHE_NAME = 'walletvibe-cache-v4'
+const CACHE_NAME = 'walletvibe-cache-v5'
 const VERSION_KEY = 'wv-deployed-version'
 
 // On install — cache shell assets
@@ -54,15 +54,16 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// Fetch handler — network first, cache fallback
+// Fetch handler — network first, cache fallback for same-origin requests only
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET') return
 
-  // Don't intercept Firebase/API calls
   const url = new URL(req.url)
-  const isFirebase = url.hostname.includes('googleapis') || url.hostname.includes('firebaseio') || url.hostname.includes('firestore')
-  if (isFirebase) return
+
+  // Don't intercept cross-origin / third-party requests (Firebase, Razorpay, Fonts, CDNs)
+  // Browser loads them natively according to style-src, font-src, img-src, etc.
+  if (url.origin !== self.location.origin) return
 
   // Don't cache version.json (always fresh)
   if (url.pathname === '/version.json') {
