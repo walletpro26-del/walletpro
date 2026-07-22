@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { onAuthChange, signOut } from './api/auth'
 import {
   addExpense, updateExpense, deleteExpense,
@@ -43,8 +43,16 @@ export default function App() {
   const [recentLending, setRecentLending] = useState([])
   const [allExpenses, setAllExpenses] = useState([])
   const [allLending, setAllLending] = useState([])
-  const [suggestions, setSuggestions] = useState(null)
-  const [searchIndex, setSearchIndex] = useState([])
+
+  // Memoized derived calculations
+  const suggestions = useMemo(() => computeSuggestions(allExpenses), [allExpenses])
+
+  const searchIndex = useMemo(() => {
+    return [
+      ...allExpenses.map((e) => ({ ...e, sheet: 'expense', isLend: false })),
+      ...allLending.map((l) => ({ ...l, sheet: 'lending', isLend: true })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [allExpenses, allLending])
 
   // UI State
   const [loading, setLoading] = useState(false)
@@ -100,14 +108,6 @@ export default function App() {
       setRecentLending(recentL)
       setAllExpenses(allExp)
       setAllLending(allL)
-      setSuggestions(computeSuggestions(allExp))
-
-      // Build search index
-      const idx = [
-        ...allExp.map((e) => ({ ...e, sheet: 'expense', isLend: false })),
-        ...allL.map((l) => ({ ...l, sheet: 'lending', isLend: true })),
-      ].sort((a, b) => new Date(b.date) - new Date(a.date))
-      setSearchIndex(idx)
     } catch (err) {
       setError(err?.message || 'Failed to load data')
     } finally {
@@ -210,6 +210,11 @@ export default function App() {
     setRecentLending([])
     setAllExpenses([])
     setAllLending([])
+    // Security: Purge sensitive cached data on logout
+    localStorage.removeItem('wv_cache_expenses')
+    localStorage.removeItem('wv_cache_lending')
+    localStorage.removeItem('wv_cache_bank')
+    localStorage.removeItem('wv_pending_queue')
   }
 
   // ─── Splash screen (auth not ready) ────────────────────────────────────────
@@ -319,6 +324,7 @@ export default function App() {
             <LendingForm
               key={editLending?.id || 'new'}
               suggestions={{ persons: [...new Set(allLending.map((l) => l.person).filter(Boolean))] }}
+              allLending={allLending}
               onSave={handleSaveLending}
               loading={loading}
               editData={editLending}
@@ -326,7 +332,8 @@ export default function App() {
             />
             <TransactionList
               items={recentLending}
-              title="Recent Transactions"
+              allLending={allLending}
+              title="Recent Lend / Borrow"
               onSelect={(item) => setSelectedTxn(item)}
             />
           </>
@@ -349,6 +356,7 @@ export default function App() {
       {selectedTxn && (
         <TransactionModal
           item={selectedTxn}
+          allLending={allLending}
           onClose={() => setSelectedTxn(null)}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -356,6 +364,7 @@ export default function App() {
       )}
       {showSettings && (
         <SettingsModal
+          auth={authState}
           onClose={() => setShowSettings(false)}
           onSave={() => {}}
           onMigrate={(url) => {

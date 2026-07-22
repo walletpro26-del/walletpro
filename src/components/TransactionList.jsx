@@ -1,7 +1,18 @@
 import { normalizeLendingType } from '../api/lending'
+import { openWhatsApp, openEmail } from '../utils/commUtils'
 
 export default function TransactionList({ items = [], title, onSelect }) {
-  if (!items.length) return null
+  if (!items.length) {
+    return (
+      <div style={{ margin: '16px 0', textAlign: 'center', padding: '32px 16px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--accent-400)' }}>
+          <i className="fas fa-receipt" style={{ fontSize: 20 }}></i>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>No recent activity yet</div>
+        <div style={{ fontSize: 11, marginTop: 4 }}>Saved transactions will appear here automatically.</div>
+      </div>
+    )
+  }
 
   function formatDate(iso) {
     try {
@@ -64,7 +75,53 @@ export default function TransactionList({ items = [], title, onSelect }) {
                 <div className="txn-sub">{formatDate(item.date)} · {sub}</div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {isLending && (item.mobileNo || item.phone) && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openWhatsApp(item.mobileNo || item.phone, item) }}
+                    title="Send details via WhatsApp"
+                    style={{
+                      border: 'none',
+                      background: 'rgba(37, 211, 102, 0.1)',
+                      color: '#25D366',
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 12
+                    }}
+                  >
+                    <i className="fab fa-whatsapp" />
+                  </button>
+                )}
+
+                {isLending && item.email && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openEmail(item.email, item) }}
+                    title="Send details via Email"
+                    style={{
+                      border: 'none',
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      color: '#3b82f6',
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 11
+                    }}
+                  >
+                    <i className="fas fa-envelope" />
+                  </button>
+                )}
+
                 <div className={`txn-amount ${amtInfo.cls}`} style={{ textAlign: 'right' }}>
                   {amtInfo.text}
                 </div>

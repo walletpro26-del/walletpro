@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { compressImage, getAttachment } from '../api/attachments'
+import { getPersonContactMap } from '../utils/commUtils'
 import MultiSelectCombobox from './MultiSelectCombobox'
 
-export default function LendingForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
+export default function LendingForm({ suggestions, allLending = [], onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
   const getInitialMode = () => {
     if (!editData) return 'Lend'
@@ -25,6 +26,8 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
   const [form, setForm] = useState({
     date: editData?.date?.split('T')[0] || today,
     person: editData?.person || '',
+    mobileNo: editData?.mobileNo || editData?.phone || '',
+    email: editData?.email || '',
     amount: editData?.amount || '',
     remarks: editData?.remarks || '',
     fileData: null,
@@ -34,17 +37,31 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
   const [fileLabel, setFileLabel] = useState(editData?.fileName ? (editData.fileName.length > 5 ? editData.fileName.slice(0, 5) + '…' : editData.fileName) : 'None')
   const [existingAttachmentPreview, setExistingAttachmentPreview] = useState(null)
   const [loadingAttachment, setLoadingAttachment] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
+  const [attachmentSuccess, setAttachmentSuccess] = useState('')
 
   // Load existing attachment preview when editing
   useEffect(() => {
     if (editData?.hasAttachment && !editData?.fileData) {
       setLoadingAttachment(true)
+      setAttachmentError('')
+      setAttachmentSuccess('')
       getAttachment('lending', editData.id)
-        .then((data) => setExistingAttachmentPreview(data))
-        .catch(() => {})
+        .then((data) => {
+          if (data) {
+            setExistingAttachmentPreview(data)
+            setAttachmentSuccess('✔ Attachment fetched successfully')
+          } else {
+            setAttachmentError('⚠ Attachment file could not be retrieved.')
+          }
+        })
+        .catch((err) => {
+          setAttachmentError('⚠ Failed to fetch attachment: ' + (err?.message || 'Error'))
+        })
         .finally(() => setLoadingAttachment(false))
     } else if (editData?.fileData) {
       setExistingAttachmentPreview(editData.fileData)
+      setAttachmentSuccess('✔ Attachment fetched successfully')
     }
   }, [editData?.id])
 
@@ -66,15 +83,30 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
 
   async function handleFile(e) {
     const f = e.target.files?.[0]
-    if (!f) { set('fileData', null); set('fileName', ''); set('mimeType', ''); setFileLabel('None'); return }
+    if (!f) {
+      set('fileData', null); set('fileName', ''); set('mimeType', ''); setFileLabel('None')
+      setAttachmentError('')
+      setAttachmentSuccess('')
+      return
+    }
+    setAttachmentError('')
+    setAttachmentSuccess('')
     try {
       const dataUrl = await compressImage(f)
       setForm((s) => ({ ...s, fileData: dataUrl, fileName: f.name, mimeType: f.type }))
       setFileLabel(f.name.length > 5 ? f.name.slice(0, 5) + '…' : f.name)
-    } catch { setFileLabel('Error') }
+      setAttachmentSuccess(`✔ Attached: ${f.name}`)
+    } catch {
+      setFileLabel('Error')
+      setAttachmentError('⚠ Failed to process image attachment.')
+    }
   }
 
-  function clearFile() { set('fileData', null); set('fileName', ''); set('mimeType', ''); setFileLabel('None') }
+  function clearFile() {
+    set('fileData', null); set('fileName', ''); set('mimeType', ''); setFileLabel('None')
+    setAttachmentError('')
+    setAttachmentSuccess('')
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -89,6 +121,20 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
       hasAttachment: editData?.hasAttachment,
       hasChunkedAttachment: editData?.hasChunkedAttachment,
     })
+    if (!editData) {
+      setForm({
+        date: today,
+        person: '',
+        mobileNo: '',
+        email: '',
+        amount: '',
+        remarks: '',
+        fileData: null,
+        fileName: '',
+        mimeType: '',
+      })
+      setFileLabel('None')
+    }
   }
 
   return (
@@ -162,26 +208,50 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
           </button>
         )}
 
-        {/* Existing Attachment Preview when Editing */}
-        {editData && (existingAttachmentPreview || loadingAttachment) && (
+        {/* Attachment Preview & Status */}
+        {(form.fileData || existingAttachmentPreview || loadingAttachment || attachmentError) && (
           <div style={{ marginTop: 12, padding: 10, background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              Current Attachment
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Attachment Preview
+              </span>
+              {attachmentSuccess && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--emerald-600)' }}>
+                  {attachmentSuccess}
+                </span>
+              )}
             </div>
-            {loadingAttachment ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading...</div>
-            ) : existingAttachmentPreview ? (
-              <div style={{ borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                {existingAttachmentPreview.includes('application/pdf') ? (
+
+            {loadingAttachment && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
+                <i className="fas fa-spinner fa-spin"></i> Loading attachment data...
+              </div>
+            )}
+
+            {attachmentError && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--red-600)', background: 'var(--red-50)', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }}>
+                {attachmentError}
+              </div>
+            )}
+
+            {!loadingAttachment && (form.fileData || existingAttachmentPreview) && (
+              <div style={{ borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)', marginTop: 4 }}>
+                {(form.fileData || existingAttachmentPreview).includes('application/pdf') ? (
                   <div style={{ padding: 12, textAlign: 'center', background: '#fff' }}>
-                    <i className="fas fa-file-pdf" style={{ fontSize: 28, color: 'var(--red-500)' }}></i>
-                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>{editData.fileName || 'PDF'}</div>
+                    <i className="fas fa-file-pdf" style={{ fontSize: 32, color: 'var(--red-500)' }}></i>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>
+                      {form.fileName || editData?.fileName || 'PDF Document'}
+                    </div>
                   </div>
                 ) : (
-                  <img src={existingAttachmentPreview} alt="Existing receipt" style={{ width: '100%', maxHeight: 150, objectFit: 'cover' }} />
+                  <img
+                    src={form.fileData || existingAttachmentPreview}
+                    alt="Attachment receipt"
+                    style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }}
+                  />
                 )}
               </div>
-            ) : null}
+            )}
           </div>
         )}
 
@@ -215,6 +285,32 @@ export default function LendingForm({ suggestions, onSave, loading, editData, on
           onChange={(val) => set('person', val)}
           suggestions={suggestions?.persons || []}
         />
+
+        {/* Mobile No & Email */}
+        <div className="compact-row">
+          <div className="compact-input-block" style={{ flex: 1 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 10 }} /> Mobile (WhatsApp)
+            </label>
+            <input
+              type="tel"
+              placeholder="e.g. 9876543210"
+              value={form.mobileNo}
+              onChange={(e) => set('mobileNo', e.target.value)}
+            />
+          </div>
+          <div className="compact-input-block" style={{ flex: 1 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 9 }} /> Email Address
+            </label>
+            <input
+              type="email"
+              placeholder="name@example.com"
+              value={form.email}
+              onChange={(e) => set('email', e.target.value)}
+            />
+          </div>
+        </div>
 
         {/* Remarks */}
         <div className="float-group">

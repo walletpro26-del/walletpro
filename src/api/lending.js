@@ -17,6 +17,8 @@ function toFirestore(data) {
     person: data.person || '',
     amount: Math.abs(parseFloat(data.amount)) || 0,
     remarks: data.remarks || data.details || '',
+    mobileNo: data.mobileNo || data.phone || '',
+    email: data.email || '',
     fileName: data.fileName || data.existingFileName || '',
     mimeType: data.mimeType || data.existingMimeType || '',
     hasAttachment: data.fileData ? true : (data.hasAttachment || false),
@@ -56,6 +58,8 @@ function fromFirestore(docSnap) {
     person: d.person || '',
     amount: d.amount || 0,
     remarks: d.remarks || '',
+    mobileNo: d.mobileNo || '',
+    email: d.email || '',
     fileName: d.fileName || '',
     mimeType: d.mimeType || '',
     hasAttachment: d.hasAttachment || false,
@@ -100,6 +104,8 @@ export async function addLending(data) {
         person: data.person || '',
         amount: Math.abs(parseFloat(data.amount)) || 0,
         remarks: data.remarks || '',
+        mobileNo: data.mobileNo || data.phone || '',
+        email: data.email || '',
         fileName: '',
         mimeType: '',
         hasAttachment: false,
@@ -160,23 +166,10 @@ export async function getAllLending() {
   if (!currentUid) return []
 
   try {
-    // 1. Fetch scoped lending
+    // Fetch user-scoped lending records
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await getDocs(qScoped)
     let items = snapScoped.docs.map(fromFirestore)
-
-    // 2. Fetch all to find legacy items (without userId) to migrate
-    const qAll = query(collection(db, COL))
-    const snapAll = await getDocs(qAll)
-    const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
-
-    if (legacyDocs.length > 0) {
-      legacyDocs.forEach((d) => {
-        const ref = doc(db, COL, d.id)
-        updateDoc(ref, { userId: currentUid }).catch((err) => console.error('Migration error:', err))
-        items.push(fromFirestore(d))
-      })
-    }
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
     saveSnapshot('lending', sorted)

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
-export default function SettingsModal({ onClose, onSave, onMigrate }) {
+export default function SettingsModal({ auth, onClose, onSave, onMigrate }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
   const [currency, setCurrency] = useState(localStorage.getItem('wv_currency') || localStorage.getItem('wp_currency') || '₹')
   const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
@@ -25,41 +25,165 @@ export default function SettingsModal({ onClose, onSave, onMigrate }) {
     location.reload()
   }
 
+  function handleExportBackup() {
+    try {
+      const exp = JSON.parse(localStorage.getItem('wv_cache_expenses') || '[]')
+      const lend = JSON.parse(localStorage.getItem('wv_cache_lending') || '[]')
+      const bank = JSON.parse(localStorage.getItem('wv_cache_bank') || '[]')
+      
+      const backupData = {
+        app: 'WalletVibe',
+        version: '1.2.5',
+        exportDate: new Date().toISOString(),
+        user: auth?.email || 'user',
+        data: {
+          expenses: exp,
+          lending: lend,
+          bankTransactions: bank,
+        }
+      }
+
+      const jsonStr = JSON.stringify(backupData, null, 2)
+      const blob = new Blob([jsonStr], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `WalletVibe_Backup_${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Could not export backup: ' + err?.message)
+    }
+  }
+
+  const userInitial = (auth?.email || auth?.name || 'U').charAt(0).toUpperCase()
+
+  const themes = [
+    { id: 'light', name: 'Standard Light', bg: '#ffffff', color: '#1e293b', accent: '#6366f1' },
+    { id: 'dark', name: 'Deep Dark', bg: '#0f172a', color: '#f8fafc', accent: '#818cf8' },
+    { id: 'midnight', name: 'Midnight Blue', bg: '#0b1120', color: '#f1f5f9', accent: '#38bdf8' },
+    { id: 'forest', name: 'Forest Green', bg: '#022c22', color: '#ecfdf5', accent: '#34d399' },
+  ]
+
   return (
     <div className="modal-overlay">
       <div className="modal-backdrop" onClick={onClose}></div>
-      <div className="modal-container">
+      <div className="modal-container" style={{ maxWidth: 440, maxHeight: '92vh' }}>
         <div className="modal-header">
           <div className="modal-header-info">
-            <div className="modal-header-icon" style={{ background: 'var(--accent-50)', color: 'var(--accent-500)' }}>
-              <i className="fas fa-sliders-h"></i>
+            <div className="modal-header-icon" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
+              <i className="fas fa-cog"></i>
             </div>
-            <h3>App Settings</h3>
+            <div>
+              <h3 style={{ margin: 0 }}>Settings & Preferences</h3>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>WalletVibe Account & App Config</div>
+            </div>
           </div>
           <button className="modal-close" onClick={onClose}>
             <i className="fas fa-times"></i>
           </button>
         </div>
 
-        <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Theme */}
-          <div className="settings-section">
-            <h4><i className="fas fa-palette" style={{ color: 'var(--slate-300)' }}></i> Appearance</h4>
-            <div style={{ background: 'var(--slate-50)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Theme Style</div>
-              <div className="theme-toggle" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')} style={{ flex: 1, minWidth: 100 }}>Standard Light</button>
-                <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')} style={{ flex: 1, minWidth: 100 }}>Deep Dark</button>
-                <button className={theme === 'midnight' ? 'active' : ''} onClick={() => setTheme('midnight')} style={{ flex: 1, minWidth: 100 }}>Midnight Blue</button>
-                <button className={theme === 'forest' ? 'active' : ''} onClick={() => setTheme('forest')} style={{ flex: 1, minWidth: 100 }}>Forest Green</button>
+        <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 16 }}>
+          {/* User Account Info Card */}
+          <div style={{
+            background: 'var(--bg-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <div style={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              background: 'var(--accent-gradient)',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 18,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: 'var(--shadow-sm)',
+              flexShrink: 0
+            }}>
+              {userInitial}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {auth?.name || auth?.email || 'WalletVibe User'}
               </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {auth?.email || 'Connected User'}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--emerald-600)',
+              background: 'rgba(16, 185, 129, 0.1)',
+              padding: '4px 8px',
+              borderRadius: 99,
+              border: '1px solid rgba(16, 185, 129, 0.2)',
+              whiteSpace: 'nowrap'
+            }}>
+              <i className="fas fa-shield-alt" style={{ marginRight: 4 }} /> Cloud Sync
+            </span>
+          </div>
+
+          {/* Theme Selector */}
+          <div className="settings-section">
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+              <i className="fas fa-palette" style={{ color: 'var(--accent-500)', marginRight: 6 }} /> Appearance Theme
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {themes.map((t) => {
+                const isActive = theme === t.id
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTheme(t.id)}
+                    style={{
+                      padding: 10,
+                      borderRadius: 'var(--radius-md)',
+                      border: isActive ? '2px solid var(--accent-600)' : '1px solid var(--border-color)',
+                      background: t.bg,
+                      color: t.color,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      boxShadow: isActive ? 'var(--shadow-md)' : 'none',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>{t.name}</div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.bg, border: '1px solid #ccc' }} />
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.accent }} />
+                      </div>
+                    </div>
+                    {isActive && <i className="fas fa-check-circle" style={{ color: t.accent, fontSize: 16 }} />}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {/* Preferences */}
           <div className="settings-section">
-            <h4><i className="fas fa-cog" style={{ color: 'var(--slate-300)' }}></i> Preferences</h4>
-            <div className="float-group">
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+              <i className="fas fa-sliders-h" style={{ color: 'var(--accent-500)', marginRight: 6 }} /> App Preferences
+            </h4>
+
+            <div className="float-group" style={{ marginBottom: 12 }}>
               <select className="float-input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
                 <option value="₹">Indian Rupee (₹)</option>
                 <option value="$">US Dollar ($)</option>
@@ -70,21 +194,74 @@ export default function SettingsModal({ onClose, onSave, onMigrate }) {
               <label className="float-label active">Currency Symbol</label>
               <i className="select-chevron fas fa-chevron-down"></i>
             </div>
+
             <div className="float-group">
               <select className="float-input" value={startScreen} onChange={(e) => setStartScreen(e.target.value)}>
                 <option value="expense">Expenses Form</option>
                 <option value="lending">Lending Form</option>
                 <option value="reports">Reports View</option>
               </select>
-              <label className="float-label active">Start Screen</label>
+              <label className="float-label active">Default Start Screen</label>
               <i className="select-chevron fas fa-chevron-down"></i>
             </div>
           </div>
 
-          {/* Data */}
+          {/* Data & Backup Tools */}
           <div className="settings-section">
-            <h4><i className="fas fa-database" style={{ color: 'var(--slate-300)' }}></i> Data Management</h4>
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+              <i className="fas fa-database" style={{ color: 'var(--accent-500)', marginRight: 6 }} /> Data Tools & Backup
+            </h4>
             
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                style={{
+                  padding: 10,
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-subtle)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
+                }}
+              >
+                <i className="fas fa-file-export" style={{ color: 'var(--accent-600)' }} /> Backup JSON
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {
+                  if (!gasUrl.trim()) {
+                    alert('Please enter a Google Apps Script Exec URL below first!')
+                    return
+                  }
+                  setConfirmStep(1)
+                }} 
+                style={{
+                  padding: 10,
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--accent-200)',
+                  background: 'var(--accent-50)',
+                  color: 'var(--accent-600)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
+                }}
+              >
+                <i className="fas fa-file-import" /> Legacy Import
+              </button>
+            </div>
+
             <div className="float-group" style={{ marginBottom: 12 }}>
               <input
                 type="text"
@@ -93,45 +270,32 @@ export default function SettingsModal({ onClose, onSave, onMigrate }) {
                 value={gasUrl}
                 onChange={(e) => setGasUrl(e.target.value)}
               />
-              <label className="float-label active">Google Apps Script Exec URL</label>
+              <label className="float-label active">Google Apps Script URL (Legacy)</label>
             </div>
 
-            <button 
-              onClick={() => {
-                if (!gasUrl.trim()) {
-                  alert('Please enter a valid Google Apps Script Exec URL first!')
-                  return
-                }
-                setConfirmStep(1)
-              }} 
-              style={{
-                width: '100%', padding: 12, borderRadius: 'var(--radius-md)',
-                background: 'var(--accent-50)', color: 'var(--accent-600)', border: '1px solid var(--accent-200)',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'all 0.2s', marginBottom: 16
-              }}
-            >
-              <i className="fas fa-file-import"></i> Import Legacy Data
-            </button>
-
             <button onClick={handleClearCache} style={{
-              width: '100%', padding: 12, border: '2px solid #fecaca', borderRadius: 'var(--radius-md)',
-              background: 'transparent', color: 'var(--red-500)', fontWeight: 700, fontSize: 13,
-              cursor: 'pointer', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', padding: 10, border: '1px solid var(--red-200)', borderRadius: 'var(--radius-md)',
+              background: 'rgba(239, 68, 68, 0.05)', color: 'var(--red-600)', fontWeight: 700, fontSize: 12,
+              cursor: 'pointer', fontFamily: 'var(--font-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               transition: 'all 0.2s',
             }}>
-              <i className="fas fa-eraser"></i> Clear App Cache
+              <i className="fas fa-eraser"></i> Clear Cache & Refresh Session
             </button>
-            <p style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 8 }}>
-              Clears local settings and login session. Data on server is safe.
-            </p>
+          </div>
+
+          {/* App Info Footer */}
+          <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: 11 }}>
+            <div style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>WalletVibe v1.2.5</div>
+            <div>Personal Finance Manager · PWA Ready</div>
+            <div style={{ marginTop: 2 }}>
+              Need help? <a href="mailto:walletpro26@gmail.com" style={{ color: 'var(--accent-600)', textDecoration: 'none', fontWeight: 600 }}>walletpro26@gmail.com</a>
+            </div>
           </div>
         </div>
 
-        <div style={{ padding: 16, borderTop: '1px solid var(--border-color)' }}>
-          <button className="btn-primary" onClick={handleSave} style={{ background: 'linear-gradient(135deg, var(--slate-800), var(--slate-900))', boxShadow: 'none' }}>
-            <i className="fas fa-check" style={{ marginRight: 6 }}></i> Save Changes
+        <div style={{ padding: 14, borderTop: '1px solid var(--border-color)', background: 'var(--bg-subtle)' }}>
+          <button className="btn-primary" onClick={handleSave} style={{ width: '100%', padding: '10px 14px', fontSize: 13, background: 'var(--accent-gradient)', boxShadow: 'var(--shadow-sm)' }}>
+            <i className="fas fa-check" style={{ marginRight: 6 }}></i> Save & Apply Settings
           </button>
         </div>
       </div>

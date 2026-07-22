@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db } from '../firebase'
-import { collection, getDocs, query, where, updateDoc, doc } from 'firebase/firestore'
+import { collection, getDocs, query, where, writeBatch, doc, Timestamp, deleteDoc } from 'firebase/firestore'
+import { saveSnapshot, loadSnapshot } from '../api/localCache'
 
 export default function BankSearchModal({ uid, onClose }) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -8,13 +9,27 @@ export default function BankSearchModal({ uid, onClose }) {
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [importSuccess, setImportSuccess] = useState('')
+  const [csvPreviewData, setCsvPreviewData] = useState(null)
 
   async function loadRecords() {
     if (allRecords) return allRecords
-    setLoading(true)
+    
+    // Check local cache first for instant display
+    const cached = loadSnapshot('bank')
+    if (cached && cached.length > 0) {
+      const rehydrated = cached.map((r) => ({
+        ...r,
+        date: r.date ? new Date(r.date) : new Date(),
+      }))
+      setAllRecords(rehydrated)
+    } else {
+      setLoading(true)
+    }
+
     setError('')
     try {
-      // 1. Fetch user-scoped bank transactions
+      // User-scoped bank transactions query
       const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', uid || ''))
       const snapScoped = await getDocs(qScoped)
       let records = snapScoped.docs.map((d) => {
@@ -32,34 +47,23 @@ export default function BankSearchModal({ uid, onClose }) {
         }
       })
 
-      // 2. Fetch all bank transactions to find legacy records to migrate
-      const qAll = query(collection(db, 'bankTransactions'))
-      const snapAll = await getDocs(qAll)
-      const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
-      if (legacyDocs.length > 0) {
-        legacyDocs.forEach((d) => {
-          const ref = doc(db, 'bankTransactions', d.id)
-          updateDoc(ref, { userId: uid || '' }).catch((err) => console.error('Migration error:', err))
-          const data = d.data()
-          const dateObj = data.date?.toDate?.() || new Date(data.date)
-          records.push({
-            id: d.id,
-            bank: data.bank || '',
-            date: dateObj,
-            description: data.description || '',
-            debit: data.debit || 0,
-            credit: data.credit || 0,
-            balance: data.balance || 0,
-            searchStr: `${dateObj.toLocaleDateString('en-IN')} ${data.description || ''} ${data.bank || ''} ${data.debit || ''} ${data.credit || ''} ${data.balance || ''}`.toLowerCase(),
-          })
-        })
-      }
-
       records.sort((a, b) => b.date - a.date)
       setAllRecords(records)
+      saveSnapshot('bank', records)
       setLoading(false)
       return records
     } catch (err) {
+      console.warn('Bank records fetch error, using cache:', err?.message)
+      const cached = loadSnapshot('bank')
+      if (cached) {
+        const rehydrated = cached.map((r) => ({
+          ...r,
+          date: r.date ? new Date(r.date) : new Date(),
+        }))
+        setAllRecords(rehydrated)
+        setLoading(false)
+        return rehydrated
+      }
       setError('Failed to load bank records: ' + (err?.message || ''))
       setLoading(false)
       return []
@@ -84,79 +88,531 @@ export default function BankSearchModal({ uid, onClose }) {
     return () => { active = false }
   }, [searchTerm, uid])
 
+  function downloadCsvTemplate() {
+    const sampleCsv = `Date,Bank,Description,Debit,Credit,Balance
+2026-07-22,HDFC Bank,UPI/Swiggy/Order123,250,0,45000.00
+2026-07-21,HDFC Bank,Salary Credited,0,55000,45250.00
+2026-07-20,SBI,ATM Cash Withdrawal,2000,0,10250.50`
+
+    const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'bank_transactions_template.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleCsvFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    setError('')
+    setImportSuccess('')
+
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      if (lines.length < 2) {
+        throw new Error('CSV file must contain a header row and at least 1 data row.')
+      }
+
+      function parseCSVLine(line) {
+        const row = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i]
+          if (char === '"' || char === "'") {
+            inQuotes = !inQuotes
+          } else if (char === ',' && !inQuotes) {
+            row.push(current.trim())
+            current = ''
+          } else {
+            current += char
+          }
+        }
+        row.push(current.trim())
+        return row
+      }
+
+      const headers = parseCSVLine(lines[0])
+
+      function findCol(headers, names) {
+        const cleanHeaders = headers.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''))
+        for (const name of names) {
+          const target = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+          const idx = cleanHeaders.findIndex(h => h.includes(target))
+          if (idx !== -1) return idx
+        }
+        return -1
+      }
+
+      const dateIdx = findCol(headers, ['date', 'txndate', 'transactiondate', 'valuedate', 'postdate', 'dt'])
+      const bankIdx = findCol(headers, ['bank', 'bankname', 'institution', 'account', 'branch'])
+      const descIdx = findCol(headers, ['description', 'particulars', 'narration', 'details', 'remark', 'remarks', 'payee'])
+      const debitIdx = findCol(headers, ['debit', 'withdrawal', 'dr', 'out', 'paidout', 'debitamount'])
+      const creditIdx = findCol(headers, ['credit', 'deposit', 'cr', 'in', 'paidin', 'creditamount'])
+      const amountIdx = findCol(headers, ['amount', 'amt', 'transactionamount', 'val'])
+      const balIdx = findCol(headers, ['balance', 'bal', 'closingbalance', 'runningbalance', 'availbal'])
+
+      if (dateIdx === -1 && debitIdx === -1 && creditIdx === -1 && amountIdx === -1) {
+        throw new Error('CSV headers not recognized. Download template to view expected format.')
+      }
+
+      function parseCsvDate(str) {
+        if (!str) return new Date()
+        const clean = str.replace(/["']/g, '').trim()
+        const direct = new Date(clean)
+        if (!isNaN(direct.getTime())) return direct
+
+        const parts = clean.split(/[- .:/]/)
+        if (parts.length >= 3) {
+          let day, month, year
+          const monthNames = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
+          const pm = parts[1].toLowerCase().substring(0, 3)
+
+          if (parts[0].length === 4) {
+            year = parseInt(parts[0], 10)
+            month = monthNames[pm] !== undefined ? monthNames[pm] : (parseInt(parts[1], 10) - 1)
+            day = parseInt(parts[2], 10)
+          } else {
+            day = parseInt(parts[0], 10)
+            month = monthNames[pm] !== undefined ? monthNames[pm] : (parseInt(parts[1], 10) - 1)
+            year = parseInt(parts[2], 10)
+            if (year < 100) year += 2000
+          }
+          const dt = new Date(year, month, day)
+          if (!isNaN(dt.getTime())) return dt
+        }
+        return new Date()
+      }
+
+      function parseNum(val) {
+        if (!val) return 0
+        const clean = String(val).replace(/[^0-9.-]/g, '')
+        const num = parseFloat(clean)
+        return isNaN(num) ? 0 : num
+      }
+
+      const items = []
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCSVLine(lines[i])
+        if (row.length === 0 || (row.length === 1 && !row[0])) continue
+
+        const dateObj = dateIdx !== -1 ? parseCsvDate(row[dateIdx]) : new Date()
+        const bank = bankIdx !== -1 ? (row[bankIdx] || 'Bank') : 'Bank'
+        const description = descIdx !== -1 ? (row[descIdx] || '') : ''
+        
+        let debit = 0, credit = 0
+        if (debitIdx !== -1) debit = parseNum(row[debitIdx])
+        if (creditIdx !== -1) credit = parseNum(row[creditIdx])
+        if (debit === 0 && credit === 0 && amountIdx !== -1) {
+          const amt = parseNum(row[amountIdx])
+          if (amt < 0) debit = Math.abs(amt)
+          else credit = amt
+        }
+
+        const balance = balIdx !== -1 ? parseNum(row[balIdx]) : 0
+
+        const isDuplicate = (allRecords || []).some((existing) => {
+          const sameDate = Math.abs(new Date(existing.date) - dateObj) < 86400000
+          const sameAmt = existing.debit === debit && existing.credit === credit
+          const sameDesc = (existing.description || '').toLowerCase().trim() === description.toLowerCase().trim()
+          return sameDate && sameAmt && (sameDesc || (debit > 0 || credit > 0))
+        })
+
+        items.push({
+          date: dateObj,
+          bank,
+          description,
+          debit,
+          credit,
+          balance,
+          selected: !isDuplicate,
+          isDuplicate,
+        })
+      }
+
+      if (items.length === 0) {
+        throw new Error('No valid bank transactions found in this CSV file.')
+      }
+
+      const dupCount = items.filter(i => i.isDuplicate).length
+      setCsvPreviewData({ filename: file.name, items, dupCount })
+    } catch (err) {
+      setError('CSV Parsing Failed: ' + (err?.message || 'Invalid format'))
+    }
+  }
+
+  function togglePreviewItem(index) {
+    if (!csvPreviewData) return
+    setCsvPreviewData((prev) => {
+      const next = [...prev.items]
+      next[index] = { ...next[index], selected: !next[index].selected }
+      return { ...prev, items: next }
+    })
+  }
+
+  function toggleSelectAllPreview(selectVal) {
+    if (!csvPreviewData) return
+    setCsvPreviewData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => ({ ...item, selected: selectVal })),
+    }))
+  }
+
+  async function confirmCsvImport() {
+    if (!csvPreviewData) return
+    const selectedItems = csvPreviewData.items.filter((i) => i.selected)
+    if (selectedItems.length === 0) {
+      setError('Please select at least one transaction to import.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setImportSuccess('')
+
+    try {
+      const newRecords = []
+      const firestoreItems = []
+
+      selectedItems.forEach((item, i) => {
+        firestoreItems.push({
+          userId: uid || '',
+          bank: item.bank || 'Bank',
+          date: Timestamp.fromDate(item.date),
+          description: item.description || '',
+          debit: item.debit || 0,
+          credit: item.credit || 0,
+          balance: item.balance || 0,
+        })
+
+        newRecords.push({
+          id: `imported_${Date.now()}_${i}`,
+          bank: item.bank || 'Bank',
+          date: item.date,
+          description: item.description || '',
+          debit: item.debit || 0,
+          credit: item.credit || 0,
+          balance: item.balance || 0,
+          searchStr: `${item.date.toLocaleDateString('en-IN')} ${item.description || ''} ${item.bank || ''} ${item.debit || ''} ${item.credit || ''} ${item.balance || ''}`.toLowerCase(),
+        })
+      })
+
+      // Write to Firestore in batches of 400
+      const batchSize = 400
+      for (let i = 0; i < firestoreItems.length; i += batchSize) {
+        const chunk = firestoreItems.slice(i, i + batchSize)
+        const batch = writeBatch(db)
+        chunk.forEach((docData) => {
+          const docRef = doc(collection(db, 'bankTransactions'))
+          batch.set(docRef, docData)
+        })
+        await batch.commit()
+      }
+
+      const combined = [...newRecords, ...(allRecords || [])].sort((a, b) => b.date - a.date)
+      setAllRecords(combined)
+      saveSnapshot('bank', combined)
+      setFiltered(combined.slice(0, 50))
+      setCsvPreviewData(null)
+      setImportSuccess(`✔ Successfully imported ${selectedItems.length} bank transactions!`)
+    } catch (err) {
+      setError('CSV Import Failed: ' + (err?.message || 'Error writing data'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDeleteRecord(id) {
+    if (!id) return
+    if (!window.confirm('Are you sure you want to delete this bank record?')) return
+
+    try {
+      await deleteDoc(doc(db, 'bankTransactions', id))
+      const updated = (allRecords || []).filter((r) => r.id !== id)
+      setAllRecords(updated)
+      setFiltered((prev) => prev.filter((r) => r.id !== id))
+      saveSnapshot('bank', updated)
+      setImportSuccess('✔ Bank transaction deleted.')
+      setTimeout(() => setImportSuccess(''), 3000)
+    } catch (err) {
+      setError('Failed to delete record: ' + (err?.message || 'Error'))
+    }
+  }
 
   function formatDate(d) {
     try { return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) }
     catch { return '' }
   }
 
+  const selectedPreviewCount = csvPreviewData ? csvPreviewData.items.filter((i) => i.selected).length : 0
+  const allSelected = csvPreviewData && csvPreviewData.items.every((i) => i.selected)
+
+  const latestByBank = (allRecords || []).reduce((acc, r) => {
+    const b = (r.bank || 'Bank').trim()
+    if (!acc[b] || r.date > acc[b]) {
+      acc[b] = r.date
+    }
+    return acc
+  }, {})
+
   return (
     <div className="modal-overlay" style={{ zIndex: 120 }}>
       <div className="modal-backdrop" onClick={onClose}></div>
-      <div className="modal-container" style={{ maxWidth: 520, maxHeight: '85vh' }}>
+      <div className="modal-container" style={{ maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div className="bank-search-header">
-          <h3 style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="bank-search-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, margin: 0 }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
               <i className="fas fa-university" style={{ fontSize: 12 }}></i>
             </div>
-            Bank Search
+            {csvPreviewData ? 'CSV Import Preview' : 'Bank Search'}
           </h3>
-          <button className="modal-close" style={{ background: 'rgba(255,255,255,0.1)', color: '#a5b4fc' }} onClick={onClose}>
-            <i className="fas fa-times"></i>
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="bank-search-input-area">
-          <div style={{ position: 'relative' }}>
-            <i className="fas fa-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 14 }}></i>
-            <input
-              type="text"
-              placeholder="Search amount, date, desc..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%', padding: '12px 16px 12px 38px', border: '2px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
-                color: 'var(--text-primary)', background: 'var(--bg-input)', outline: 'none',
-              }}
-            />
+          
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {!csvPreviewData && (
+              <>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  style={{ padding: '5px 10px', fontSize: 11, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 'var(--radius-sm)' }}
+                  onClick={downloadCsvTemplate}
+                  title="Download CSV Template"
+                >
+                  <i className="fas fa-download" style={{ fontSize: 10, marginRight: 4 }} /> Template
+                </button>
+                <label
+                  className="btn-outline"
+                  style={{ padding: '5px 10px', fontSize: 11, background: 'var(--accent-gradient)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                  title="Import CSV bank statement"
+                >
+                  <i className="fas fa-file-csv" style={{ fontSize: 11, marginRight: 4 }} /> Import CSV
+                  <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvFileSelect} />
+                </label>
+              </>
+            )}
+            <button className="modal-close" style={{ background: 'rgba(255,255,255,0.1)', color: '#a5b4fc' }} onClick={onClose}>
+              <i className="fas fa-times"></i>
+            </button>
           </div>
         </div>
 
-        {/* Results */}
-        <div className="bank-search-results custom-scrollbar" style={{ flex: 1, overflow: 'auto' }}>
-          {error && <div className="error-banner" style={{ margin: 12 }}>{error}</div>}
-          {loading && (
-            <div className="loader-wrap">
-              <div className="loader-spinner"></div>
-              <div className="loader-text">Loading</div>
-            </div>
-          )}
-          {!loading && filtered.length === 0 && !error && (
-            <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent-100)' }}>
-                <i className="fas fa-search-dollar" style={{ fontSize: 28 }}></i>
-              </div>
-              <p style={{ fontSize: 12, fontWeight: 500 }}>Enter keywords to search bank history</p>
-            </div>
-          )}
-          {filtered.map((r, i) => (
-            <div key={i} className="bank-txn-item">
+        {/* Banners */}
+        {error && <div className="error-banner" style={{ margin: '10px 16px 0' }}>{error}</div>}
+        {importSuccess && (
+          <div style={{ margin: '10px 16px 0', padding: '10px 14px', background: 'var(--emerald-50)', border: '1px solid var(--emerald-500)', color: 'var(--emerald-600)', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: 600 }}>
+            {importSuccess}
+          </div>
+        )}
+
+        {/* ── CSV Preview Step ── */}
+        {csvPreviewData ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginTop: 8 }}>
+            <div style={{ padding: '10px 16px', background: 'var(--slate-50)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div className="bank-txn-date">{formatDate(r.date)}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent-500)', textTransform: 'uppercase' }}>{r.bank}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  File: <span style={{ color: 'var(--accent-600)' }}>{csvPreviewData.filename}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {selectedPreviewCount} of {csvPreviewData.items.length} transactions selected
+                  {csvPreviewData.dupCount > 0 && (
+                    <span style={{ color: 'var(--amber-700)', marginLeft: 6, fontWeight: 700 }}>
+                      ({csvPreviewData.dupCount} duplicates auto-unchecked)
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="bank-txn-desc">{r.description}</div>
-              <div>
-                {r.debit > 0 && <div className="bank-txn-amount debit">-₹{r.debit.toLocaleString('en-IN')}</div>}
-                {r.credit > 0 && <div className="bank-txn-amount credit">+₹{r.credit.toLocaleString('en-IN')}</div>}
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>Bal: ₹{r.balance.toLocaleString('en-IN')}</div>
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ padding: '4px 10px', fontSize: 10, fontWeight: 700 }}
+                onClick={() => toggleSelectAllPreview(!allSelected)}
+              >
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+
+            {/* Scrollable list of parsed rows */}
+            <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+              {csvPreviewData.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => togglePreviewItem(idx)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', margin: '4px 0',
+                    borderRadius: 'var(--radius-md)', border: item.isDuplicate ? '1px dashed var(--amber-500)' : '1px solid var(--border-color)',
+                    background: item.selected ? 'var(--bg-card)' : 'var(--slate-50)',
+                    opacity: item.selected ? 1 : 0.55, cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.selected}
+                    onChange={() => {}}
+                    style={{ accentColor: 'var(--accent-600)', width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)' }}>
+                      <span>{formatDate(item.date)}</span>
+                      <span style={{ color: 'var(--accent-500)', textTransform: 'uppercase' }}>{item.bank}</span>
+                      {item.isDuplicate && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--amber-700)', background: 'var(--amber-50)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--amber-500)' }}>
+                          ⚠️ Duplicate
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.description || '—'}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {item.debit > 0 && <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--red-500)' }}>-₹{item.debit.toLocaleString('en-IN')}</div>}
+                    {item.credit > 0 && <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--emerald-600)' }}>+₹{item.credit.toLocaleString('en-IN')}</div>}
+                    {item.balance > 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Bal: ₹{item.balance.toLocaleString('en-IN')}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer action buttons */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)', display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setCsvPreviewData(null)}
+                style={{ padding: '8px 14px', fontSize: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={selectedPreviewCount === 0 || loading}
+                onClick={confirmCsvImport}
+                style={{ margin: 0, padding: '8px 16px', width: 'auto', fontSize: 12, minHeight: 38 }}
+              >
+                {loading ? (
+                  <><i className="fas fa-spinner fa-spin"></i> Importing...</>
+                ) : (
+                  <><i className="fas fa-file-import"></i> Confirm Import ({selectedPreviewCount})</>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* ── Main Search View ── */
+          <>
+            {/* Latest Record Date by Bank Guidance Card */}
+            {Object.keys(latestByBank).length > 0 && (
+              <div style={{ margin: '10px 16px 0', padding: '10px 12px', background: 'var(--slate-50)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    <i className="fas fa-university" style={{ color: 'var(--accent-500)', marginRight: 6 }} />
+                    Latest Record Date by Bank
+                  </span>
+                  <span style={{ fontSize: 10, textTransform: 'none', fontWeight: 500 }}>
+                    {allRecords.length} records total
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {Object.entries(latestByBank).map(([bName, dt]) => (
+                    <div
+                      key={bName}
+                      style={{
+                        fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)',
+                        display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: 'var(--shadow-xs)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--accent-600)', textTransform: 'uppercase', fontSize: 10, fontWeight: 800 }}>{bName}:</span>
+                      <span>{formatDate(dt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bank-search-input-area">
+              <div style={{ position: 'relative' }}>
+                <i className="fas fa-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 14 }}></i>
+                <input
+                  type="text"
+                  placeholder="Search amount, date, desc..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%', padding: '12px 16px 12px 38px', border: '2px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
+                    color: 'var(--text-primary)', background: 'var(--bg-input)', outline: 'none',
+                  }}
+                />
               </div>
             </div>
-          ))}
-        </div>
+
+            <div className="bank-search-results custom-scrollbar" style={{ flex: 1, overflow: 'auto' }}>
+              {loading && (
+                <div className="loader-wrap">
+                  <div className="loader-spinner"></div>
+                  <div className="loader-text">Loading...</div>
+                </div>
+              )}
+              {!loading && filtered.length === 0 && !error && (
+                <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent-100)' }}>
+                    <i className="fas fa-search-dollar" style={{ fontSize: 28 }}></i>
+                  </div>
+                  <p style={{ fontSize: 12, fontWeight: 500 }}>Enter keywords to search bank history or click "Import CSV"</p>
+                </div>
+              )}
+              {filtered.map((r, i) => (
+                <div key={r.id || i} className="bank-txn-item" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div>
+                      <div className="bank-txn-date">{formatDate(r.date)}</div>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent-500)', textTransform: 'uppercase' }}>{r.bank}</div>
+                    </div>
+                    <div className="bank-txn-desc" style={{ flex: 1 }}>{r.description}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {r.debit > 0 && <div className="bank-txn-amount debit">-₹{r.debit.toLocaleString('en-IN')}</div>}
+                    {r.credit > 0 && <div className="bank-txn-amount credit">+₹{r.credit.toLocaleString('en-IN')}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Bal: ₹{r.balance.toLocaleString('en-IN')}</div>
+                  </div>
+                  {r.id && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRecord(r.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--slate-400)',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        fontSize: 13,
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      title="Delete bank record"
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--red-500)'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--slate-400)'}
+                    >
+                      <i className="fas fa-trash-alt" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

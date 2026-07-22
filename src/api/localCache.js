@@ -10,6 +10,7 @@
 const KEYS = {
   expenses: 'wv_cache_expenses',
   lending: 'wv_cache_lending',
+  bank: 'wv_cache_bank',
   pending: 'wv_pending_queue',
   pendingId: 'wv_pending_id',
 }
@@ -25,9 +26,9 @@ export function saveSnapshot(type, data) {
   try {
     const key = KEYS[type]
     if (!key) return
-    // Store only essential fields to keep size manageable
+    // Store only essential fields to keep size manageable and prevent QuotaExceededError
     const slim = data.map((item) => {
-      const { dateObj, ...rest } = item // dateObj is a Date object — not serializable
+      const { dateObj, fileData, ...rest } = item
       return rest
     })
     localStorage.setItem(key, JSON.stringify(slim))

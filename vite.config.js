@@ -8,6 +8,16 @@ export default defineConfig({
     open: true
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          html2canvas: ['html2canvas'],
+          dompurify: ['dompurify']
+        }
+      }
+    }
   }
 })

@@ -46,7 +46,7 @@ export default function MultiSelectCombobox({
     setIsDirty(false)
   }
 
-  // Close when clicking outside
+  // Close when clicking or tapping outside
   useEffect(() => {
     function handleClickOutside(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -60,7 +60,11 @@ export default function MultiSelectCombobox({
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
   }, [search, isDirty, onChange])
 
   function toggleMultiSelect(item) {
@@ -158,7 +162,7 @@ export default function MultiSelectCombobox({
       />
       <label className={`float-label ${open || displayValue ? 'active' : ''}`}>{label}</label>
 
-      {/* Chevron / done icon */}
+      {/* Chevron icon */}
       <i
         className={open ? 'select-chevron fas fa-chevron-up' : 'select-chevron fas fa-chevron-down'}
         onClick={() => {
@@ -172,8 +176,12 @@ export default function MultiSelectCombobox({
             openDropdown()
           }
         }}
-        style={{ cursor: 'pointer', zIndex: 2, color: open ? 'var(--accent-500)' : 'var(--text-muted)' }}
-        title={open ? 'Close' : 'Open Options'}
+        style={{
+          cursor: 'pointer', zIndex: 2,
+          color: open ? 'var(--accent-500)' : 'var(--text-muted)',
+          fontSize: 12,
+        }}
+        title={open ? 'Close dropdown' : 'Open Options'}
       />
 
       {/* Selected tags in multi mode */}
@@ -198,52 +206,86 @@ export default function MultiSelectCombobox({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            maxHeight: 260,
+            maxHeight: 'min(190px, 30vh)',
             overflow: 'hidden',
             top: '100%',
-            zIndex: 60,
+            zIndex: 9999,
             marginTop: 4,
             background: 'var(--bg-card)',
             animation: 'dropdown-spring 0.2s cubic-bezier(0.34,1.56,0.64,1)',
           }}
         >
-          {/* Header: label + multi toggle */}
+          {/* Header: label + multi toggle + Close button */}
           <div style={{
             borderBottom: '1px solid var(--border-color)',
-            padding: '6px 10px',
+            padding: '5px 8px',
             display: 'flex',
-            gap: 6,
+            gap: 4,
             justifyContent: 'space-between',
             alignItems: 'center',
             background: 'var(--bg-subtle)',
           }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {multiMode ? 'Multi-select mode' : 'Tap to select'}
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {multiMode ? 'Multi' : 'Select'}
             </span>
-            {allowMulti && (
+            
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+              {allowMulti && (
+                <button
+                  type="button"
+                  onClick={() => setMultiMode(m => !m)}
+                  style={{
+                    padding: '3px 6px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    background: multiMode ? 'var(--accent-gradient)' : 'var(--slate-100)',
+                    color: multiMode ? '#fff' : 'var(--accent-600)',
+                    border: multiMode ? 'none' : '1px solid var(--accent-200)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    boxShadow: multiMode ? 'var(--shadow-xs)' : 'none',
+                  }}
+                  title={multiMode ? 'Switch to single-select mode' : 'Enable multi-select mode'}
+                >
+                  <i className={multiMode ? 'fas fa-check-double' : 'fas fa-tasks'} style={{ fontSize: 9 }} />
+                  {multiMode ? 'Multi' : 'Multi'}
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => setMultiMode(m => !m)}
+                onClick={() => {
+                  if (isDirty && search.trim()) onChange(search.trim())
+                  setOpen(false)
+                  setSearch('')
+                  setIsDirty(false)
+                  setMultiMode(false)
+                }}
                 style={{
-                  padding: '3px 8px',
+                  padding: '3px 6px',
                   fontSize: 10,
                   fontWeight: 700,
-                  background: multiMode ? 'var(--accent-600)' : 'var(--bg-card)',
-                  color: multiMode ? '#fff' : 'var(--accent-600)',
-                  border: '1px solid var(--accent-300)',
+                  background: 'var(--red-50)',
+                  color: 'var(--red-600)',
+                  border: '1px solid var(--red-200)',
                   borderRadius: 'var(--radius-sm)',
                   cursor: 'pointer',
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 3,
+                  gap: 2,
+                  whiteSpace: 'nowrap',
                   transition: 'all 0.15s',
                 }}
-                title={multiMode ? 'Switch to single-select' : 'Enable multi-select'}
+                title="Close dropdown"
               >
-                <i className={multiMode ? 'fas fa-check-square' : 'fas fa-th-large'} style={{ fontSize: 9 }} />
-                {multiMode ? 'Multi' : '⊞ Multi'}
+                <i className="fas fa-times" style={{ fontSize: 10 }} />
               </button>
-            )}
+            </div>
           </div>
 
           {/* Scrollable list */}

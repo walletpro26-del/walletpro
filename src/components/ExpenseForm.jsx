@@ -19,18 +19,32 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   const [fileLabel, setFileLabel] = useState(editData?.fileName ? (editData.fileName.length > 6 ? editData.fileName.slice(0, 6) + '…' : editData.fileName) : 'File')
   const [existingAttachmentPreview, setExistingAttachmentPreview] = useState(null)
   const [loadingAttachment, setLoadingAttachment] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
+  const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const chipsRef = useRef(null)
 
   // Load existing attachment preview when editing
   useEffect(() => {
     if (editData?.hasAttachment && !editData?.fileData) {
       setLoadingAttachment(true)
+      setAttachmentError('')
+      setAttachmentSuccess('')
       getAttachment('expenses', editData.id)
-        .then((data) => setExistingAttachmentPreview(data))
-        .catch(() => {})
+        .then((data) => {
+          if (data) {
+            setExistingAttachmentPreview(data)
+            setAttachmentSuccess('✔ Attachment fetched successfully')
+          } else {
+            setAttachmentError('⚠ Attachment file could not be retrieved.')
+          }
+        })
+        .catch((err) => {
+          setAttachmentError('⚠ Failed to fetch attachment: ' + (err?.message || 'Error'))
+        })
         .finally(() => setLoadingAttachment(false))
     } else if (editData?.fileData) {
       setExistingAttachmentPreview(editData.fileData)
+      setAttachmentSuccess('✔ Attachment fetched successfully')
     }
   }, [editData?.id])
 
@@ -52,20 +66,28 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
     if (!f) {
       set('fileData', null); set('fileName', ''); set('mimeType', '')
       setFileLabel('File')
+      setAttachmentError('')
+      setAttachmentSuccess('')
       return
     }
+    setAttachmentError('')
+    setAttachmentSuccess('')
     try {
       const dataUrl = await compressImage(f)
       setForm((s) => ({ ...s, fileData: dataUrl, fileName: f.name, mimeType: f.type || 'application/octet-stream' }))
       setFileLabel(f.name.length > 6 ? f.name.slice(0, 6) + '…' : f.name)
+      setAttachmentSuccess(`✔ Attached: ${f.name}`)
     } catch {
       setFileLabel('Error')
+      setAttachmentError('⚠ Failed to process image attachment.')
     }
   }
 
   function clearFile() {
     set('fileData', null); set('fileName', ''); set('mimeType', '')
     setFileLabel('File')
+    setAttachmentError('')
+    setAttachmentSuccess('')
   }
 
   function handleSubmit(e) {
@@ -79,6 +101,21 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       hasAttachment: editData?.hasAttachment,
       hasChunkedAttachment: editData?.hasChunkedAttachment,
     })
+    if (!editData) {
+      setForm({
+        date: today,
+        forWhom: '',
+        category: '',
+        details: '',
+        amount: '',
+        paymentMode: 'Cash',
+        remarks: '',
+        fileData: null,
+        fileName: '',
+        mimeType: '',
+      })
+      setFileLabel('File')
+    }
   }
 
   return (
@@ -148,26 +185,50 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           </label>
         </div>
 
-        {/* Existing Attachment Preview when Editing */}
-        {editData && (existingAttachmentPreview || loadingAttachment) && (
+        {/* Attachment Preview & Status */}
+        {(form.fileData || existingAttachmentPreview || loadingAttachment || attachmentError) && (
           <div style={{ marginTop: 12, padding: 10, background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              Current Attachment
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Attachment Preview
+              </span>
+              {attachmentSuccess && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--emerald-600)' }}>
+                  {attachmentSuccess}
+                </span>
+              )}
             </div>
-            {loadingAttachment ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading...</div>
-            ) : existingAttachmentPreview ? (
-              <div style={{ borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                {existingAttachmentPreview.includes('application/pdf') ? (
+
+            {loadingAttachment && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
+                <i className="fas fa-spinner fa-spin"></i> Loading attachment data...
+              </div>
+            )}
+
+            {attachmentError && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--red-600)', background: 'var(--red-50)', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }}>
+                {attachmentError}
+              </div>
+            )}
+
+            {!loadingAttachment && (form.fileData || existingAttachmentPreview) && (
+              <div style={{ borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)', marginTop: 4 }}>
+                {(form.fileData || existingAttachmentPreview).includes('application/pdf') ? (
                   <div style={{ padding: 12, textAlign: 'center', background: '#fff' }}>
-                    <i className="fas fa-file-pdf" style={{ fontSize: 28, color: 'var(--red-500)' }}></i>
-                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>{editData.fileName || 'PDF'}</div>
+                    <i className="fas fa-file-pdf" style={{ fontSize: 32, color: 'var(--red-500)' }}></i>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>
+                      {form.fileName || editData?.fileName || 'PDF Document'}
+                    </div>
                   </div>
                 ) : (
-                  <img src={existingAttachmentPreview} alt="Existing receipt" style={{ width: '100%', maxHeight: 150, objectFit: 'cover' }} />
+                  <img
+                    src={form.fileData || existingAttachmentPreview}
+                    alt="Attachment receipt"
+                    style={{ width: '100%', maxHeight: 160, objectFit: 'cover' }}
+                  />
                 )}
               </div>
-            ) : null}
+            )}
           </div>
         )}
 

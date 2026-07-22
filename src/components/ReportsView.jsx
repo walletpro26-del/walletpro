@@ -1,23 +1,233 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getAllExpenses } from '../api/expenses'
 import { getAllLending, normalizeLendingType } from '../api/lending'
+import { loadSnapshot } from '../api/localCache'
+import { openWhatsApp, openEmail, getPersonContactMap, openWhatsAppPerson, openEmailPerson } from '../utils/commUtils'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
-  const [reportType, setReportType] = useState('expense')
+  const [reportType, setReportType] = useState('expense') // 'expense' | 'lending' | 'bank'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [isAllTime, setIsAllTime] = useState(true)
-  const [expandedGroups, setExpandedGroups] = useState({})
+  const [activeRange, setActiveRange] = useState('allTime')
+  const [bankRecords, setBankRecords] = useState([])
   const [pdfSettings, setPdfSettings] = useState({
     showStats: true,
     showBreakdown: true,
     showLedger: true,
     showRemarks: true,
   })
+
+  const [pdfColumns, setPdfColumns] = useState({
+    date: true,
+    catPerson: true,
+    whomType: true,
+    paymentBank: true,
+    contact: true,
+    remarks: true,
+    amount: true,
+  })
+
+  useEffect(() => {
+    const cached = loadSnapshot('bank')
+    if (cached && cached.length > 0) {
+      setBankRecords(cached.map((r) => ({
+        ...r,
+        dateObj: r.date ? new Date(r.date) : new Date(),
+      })))
+    }
+  }, [])
+
+  function toYYYYMMDD(date) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  function applyQuickRange(rangeKey) {
+    setActiveRange(rangeKey)
+    const now = new Date()
+    if (rangeKey === 'allTime') {
+      setIsAllTime(true)
+      setStartDate('')
+      setEndDate('')
+      return
+    }
+    setIsAllTime(false)
+    if (rangeKey === 'today') {
+      const s = toYYYYMMDD(now)
+      setStartDate(s)
+      setEndDate(s)
+    } else if (rangeKey === 'yesterday') {
+      const yest = new Date(now)
+      yest.setDate(yest.getDate() - 1)
+      const s = toYYYYMMDD(yest)
+      setStartDate(s)
+      setEndDate(s)
+    } else if (rangeKey === 'thisMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      setStartDate(toYYYYMMDD(start))
+      setEndDate(toYYYYMMDD(end))
+    } else if (rangeKey === 'lastMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const end = new Date(now.getFullYear(), now.getMonth(), 0)
+      setStartDate(toYYYYMMDD(start))
+      setEndDate(toYYYYMMDD(end))
+    } else if (rangeKey === 'thisYear') {
+      const start = new Date(now.getFullYear(), 0, 1)
+      const end = new Date(now.getFullYear(), 11, 31)
+      setStartDate(toYYYYMMDD(start))
+      setEndDate(toYYYYMMDD(end))
+    } else if (rangeKey === 'custom') {
+      if (!startDate || !endDate) {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1)
+        setStartDate(toYYYYMMDD(start))
+        setEndDate(toYYYYMMDD(now))
+      }
+    }
+  }
+
+  const [expandedGroups, setExpandedGroups] = useState({})
   const [downloading, setDownloading] = useState(false)
-  const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [personSearch, setPersonSearch] = useState('')
+
+  // Build contact map from ALL lending transactions (most recent phone/email per person)
+  const personContactMap = useMemo(() => getPersonContactMap(allLending), [allLending])
+
+  function exportToExcelCSV(scope = 'full') {
+    let csvContent = '\uFEFF' // UTF-8 BOM for Microsoft Excel compatibility
+    let fileName = ''
+
+    function escapeCSV(val) {
+      if (val === null || val === undefined) return '""'
+      const str = String(val).replace(/"/g, '""')
+      return `"${str}"`
+    }
+
+    if (scope === 'full') {
+      fileName = `WalletVibe_Full_Database_${toYYYYMMDD(new Date())}.csv`
+      
+      csvContent += '=== WALLETVIBE FULL DATABASE EXPORT ===\n'
+      csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+
+      // 1. EXPENSES SECTION
+      csvContent += '--- SECTION 1: ALL EXPENSES ---\n'
+      csvContent += 'ID,Date,For Whom,Category,Details,Amount (INR),Payment Mode,Remarks,Attachment\n'
+      ;(allExpenses || []).forEach(e => {
+        const dStr = e.dateObj ? toYYYYMMDD(e.dateObj) : (e.date ? e.date.slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(e.id),
+          escapeCSV(dStr),
+          escapeCSV(e.forWhom || 'Self'),
+          escapeCSV(e.category || ''),
+          escapeCSV(e.details || ''),
+          escapeCSV(e.amount || 0),
+          escapeCSV(e.paymentMode || 'Cash'),
+          escapeCSV(e.remarks || ''),
+          escapeCSV(e.hasAttachment ? 'Yes' : 'No')
+        ].join(',') + '\n'
+      })
+
+      // 2. LENDING & BORROWING SECTION
+      csvContent += '\n--- SECTION 2: LENDING & BORROWING ---\n'
+      csvContent += 'ID,Date,Type/Label,Person,Amount (INR),Remarks,Attachment\n'
+      ;(allLending || []).forEach(l => {
+        const dStr = l.dateObj ? toYYYYMMDD(l.dateObj) : (l.date ? l.date.slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(l.id),
+          escapeCSV(dStr),
+          escapeCSV(l.label || l.type || ''),
+          escapeCSV(l.person || ''),
+          escapeCSV(l.amount || 0),
+          escapeCSV(l.remarks || ''),
+          escapeCSV(l.hasAttachment ? 'Yes' : 'No')
+        ].join(',') + '\n'
+      })
+
+      // 3. BANK TRANSACTIONS SECTION
+      csvContent += '\n--- SECTION 3: BANK TRANSACTIONS ---\n'
+      csvContent += 'ID,Date,Bank,Description,Debit (INR),Credit (INR),Balance (INR)\n'
+      ;(bankRecords || []).forEach(b => {
+        const dStr = b.dateObj ? toYYYYMMDD(b.dateObj) : (b.date ? String(b.date).slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(b.id),
+          escapeCSV(dStr),
+          escapeCSV(b.bank || ''),
+          escapeCSV(b.description || ''),
+          escapeCSV(b.debit || 0),
+          escapeCSV(b.credit || 0),
+          escapeCSV(b.balance || 0)
+        ].join(',') + '\n'
+      })
+
+    } else {
+      // Current Range Export
+      const rangeLabel = activeRange === 'allTime' ? 'AllTime' : (startDate && endDate ? `${startDate}_to_${endDate}` : activeRange)
+      fileName = `WalletVibe_${reportType === 'expense' ? 'Expenses' : reportType === 'lending' ? 'Lending' : 'BankHistory'}_${rangeLabel}.csv`
+
+      if (reportType === 'expense') {
+        csvContent += `=== WALLETVIBE EXPENSES EXPORT (${rangeLabel}) ===\n`
+        csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+        csvContent += 'Date,For Whom,Category,Details,Amount (INR),Payment Mode,Remarks\n'
+        ;(filteredExpenses || []).forEach(e => {
+          const dStr = e.dateObj ? toYYYYMMDD(e.dateObj) : (e.date ? e.date.slice(0, 10) : '')
+          csvContent += [
+            escapeCSV(dStr),
+            escapeCSV(e.forWhom || 'Self'),
+            escapeCSV(e.category || ''),
+            escapeCSV(e.details || ''),
+            escapeCSV(e.amount || 0),
+            escapeCSV(e.paymentMode || 'Cash'),
+            escapeCSV(e.remarks || '')
+          ].join(',') + '\n'
+        })
+      } else if (reportType === 'lending') {
+        csvContent += `=== WALLETVIBE LENDING EXPORT (${rangeLabel}) ===\n`
+        csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+        csvContent += 'Date,Type,Person,Amount (INR),Remarks\n'
+        ;(filteredLending || []).forEach(l => {
+          const dStr = l.dateObj ? toYYYYMMDD(l.dateObj) : (l.date ? l.date.slice(0, 10) : '')
+          csvContent += [
+            escapeCSV(dStr),
+            escapeCSV(l.label || l.type || ''),
+            escapeCSV(l.person || ''),
+            escapeCSV(l.amount || 0),
+            escapeCSV(l.remarks || '')
+          ].join(',') + '\n'
+        })
+      } else {
+        csvContent += `=== WALLETVIBE BANK TRANSACTIONS EXPORT (${rangeLabel}) ===\n`
+        csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+        csvContent += 'Date,Bank,Description,Debit (INR),Credit (INR),Balance (INR)\n'
+        ;(filteredBankTxns || []).forEach(b => {
+          const dStr = b.dateObj ? toYYYYMMDD(b.dateObj) : (b.date ? String(b.date).slice(0, 10) : '')
+          csvContent += [
+            escapeCSV(dStr),
+            escapeCSV(b.bank || ''),
+            escapeCSV(b.description || ''),
+            escapeCSV(b.debit || 0),
+            escapeCSV(b.credit || 0),
+            escapeCSV(b.balance || 0)
+          ].join(',') + '\n'
+        })
+      }
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
   const handleDownloadPDF = () => {
     setDownloading(true)
     try {
@@ -185,31 +395,27 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
         doc.setTextColor(15, 23, 42)
-        doc.text('Transaction Ledger (Details)', 14, currentY + 4)
+        doc.text('Transaction Ledger (Detailed Report)', 14, currentY + 4)
         currentY += 8
 
         const columns = []
-        columns.push({ header: 'Date', dataKey: 'date' })
-        if (reportType === 'expense') {
-          columns.push({ header: 'Category', dataKey: 'category' })
-          columns.push({ header: 'For Whom', dataKey: 'forWhom' })
-          if (pdfSettings.showRemarks) {
-            columns.push({ header: 'Details / Remarks', dataKey: 'remarks' })
-          }
-        } else {
-          columns.push({ header: 'Person', dataKey: 'person' })
-          columns.push({ header: 'Type', dataKey: 'type' })
-          if (pdfSettings.showRemarks) {
-            columns.push({ header: 'Remarks', dataKey: 'remarks' })
-          }
-        }
-        columns.push({ header: 'Amount', dataKey: 'amount' })
+        if (pdfColumns.date) columns.push({ header: 'Date', dataKey: 'date' })
+        if (pdfColumns.catPerson) columns.push({ header: reportType === 'expense' ? 'Category' : reportType === 'lending' ? 'Person' : 'Bank', dataKey: 'catPerson' })
+        if (pdfColumns.whomType) columns.push({ header: reportType === 'expense' ? 'For Whom' : reportType === 'lending' ? 'Type' : 'Description', dataKey: 'whomType' })
+        if (pdfColumns.paymentBank) columns.push({ header: reportType === 'expense' ? 'Payment' : reportType === 'lending' ? 'Mode' : 'Type', dataKey: 'paymentBank' })
+        if (pdfColumns.contact) columns.push({ header: 'Contact', dataKey: 'contact' })
+        if (pdfColumns.remarks) columns.push({ header: 'Remarks / Details', dataKey: 'remarks' })
+        if (pdfColumns.amount) columns.push({ header: 'Amount', dataKey: 'amount' })
 
-        const rows = (reportType === 'expense' ? expenseReport.items : lendingReport.items)
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
+        const rawItems = reportType === 'expense' ? expenseReport.items : reportType === 'lending' ? lendingReport.items : filteredBankTxns
+        const rows = (rawItems || [])
+          .sort((a, b) => new Date(b.date || b.dateObj) - new Date(a.date || a.dateObj))
           .map((item) => {
             const isLend = reportType === 'lending'
-            const amt = item.amount.toLocaleString('en-IN')
+            const isBank = reportType === 'bank'
+            const amtVal = item.amount || (item.debit ? parseFloat(item.debit) : parseFloat(item.credit || 0))
+            const amt = (amtVal || 0).toLocaleString('en-IN')
+            
             let typeText = item.type
             let amtStr = `Rs.${amt}`
             
@@ -220,58 +426,33 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
               else if (norm === 'THEY_RETURN') { typeText = 'Received Return'; amtStr = `+Rs.${amt}` }
               else if (norm === 'I_RETURN') { typeText = 'I Returned'; amtStr = `-Rs.${amt}` }
               else if (norm === 'FORGIVE') { typeText = 'Forgiven'; amtStr = `-Rs.${amt}` }
+            } else if (isBank) {
+              amtStr = item.debit ? `-Rs.${amt}` : `+Rs.${amt}`
             } else {
               amtStr = `-Rs.${amt}`
             }
 
-            // Compact date: "25-Jun-26"
-            const d = new Date(item.date)
+            const d = new Date(item.date || item.dateObj)
             const day = String(d.getDate()).padStart(2, '0')
             const mon = d.toLocaleString('en', { month: 'short' })
             const yr = String(d.getFullYear()).slice(-2)
             const dateStr = `${day}-${mon}-${yr}`
 
-            const rowData = {
-              date: dateStr,
-              amount: amtStr
-            }
-
-            if (reportType === 'expense') {
-              rowData.category = item.category || ''
-              rowData.forWhom = item.forWhom || ''
-              if (pdfSettings.showRemarks) {
-                rowData.remarks = [item.details, item.remarks].filter(Boolean).join(' — ')
-              }
-            } else {
-              rowData.person = item.person || ''
-              rowData.type = typeText
-              if (pdfSettings.showRemarks) {
-                rowData.remarks = item.remarks || '—'
-              }
-            }
+            const rowData = {}
+            if (pdfColumns.date) rowData.date = dateStr
+            if (pdfColumns.catPerson) rowData.catPerson = isBank ? (item.bank || 'Bank') : isLend ? (item.person || '—') : (item.category || 'Uncategorized')
+            if (pdfColumns.whomType) rowData.whomType = isBank ? (item.description || '—') : isLend ? typeText : (item.forWhom || 'Self')
+            if (pdfColumns.paymentBank) rowData.paymentBank = isBank ? (item.debit ? 'Debit' : 'Credit') : isLend ? (item.paymentMode || '—') : (item.paymentMode || '—')
+            if (pdfColumns.contact) rowData.contact = [item.mobileNo || item.phone, item.email].filter(Boolean).join(' | ') || '—'
+            if (pdfColumns.remarks) rowData.remarks = [item.details, item.remarks].filter(Boolean).join(' — ') || '—'
+            if (pdfColumns.amount) rowData.amount = amtStr
 
             return rowData
           })
 
-        // Column width config based on report type and remarks toggle
         const colStyles = {}
-        if (reportType === 'expense') {
-          colStyles.date = { cellWidth: 18 }
-          colStyles.category = { cellWidth: 'auto', overflow: 'linebreak' }
-          colStyles.forWhom = { cellWidth: 'auto', overflow: 'linebreak' }
-          colStyles.amount = { halign: 'right', fontStyle: 'bold', cellWidth: 26 }
-          if (pdfSettings.showRemarks) {
-            colStyles.remarks = { cellWidth: 'auto', overflow: 'linebreak' }
-          }
-        } else {
-          colStyles.date = { cellWidth: 18 }
-          colStyles.person = { cellWidth: 'auto', overflow: 'linebreak' }
-          colStyles.type = { cellWidth: 26 }
-          colStyles.amount = { halign: 'right', fontStyle: 'bold', cellWidth: 26 }
-          if (pdfSettings.showRemarks) {
-            colStyles.remarks = { cellWidth: 'auto', overflow: 'linebreak' }
-          }
-        }
+        if (pdfColumns.date) colStyles.date = { cellWidth: 18 }
+        if (pdfColumns.amount) colStyles.amount = { halign: 'right', fontStyle: 'bold', cellWidth: 26 }
 
         autoTable(doc, {
           startY: currentY,
@@ -309,7 +490,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
         doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
       }
 
-      doc.save(`WalletVibe_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`WalletVibe_${reportType.toUpperCase()}_Detailed_Report_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error('PDF generation error:', err);
       alert('Could not generate PDF. Please try using Print instead.');
@@ -317,6 +498,54 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
       setDownloading(false)
     }
   };
+
+  const handleShareReportWhatsApp = () => {
+    const rawItems = reportType === 'expense' ? expenseReport.items : reportType === 'lending' ? lendingReport.items : filteredBankTxns
+    const count = rawItems.length
+    const title = reportType === 'expense' ? 'Expenses Detailed Statement' : reportType === 'lending' ? 'Lend / Borrow Detailed Statement' : 'Bank History Statement'
+    const summaryText = reportType === 'expense' ? `Total: ₹${expenseReport.total.toLocaleString('en-IN')}` : reportType === 'lending' ? `Receivable: ₹${lendingReport.receivable.toLocaleString('en-IN')} | Payable: ₹${lendingReport.payable.toLocaleString('en-IN')}` : `Debits: ₹${bankStats.debit.toLocaleString('en-IN')} | Credits: ₹${bankStats.credit.toLocaleString('en-IN')}`
+
+    const header = `📋 *WalletVibe ${title}*\n${summaryText}\nTotal Records: ${count}\n\n`
+    const rows = rawItems.slice(0, 30).map((it, idx) => {
+      const dateStr = formatDate(it.date || it.dateObj)
+      const amtStr = `₹${(it.amount || it.debit || it.credit || 0).toLocaleString('en-IN')}`
+      if (reportType === 'expense') {
+        return `${idx + 1}. ${dateStr} - ${it.category || 'Expense'} (${it.forWhom || 'Self'}): ${amtStr}${it.remarks ? ' [' + it.remarks + ']' : ''}`
+      } else if (reportType === 'lending') {
+        return `${idx + 1}. ${dateStr} - ${it.person} (${it.type}): ${amtStr}${it.remarks ? ' [' + it.remarks + ']' : ''}`
+      } else {
+        return `${idx + 1}. ${dateStr} - ${it.bank || 'Bank'} (${it.description || ''}): ${amtStr}`
+      }
+    }).join('\n')
+
+    const footer = count > 30 ? `\n\n...and ${count - 30} more transactions.` : ''
+    const fullMsg = header + rows + footer
+    window.open(`https://wa.me/?text=${encodeURIComponent(fullMsg)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleShareReportEmail = () => {
+    const rawItems = reportType === 'expense' ? expenseReport.items : reportType === 'lending' ? lendingReport.items : filteredBankTxns
+    const count = rawItems.length
+    const title = reportType === 'expense' ? 'Expenses Detailed Statement' : reportType === 'lending' ? 'Lend / Borrow Detailed Statement' : 'Bank History Statement'
+    const summaryText = reportType === 'expense' ? `Total: ₹${expenseReport.total.toLocaleString('en-IN')}` : reportType === 'lending' ? `Receivable: ₹${lendingReport.receivable.toLocaleString('en-IN')} | Payable: ₹${lendingReport.payable.toLocaleString('en-IN')}` : `Debits: ₹${bankStats.debit.toLocaleString('en-IN')} | Credits: ₹${bankStats.credit.toLocaleString('en-IN')}`
+
+    const subject = `WalletVibe Report: ${title}`
+    const header = `WalletVibe ${title}\n${summaryText}\nTotal Records: ${count}\n\n`
+    const rows = rawItems.map((it, idx) => {
+      const dateStr = formatDate(it.date || it.dateObj)
+      const amtStr = `₹${(it.amount || it.debit || it.credit || 0).toLocaleString('en-IN')}`
+      if (reportType === 'expense') {
+        return `${idx + 1}. ${dateStr} | ${it.category || 'Expense'} | ${it.forWhom || 'Self'} | ${amtStr} | ${it.remarks || ''}`
+      } else if (reportType === 'lending') {
+        return `${idx + 1}. ${dateStr} | ${it.person} | ${it.type} | ${amtStr} | ${it.remarks || ''}`
+      } else {
+        return `${idx + 1}. ${dateStr} | ${it.bank || 'Bank'} | ${it.description || ''} | ${amtStr}`
+      }
+    }).join('\n')
+
+    const body = header + rows
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_self')
+  }
 
   // Expense filters
   const [selectedCats, setSelectedCats] = useState([])
@@ -364,15 +593,38 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
         if (d < start || d > end) return false
       }
       if (selectedTypes.length) {
-        const norm = normalizeLendingType(l.type)
-        // Map the options back to normalized values for comparison
-        const normOptions = selectedTypes.map(t => normalizeLendingType(t))
-        if (!normOptions.includes(norm)) return false
+        const norm = normalizeLendingType(l.type || l.label)
+        const match = selectedTypes.some((t) => normalizeLendingType(t) === norm)
+        if (!match) return false
       }
       if (selectedPersons.length && !selectedPersons.includes(l.person)) return false
       return true
     })
   }, [allLending, isAllTime, startDate, endDate, selectedTypes, selectedPersons])
+
+  const filteredBankTxns = useMemo(() => {
+    return (bankRecords || []).filter((b) => {
+      if (!isAllTime && startDate && endDate) {
+        const dt = b.dateObj || new Date(b.date)
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+        if (dt < start || dt > end) return false
+      }
+      return true
+    })
+  }, [bankRecords, isAllTime, startDate, endDate])
+
+  const bankStats = useMemo(() => {
+    let debit = 0
+    let credit = 0
+    filteredBankTxns.forEach((b) => {
+      debit += parseFloat(b.debit || 0)
+      credit += parseFloat(b.credit || 0)
+    })
+    return { debit, credit, net: credit - debit, count: filteredBankTxns.length }
+  }, [filteredBankTxns])
 
   // Expense report
   const expenseReport = useMemo(() => {
@@ -426,93 +678,203 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           <h3 className="report-title">
             <i className="fas fa-chart-pie"></i> Report Generator
           </h3>
-          <div className="report-header-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="report-icon-btn"
-              title="Print / Save as PDF"
-            >
-              <i className="fas fa-print"></i>
-            </button>
+          <div className="report-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Unified Export / Download Menu */}
             <div style={{ position: 'relative' }}>
               <button
                 type="button"
-                onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
-                className="report-icon-btn report-icon-btn--green"
-                title="PDF Download & Settings"
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                className="export-menu-btn"
+                title="Export Statement or Full Database"
               >
-                <i className="fas fa-file-pdf"></i>
-                <i className="fas fa-caret-down" style={{ fontSize: '0.75em', marginLeft: 6 }}></i>
+                <i className="fas fa-download" style={{ fontSize: 10 }}></i>
+                Export
+                <i className="fas fa-caret-down" style={{ fontSize: 9, marginLeft: 1 }}></i>
               </button>
-              
-              {pdfMenuOpen && (
+
+              {exportMenuOpen && (
                 <>
-                  <div className="dropdown-overlay" onClick={() => setPdfMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
-                  <div className="pdf-dropdown-menu" style={{
+                  <div className="dropdown-overlay" onClick={() => setExportMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                  <div className="pdf-dropdown-menu custom-scrollbar" style={{
                     position: 'absolute',
                     top: '100%',
                     right: 0,
                     marginTop: '8px',
                     backgroundColor: 'var(--bg-card)',
                     border: '1px solid var(--border-color)',
-                    borderRadius: '12px',
+                    borderRadius: '14px',
                     boxShadow: 'var(--shadow-lg)',
-                    minWidth: '200px',
+                    minWidth: '240px',
+                    maxHeight: 'min(380px, 65vh)',
+                    overflowY: 'auto',
                     zIndex: 100,
-                    padding: '8px',
+                    padding: '10px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '4px'
+                    gap: '6px'
                   }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Include in PDF
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Excel / CSV Exports
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setExportMenuOpen(false); exportToExcelCSV('full') }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
+                      }}
+                    >
+                      <i className="fas fa-database" style={{ color: 'var(--accent-600)', fontSize: 14 }} />
+                      <div>
+                        <div>Full Database (Excel CSV)</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Expenses + Lending + Bank history</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setExportMenuOpen(false); exportToExcelCSV('range') }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
+                      }}
+                    >
+                      <i className="fas fa-filter" style={{ color: 'var(--emerald-600)', fontSize: 14 }} />
+                      <div>
+                        <div>Filtered Range (Excel CSV)</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>{activeRange === 'allTime' ? 'All Time' : activeRange} {reportType} data</div>
+                      </div>
+                    </button>
+
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
+
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      PDF & Print Statements
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setExportMenuOpen(false); handleDownloadPDF() }}
+                      disabled={downloading}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
+                      }}
+                    >
+                      <i className="fas fa-file-pdf" style={{ color: 'var(--red-500)', fontSize: 14 }} />
+                      <div>
+                        <div>Download PDF Detailed Report</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Customized printable report</div>
+                      </div>
+                    </button>
+
+                    {/* WhatsApp & Email Full Detailed Statement Actions */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => { setExportMenuOpen(false); handleShareReportWhatsApp() }}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '7px 8px', borderRadius: 6, border: 'none', background: '#25D366',
+                          color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                        }}
+                        title="Share full statement text via WhatsApp"
+                      >
+                        <i className="fab fa-whatsapp" style={{ fontSize: 13 }} /> WhatsApp
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setExportMenuOpen(false); handleShareReportEmail() }}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '7px 8px', borderRadius: 6, border: 'none', background: '#3b82f6',
+                          color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                        }}
+                        title="Send full detailed statement via Email"
+                      >
+                        <i className="fas fa-envelope" style={{ fontSize: 11 }} /> Email
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setExportMenuOpen(false); window.print() }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
+                      }}
+                    >
+                      <i className="fas fa-print" style={{ color: 'var(--indigo-600)', fontSize: 14 }} />
+                      <div>
+                        <div>Print Statement</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Send directly to printer</div>
+                      </div>
+                    </button>
+
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
+
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      PDF Sections
                     </div>
                     {[
                       { key: 'showStats', icon: 'fa-chart-bar', label: 'Summary' },
                       { key: 'showBreakdown', icon: 'fa-layer-group', label: 'Breakdown' },
-                      { key: 'showLedger', icon: 'fa-list', label: 'Ledger' },
-                      { key: 'showRemarks', icon: 'fa-comment-alt', label: 'Remarks' },
+                      { key: 'showLedger', icon: 'fa-list', label: 'Transaction Ledger' },
                     ].map(({ key, icon, label }) => (
                       <label key={key} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        color: 'var(--text-primary)',
-                        transition: 'background-color 0.2s',
+                        display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px',
+                        borderRadius: '6px', cursor: 'pointer', fontSize: '11px', color: 'var(--text-primary)',
                         userSelect: 'none'
-                      }} className="pdf-dropdown-item-hover">
+                      }}>
                         <input
                           type="checkbox"
                           checked={pdfSettings[key]}
                           onChange={() => setPdfSettings(s => ({ ...s, [key]: !s[key] }))}
-                          style={{ margin: 0, width: '14px', height: '14px', accentColor: 'var(--primary)' }}
+                          style={{ margin: 0, width: '13px', height: '13px', accentColor: 'var(--primary)' }}
                         />
-                        <i className={`fas ${icon}`} style={{ color: 'var(--text-secondary)', width: '16px', textAlign: 'center' }}></i>
+                        <i className={`fas ${icon}`} style={{ color: 'var(--text-secondary)', width: '14px', textAlign: 'center', fontSize: 10 }}></i>
                         {label}
                       </label>
                     ))}
-                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }}></div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPdfMenuOpen(false)
-                        handleDownloadPDF()
-                      }}
-                      disabled={downloading}
-                      className="btn-primary"
-                      style={{ padding: '8px', fontSize: '13px', justifyContent: 'center' }}
-                    >
-                      {downloading ? (
-                        <><i className="fas fa-spinner fa-spin"></i> Generating...</>
-                      ) : (
-                        <><i className="fas fa-download"></i> Download PDF</>
-                      )}
-                    </button>
+
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
+
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      PDF Columns to Include
+                    </div>
+                    {[
+                      { key: 'date', label: 'Date' },
+                      { key: 'catPerson', label: reportType === 'expense' ? 'Category' : reportType === 'lending' ? 'Person' : 'Bank' },
+                      { key: 'whomType', label: reportType === 'expense' ? 'For Whom' : reportType === 'lending' ? 'Type' : 'Description' },
+                      { key: 'paymentBank', label: 'Payment Mode' },
+                      { key: 'contact', label: 'Contact (Mobile / Email)' },
+                      { key: 'remarks', label: 'Remarks / Details' },
+                      { key: 'amount', label: 'Amount' },
+                    ].map(({ key, label }) => (
+                      <label key={key} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px',
+                        borderRadius: '6px', cursor: 'pointer', fontSize: '11px', color: 'var(--text-primary)',
+                        userSelect: 'none'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={pdfColumns[key]}
+                          onChange={() => setPdfColumns(c => ({ ...c, [key]: !c[key] }))}
+                          style={{ margin: 0, width: '13px', height: '13px', accentColor: 'var(--primary)' }}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
                   </div>
                 </>
               )}
@@ -524,19 +886,61 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
         <div className="report-type-switcher">
           <button className={`report-type-btn ${reportType === 'expense' ? 'active' : ''}`} onClick={() => setReportType('expense')}>Expense</button>
           <button className={`report-type-btn ${reportType === 'lending' ? 'active' : ''}`} onClick={() => setReportType('lending')}>Lend / Borrow</button>
+          <button className={`report-type-btn ${reportType === 'bank' ? 'active' : ''}`} onClick={() => setReportType('bank')}>Bank History</button>
         </div>
 
         {/* ── Date Range ── */}
-        <div className="report-date-row">
-          <label className="report-alltime-toggle">
-            <input type="checkbox" checked={isAllTime} onChange={() => setIsAllTime(!isAllTime)} style={{ accentColor: 'var(--accent-600)' }} />
-            All Time
-          </label>
-          {!isAllTime && (
-            <div className="date-range-row">
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+            <i className="fas fa-calendar-alt" style={{ marginRight: 4 }} /> Time Range
+          </div>
+          <div className="chips-container no-scrollbar" style={{ padding: '2px 0 6px', display: 'flex', gap: 6, overflowX: 'auto' }}>
+            {[
+              { id: 'allTime', label: 'All Time' },
+              { id: 'today', label: 'Today' },
+              { id: 'yesterday', label: 'Yesterday' },
+              { id: 'thisMonth', label: 'This Month' },
+              { id: 'lastMonth', label: 'Last Month' },
+              { id: 'thisYear', label: 'This Year' },
+              { id: 'custom', label: 'Custom' },
+            ].map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={`chip ${activeRange === r.id ? 'active' : ''}`}
+                onClick={() => applyQuickRange(r.id)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 99,
+                  border: activeRange === r.id ? '1px solid var(--accent-500)' : '1px solid var(--border-color)',
+                  background: activeRange === r.id ? 'var(--accent-gradient)' : 'var(--bg-card)',
+                  color: activeRange === r.id ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: activeRange === r.id ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          {activeRange === 'custom' && (
+            <div className="date-range-row" style={{ marginTop: 8 }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setIsAllTime(false) }}
+              />
               <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>to</span>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setIsAllTime(false) }}
+              />
             </div>
           )}
         </div>
@@ -668,7 +1072,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
             </div>
           ))}
         </div>
-      ) : (
+      ) : reportType === 'lending' ? (
         <div>
           <div className="report-summary">
             <div className="report-stat">
@@ -681,51 +1085,191 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
             </div>
           </div>
 
-          <div className="section-title">By Person</div>
-          {Object.entries(lendingReport.byPerson).sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net)).map(([person, data]) => (
-            <div key={person} className="breakdown-group">
-              <div className="breakdown-header" onClick={() => toggleGroup('p-' + person)}>
-                <span className="group-name">{person}</span>
-                <span className="group-total" style={{ color: data.net >= 0 ? 'var(--emerald-600)' : 'var(--red-500)' }}>
-                  {data.net >= 0 ? '+' : ''}₹{data.net.toLocaleString('en-IN')}
-                </span>
-              </div>
-              {expandedGroups['p-' + person] && (
-                <div style={{ padding: '8px 12px' }}>
-                  {data.items.map((l, i) => {
-                    const norm = normalizeLendingType(l.type)
-                    let displayType = l.type
-                    if (norm === 'LEND') displayType = 'Loan Given'
-                    if (norm === 'BORROW') displayType = 'Borrowed'
-                    if (norm === 'THEY_RETURN') displayType = 'Received Return'
-                    if (norm === 'I_RETURN') displayType = 'I Returned'
-                    if (norm === 'FORGIVE') displayType = 'Forgiven'
-                    
-                    return (
-                      <div 
-                        key={i} 
-                        onClick={() => onSelectTxn?.(l)}
-                        className="report-txn-row"
-                        style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          padding: '6px 8px', 
-                          fontSize: 12, 
-                          borderBottom: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                          transition: 'background 0.2s'
-                        }}
-                      >
-                        <span>{formatDate(l.date)} — {displayType} {l.remarks ? `(${l.remarks})` : ''}</span>
-                        <span style={{ fontWeight: 700 }}>₹{l.amount.toLocaleString('en-IN')}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+          {/* Search & Title */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+            <div className="section-title" style={{ margin: 0 }}>By Person</div>
+            <div style={{ position: 'relative', flex: '0 1 200px' }}>
+              <i className="fas fa-search" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                placeholder="Search person…"
+                value={personSearch}
+                onChange={(e) => setPersonSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px 6px 26px',
+                  fontSize: 11,
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-card)',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {personSearch && (
+                <button
+                  onClick={() => setPersonSearch('')}
+                  style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+                >✕</button>
               )}
             </div>
-          ))}
+          </div>
+
+          {Object.entries(lendingReport.byPerson)
+            .sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net))
+            .filter(([person]) => !personSearch || person.toLowerCase().includes(personSearch.toLowerCase()))
+            .map(([person, data]) => {
+            const pKey = person.trim().toLowerCase()
+            const contactInfo = personContactMap[pKey] || {}
+            const hasPhone = !!(contactInfo.mobileNo)
+            const hasEmail = !!(contactInfo.email)
+
+            return (
+              <div key={person} className="breakdown-group">
+                <div className="breakdown-header" onClick={() => toggleGroup('p-' + person)}>
+                  <span className="group-name" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{person}</span>
+                    {hasPhone && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openWhatsAppPerson(contactInfo.mobileNo, person, data, normalizeLendingType) }}
+                        title={`WhatsApp ${person} (${contactInfo.mobileNo})`}
+                        style={{ border: 'none', background: 'rgba(37,211,102,0.12)', color: '#25D366', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}
+                      >
+                        <i className="fab fa-whatsapp" />
+                      </button>
+                    )}
+                    {hasEmail && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEmailPerson(contactInfo.email, person, data, normalizeLendingType) }}
+                        title={`Email ${person} (${contactInfo.email})`}
+                        style={{ border: 'none', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}
+                      >
+                        <i className="fas fa-envelope" />
+                      </button>
+                    )}
+                  </span>
+                  <span className="group-total" style={{ color: data.net >= 0 ? 'var(--emerald-600)' : 'var(--red-500)', flexShrink: 0 }}>
+                    {data.net >= 0 ? '+' : ''}₹{data.net.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                {expandedGroups['p-' + person] && (
+                  <div style={{ padding: '8px 12px' }}>
+                    {data.items.map((l, i) => {
+                      const norm = normalizeLendingType(l.type)
+                      let displayType = l.type
+                      if (norm === 'LEND') displayType = 'Loan Given'
+                      if (norm === 'BORROW') displayType = 'Borrowed'
+                      if (norm === 'THEY_RETURN') displayType = 'Received Return'
+                      if (norm === 'I_RETURN') displayType = 'I Returned'
+                      if (norm === 'FORGIVE') displayType = 'Forgiven'
+                      
+                      return (
+                        <div 
+                          key={i} 
+                          onClick={() => onSelectTxn?.(l)}
+                          className="report-txn-row"
+                          style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            padding: '6px 8px', 
+                            fontSize: 12, 
+                            borderBottom: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s'
+                          }}
+                        >
+                          <span>{formatDate(l.date)} — {displayType} {l.remarks ? `(${l.remarks})` : ''}</span>
+                          <span style={{ fontWeight: 700 }}>₹{l.amount.toLocaleString('en-IN')}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div style={{ marginTop: 14, width: '100%', boxSizing: 'border-box' }}>
+          {/* BANK HISTORY VIEW */}
+          <div className="report-summary">
+            <div className="report-stat">
+              <div className="label">Total Debits</div>
+              <div className="value negative" style={{ color: 'var(--red-500)' }}>₹{bankStats.debit.toLocaleString('en-IN')}</div>
+            </div>
+            <div className="report-stat">
+              <div className="label">Total Credits</div>
+              <div className="value positive" style={{ color: 'var(--emerald-600)' }}>₹{bankStats.credit.toLocaleString('en-IN')}</div>
+            </div>
+            <div className="report-stat">
+              <div className="label">Transactions</div>
+              <div className="value">{bankStats.count}</div>
+            </div>
+          </div>
+
+          {!filteredBankTxns.length ? (
+            <div style={{ textAlign: 'center', padding: '36px 16px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+              <i className="fas fa-university" style={{ fontSize: 24, color: 'var(--accent-400)', marginBottom: 8 }} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>No bank transactions found</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>Upload CSV statements in Bank Sync to view records here.</div>
+            </div>
+          ) : (
+            <div className="ledger-card" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', padding: 12 }}>
+              <div className="ledger-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  Bank Records ({filteredBankTxns.length})
+                </span>
+              </div>
+              <div style={{ overflowX: 'hidden', width: '100%' }}>
+                <table className="ledger-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '32%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '12%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '6px 4px' }}>Date</th>
+                      <th style={{ padding: '6px 4px' }}>Bank</th>
+                      <th style={{ padding: '6px 4px' }}>Description</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Debit</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Credit</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBankTxns.map((b, idx) => (
+                      <tr key={b.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '6px 4px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 10 }}>
+                          {b.dateObj ? b.dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}
+                        </td>
+                        <td style={{ padding: '6px 4px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 10 }}>{b.bank}</td>
+                        <td style={{ padding: '6px 4px', color: 'var(--text-secondary)', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.3, fontSize: 10 }} title={b.description}>
+                          {b.description}
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--red-500)', fontWeight: b.debit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 10 }}>
+                          {b.debit ? `-₹${parseFloat(b.debit).toLocaleString('en-IN')}` : '-'}
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--emerald-600)', fontWeight: b.credit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 10 }}>
+                          {b.credit ? `+₹${parseFloat(b.credit).toLocaleString('en-IN')}` : '-'}
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', fontSize: 10 }}>
+                          {b.balance ? `₹${parseFloat(b.balance).toLocaleString('en-IN')}` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -971,46 +1515,77 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
   }
 
   return (
-    <div className="multi-select" ref={containerRef} style={{ position: 'relative' }}>
+    <div className="multi-select" ref={containerRef} style={{ position: 'relative', zIndex: open ? 100 : 1 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{label}</div>
       <div className="multi-select-trigger" onClick={() => setOpen(!open)}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: 12, fontWeight: selected.length ? 700 : 500, color: selected.length ? 'var(--accent-600)' : 'var(--text-secondary)' }}>{displayText}</span>
         <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 9, color: 'var(--text-muted)' }}></i>
       </div>
       {open && (
-        <div className="multi-select-options custom-scrollbar" style={{ animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)', zIndex: 100 }}>
-          {/* Header: label + multi toggle */}
+        <div className="multi-select-options custom-scrollbar" style={{ animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)', zIndex: 9999 }}>
+          {/* Header: label + multi toggle + Close button */}
           <div style={{
             borderBottom: '1px solid var(--border-color)',
             padding: '5px 8px',
             display: 'flex',
+            gap: 4,
             justifyContent: 'space-between',
             alignItems: 'center',
             background: 'var(--bg-subtle)',
           }}>
-            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {multiMode ? 'Multi-select' : 'Single-select'}
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {multiMode ? 'Multi' : 'Select'}
             </span>
-            <button
-              type="button"
-              onClick={() => setMultiMode(m => !m)}
-              style={{
-                padding: '2px 6px',
-                fontSize: 9,
-                fontWeight: 700,
-                background: multiMode ? 'var(--accent-600)' : 'var(--bg-card)',
-                color: multiMode ? '#fff' : 'var(--accent-600)',
-                border: '1px solid var(--accent-300)',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-              }}
-            >
-              <i className={multiMode ? 'fas fa-check-square' : 'fas fa-th-large'} style={{ fontSize: 8 }} />
-              {multiMode ? 'Multi' : '⊞ Multi'}
-            </button>
+            
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setMultiMode(m => !m)}
+                style={{
+                  padding: '3px 6px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  background: multiMode ? 'var(--accent-gradient)' : 'var(--slate-100)',
+                  color: multiMode ? '#fff' : 'var(--accent-600)',
+                  border: multiMode ? 'none' : '1px solid var(--accent-200)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                  boxShadow: multiMode ? 'var(--shadow-xs)' : 'none',
+                }}
+                title={multiMode ? 'Switch to single-select mode' : 'Enable multi-select mode'}
+              >
+                <i className={multiMode ? 'fas fa-check-double' : 'fas fa-tasks'} style={{ fontSize: 9 }} />
+                {multiMode ? 'Multi' : 'Multi'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setMultiMode(false) }}
+                style={{
+                  padding: '3px 6px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  background: 'var(--red-50)',
+                  color: 'var(--red-600)',
+                  border: '1px solid var(--red-200)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                }}
+                title="Close dropdown"
+              >
+                <i className="fas fa-times" style={{ fontSize: 10 }} />
+              </button>
+            </div>
           </div>
 
           <div className="custom-scrollbar" style={{ maxHeight: 150, overflowY: 'auto' }}>

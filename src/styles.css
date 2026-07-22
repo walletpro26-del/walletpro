@@ -371,20 +371,21 @@ body {
 .tab-bar {
   display: flex;
   justify-content: center;
-  margin: -20px 20px 0;
+  margin: -20px 12px 0;
   position: relative;
   z-index: 40;
 }
 .tab-bar-inner {
   display: flex;
   width: 100%;
-  gap: 6px;
-  padding: 5px;
+  gap: 4px;
+  padding: 4px;
   background: rgba(255,255,255,0.7);
   backdrop-filter: blur(12px);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   border: 1px solid rgba(255,255,255,0.5);
+  box-sizing: border-box;
 }
 [data-theme="dark"] .tab-bar-inner {
   background: rgba(30,41,59,0.92);
@@ -400,15 +401,22 @@ body {
 }
 .tab-btn {
   flex: 1;
-  padding: 10px 6px;
-  font-size: 12px;
+  min-width: 0;
+  padding: 8px 4px;
+  font-size: 11px;
   font-weight: 700;
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.25s;
-  color: var(--text-secondary); /* was text-muted — boosted for better contrast */
+  color: var(--text-secondary);
   background: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .tab-btn:hover {
   background: var(--bg-subtle);
@@ -431,9 +439,12 @@ body {
 /* --- Content Area --- */
 .content-area {
   flex: 1;
-  padding: 20px;
+  padding: 16px 12px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 100px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* --- Glass Effects --- */
@@ -634,6 +645,7 @@ select.float-input { padding-right: 32px; }
 .btn-primary {
   width: 100%;
   padding: 14px;
+  min-height: 48px;
   border: none;
   border-radius: var(--radius-md);
   background: var(--accent-gradient);
@@ -645,6 +657,9 @@ select.float-input { padding-right: 32px; }
   transition: all 0.2s;
   box-shadow: var(--shadow-accent);
   margin-top: 6px;
+  position: relative;
+  z-index: 10;
+  touch-action: manipulation;
 }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px -4px rgba(99,102,241,0.4); }
 .btn-primary:active { transform: translateY(0) scale(0.98); }
@@ -1092,33 +1107,73 @@ select.float-input { padding-right: 32px; }
 /* --- Reports --- */
 .report-card {
   background: var(--bg-card);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
-  padding: 20px;
-  box-shadow: var(--shadow-lg);
-  margin-bottom: 20px;
+  padding: 10px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
 }
 
 .report-compact-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  gap: 12px;
+  margin-bottom: 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .report-title {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   margin: 0;
+  white-space: nowrap;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-title i {
   color: var(--accent-500);
+}
+
+.export-menu-btn {
+  padding: 4px 8px;
+  height: 26px;
+  min-height: 26px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  margin: 0;
+  line-height: 1;
+  touch-action: manipulation;
+}
+.export-menu-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.export-menu-btn:active {
+  transform: translateY(0);
 }
 
 .report-header-actions {
@@ -1264,24 +1319,32 @@ select.float-input { padding-right: 32px; }
 
 .report-type-switcher {
   display: flex;
-  gap: 6px;
-  padding: 5px;
+  gap: 4px;
+  padding: 4px;
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .report-type-btn {
   flex: 1;
-  padding: 10px;
+  min-width: 0;
+  padding: 8px 4px;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--font-body);
   cursor: pointer;
   transition: all 0.2s;
   background: transparent;
-  color: var(--text-secondary); /* boosted from text-muted */
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .report-type-btn.active {
   background: var(--bg-card);
@@ -1335,8 +1398,8 @@ select.float-input { padding-right: 32px; }
   background: var(--bg-card);
   border: 1.5px solid var(--border-color);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 20;
+  box-shadow: var(--shadow-xl);
+  z-index: 9999;
   max-height: 200px;
   overflow-y: auto;
 }
@@ -1359,19 +1422,23 @@ select.float-input { padding-right: 32px; }
 /* Report stats summary */
 .report-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .report-stat {
-  padding: 12px;
+  padding: 10px 8px;
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
   border: 1px solid var(--border-color);
   text-align: center;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-.report-stat .label { font-size: 9px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
-.report-stat .value { font-size: 18px; font-weight: 900; margin-top: 2px; color: var(--text-primary); }
+.report-stat .label { font-size: 8px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.report-stat .value { font-size: clamp(12px, 3.8vw, 17px); font-weight: 900; margin-top: 2px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Grouped breakdown */
 .breakdown-group {

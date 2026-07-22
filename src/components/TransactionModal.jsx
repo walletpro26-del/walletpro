@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { getAttachment } from '../api/attachments'
+import { openWhatsApp, openEmail } from '../utils/commUtils'
 
 export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare }) {
   const [attachmentData, setAttachmentData] = useState(null)
   const [loadingAttachment, setLoadingAttachment] = useState(false)
+  const [attachmentError, setAttachmentError] = useState('')
+  const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const [fullscreen, setFullscreen] = useState(false)
 
   if (!item) return null
@@ -22,13 +25,25 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
   useEffect(() => {
     if (item.hasAttachment && !item.fileData) {
       setLoadingAttachment(true)
+      setAttachmentError('')
+      setAttachmentSuccess('')
       const col = isLending ? 'lending' : 'expenses'
       getAttachment(col, item.id)
-        .then((data) => setAttachmentData(data))
-        .catch(() => {})
+        .then((data) => {
+          if (data) {
+            setAttachmentData(data)
+            setAttachmentSuccess('✔ Attachment fetched successfully')
+          } else {
+            setAttachmentError('⚠ Attachment file data unavailable.')
+          }
+        })
+        .catch((err) => {
+          setAttachmentError('⚠ Failed to load attachment: ' + (err?.message || 'Error'))
+        })
         .finally(() => setLoadingAttachment(false))
     } else if (item.fileData) {
       setAttachmentData(item.fileData)
+      setAttachmentSuccess('✔ Attachment fetched successfully')
     }
   }, [item.id])
 
@@ -87,6 +102,24 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                     <label>Type</label>
                     <span>{item.type || '—'}</span>
                   </div>
+                  {(item.mobileNo || item.phone) && (
+                    <div className="detail-item">
+                      <label>Mobile (WhatsApp)</label>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#16a34a' }}>
+                        <i className="fab fa-whatsapp" />
+                        {item.mobileNo || item.phone}
+                      </span>
+                    </div>
+                  )}
+                  {item.email && (
+                    <div className="detail-item">
+                      <label>Email Address</label>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#2563eb' }}>
+                        <i className="fas fa-envelope" />
+                        {item.email}
+                      </span>
+                    </div>
+                  )}
                   <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
                     <label>Remarks</label>
                     <span>{item.remarks || '—'}</span>
@@ -121,14 +154,32 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
             </div>
 
             {/* Attachment */}
-            {(item.hasAttachment || attachmentData) && (
+            {(item.hasAttachment || attachmentData || loadingAttachment || attachmentError) && (
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                  Attachment
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Attachment
+                  </span>
+                  {attachmentSuccess && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--emerald-600)' }}>
+                      {attachmentSuccess}
+                    </span>
+                  )}
                 </div>
-                {loadingAttachment ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading attachment...</div>
-                ) : attachmentData ? (
+
+                {loadingAttachment && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-spinner fa-spin"></i> Fetching attachment data...
+                  </div>
+                )}
+
+                {attachmentError && (
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--red-600)', background: 'var(--red-50)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
+                    {attachmentError}
+                  </div>
+                )}
+
+                {!loadingAttachment && attachmentData && (
                   <div
                     style={{
                       borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)',
@@ -139,27 +190,46 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                     {attachmentData.includes('application/pdf') ? (
                       <div style={{ padding: 16, textAlign: 'center', background: 'var(--slate-50)' }}>
                         <i className="fas fa-file-pdf" style={{ fontSize: 32, color: 'var(--red-500)' }}></i>
-                        <div style={{ fontSize: 11, marginTop: 6, fontWeight: 600 }}>PDF Attachment</div>
+                        <div style={{ fontSize: 11, marginTop: 6, fontWeight: 600 }}>{item.fileName || 'PDF Attachment (Tap to view)'}</div>
                       </div>
                     ) : (
                       <img src={attachmentData} alt="Receipt" style={{ width: '100%', objectFit: 'cover', maxHeight: 200 }} />
                     )}
                   </div>
-                ) : null}
+                )}
               </div>
             )}
           </div>
 
-          <div className="modal-footer">
-            <button className="btn-outline" onClick={() => onEdit?.(item)}>
+          <div className="modal-footer" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn-outline" onClick={() => onEdit?.(item)} style={{ flex: 1 }}>
               <i className="fas fa-edit"></i> Edit
             </button>
-            <button className="btn-outline" style={{ color: 'var(--red-500)', borderColor: '#fecaca' }} onClick={() => { if (confirm('Delete this transaction?')) onDelete?.(item) }}>
+            <button className="btn-outline" style={{ color: 'var(--red-500)', borderColor: '#fecaca', flex: 1 }} onClick={() => { if (confirm('Delete this transaction?')) onDelete?.(item) }}>
               <i className="fas fa-trash-alt"></i> Delete
             </button>
-            <button className="btn-outline" style={{ background: 'var(--emerald-500)', color: '#fff', borderColor: 'var(--emerald-500)', flex: 'none', padding: '10px 14px' }} onClick={handleShare}>
+
+            <button
+              type="button"
+              className="btn-outline"
+              style={{ background: '#25D366', color: '#fff', borderColor: '#25D366', flex: 'none', padding: '10px 12px' }}
+              onClick={() => openWhatsApp(item.mobileNo || item.phone, item)}
+              title="Send entry details via WhatsApp"
+            >
               <i className="fab fa-whatsapp" style={{ fontSize: 16 }}></i>
             </button>
+
+            {(item.email || isLending) && (
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ background: '#3b82f6', color: '#fff', borderColor: '#3b82f6', flex: 'none', padding: '10px 12px' }}
+                onClick={() => openEmail(item.email, item)}
+                title="Send entry details via Email"
+              >
+                <i className="fas fa-envelope" style={{ fontSize: 14 }}></i>
+              </button>
+            )}
           </div>
         </div>
       </div>

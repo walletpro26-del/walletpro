@@ -135,23 +135,10 @@ export async function getAllExpenses() {
   if (!currentUid) return []
 
   try {
-    // 1. Fetch scoped expenses
+    // Fetch user-scoped expenses
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await getDocs(qScoped)
     let items = snapScoped.docs.map(fromFirestore)
-
-    // 2. Fetch all to find legacy items (without userId) to migrate
-    const qAll = query(collection(db, COL))
-    const snapAll = await getDocs(qAll)
-    const legacyDocs = snapAll.docs.filter((d) => !d.data().userId)
-
-    if (legacyDocs.length > 0) {
-      legacyDocs.forEach((d) => {
-        const ref = doc(db, COL, d.id)
-        updateDoc(ref, { userId: currentUid }).catch((err) => console.error('Migration error:', err))
-        items.push(fromFirestore(d))
-      })
-    }
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
     // Save to local cache for offline use
