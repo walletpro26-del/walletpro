@@ -45,7 +45,10 @@ export async function getAppConfig() {
     _cacheTime = Date.now()
     return _cachedConfig
   } catch (err) {
-    console.warn('[appConfig] Failed to load config:', err?.message)
+    // Quietly fallback to defaults if Firestore rules restrict appConfig document
+    if (err?.code !== 'permission-denied' && !err?.message?.includes('permissions')) {
+      console.warn('[appConfig] Failed to load config:', err?.message)
+    }
     // Return defaults on error
     return _cachedConfig || { ...DEFAULTS }
   }

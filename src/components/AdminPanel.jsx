@@ -4,8 +4,10 @@ import {
   isAdminEmail,
   ADMIN_EMAILS,
   getAllUpiPayments,
+  getAllSubscriptions,
   revokeSubscription,
   reactivateSubscription,
+  adminSetSubscriptionByEmailOrUid,
 } from '../api/subscription'
 
 export default function AdminPanel({ auth, onClose }) {
@@ -15,9 +17,15 @@ export default function AdminPanel({ auth, onClose }) {
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
 
-  // UPI Payments state
+  // UPI Payments state & Subscriptions list
   const [upiPayments, setUpiPayments] = useState([])
+  const [allSubscriptions, setAllSubscriptions] = useState([])
   const [upiLoading, setUpiLoading] = useState(false)
+
+  // Manual User Lookup & Activation State
+  const [manualUser, setManualUser] = useState('')
+  const [manualPlan, setManualPlan] = useState('yearly')
+  const [manualSubmitting, setManualSubmitting] = useState(false)
 
   // Editable fields
   const [monthlyPrice, setMonthlyPrice] = useState('')
@@ -36,12 +44,38 @@ export default function AdminPanel({ auth, onClose }) {
   async function loadUpiPayments() {
     setUpiLoading(true)
     try {
-      const list = await getAllUpiPayments()
-      setUpiPayments(list)
+      const [payments, subs] = await Promise.all([
+        getAllUpiPayments(),
+        getAllSubscriptions(),
+      ])
+      setUpiPayments(payments)
+      setAllSubscriptions(subs)
     } catch (err) {
-      console.warn('[AdminPanel] Failed to load UPI payments:', err?.message)
+      console.warn('[AdminPanel] Failed to load payments/subscriptions:', err?.message)
     } finally {
       setUpiLoading(false)
+    }
+  }
+
+  async function handleManualSet(status) {
+    const input = manualUser.trim()
+    if (!input) {
+      setError('Please enter a user Email or UID')
+      return
+    }
+
+    setManualSubmitting(true)
+    setError('')
+    try {
+      await adminSetSubscriptionByEmailOrUid(input, status, manualPlan, auth?.email)
+      setToast(status === 'active' ? `⚡ Access granted to ${input} (${manualPlan.toUpperCase()})!` : `⛔ Account ${input} deactivated!`)
+      setManualUser('')
+      setTimeout(() => setToast(''), 4000)
+      await loadUpiPayments()
+    } catch (err) {
+      setError(err?.message || 'Action failed')
+    } finally {
+      setManualSubmitting(false)
     }
   }
 
@@ -404,6 +438,106 @@ export default function AdminPanel({ auth, onClose }) {
                 <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                   Leave blank to hide the banner. This appears on the login and main screens.
                 </p>
+              </div>
+
+              {/* Direct Account Manager Tool */}
+              <div style={{ background: 'var(--bg-subtle)', border: '1.5px solid #6366f1', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                <h4 style={{ fontSize: 11, fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-user-shield" />
+                  Direct Account Manager (Activate / Deactivate Any Account)
+                </h4>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.3 }}>
+                  Enter any user Email or UID below to grant full access or instantly deactivate their plan:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    type="text"
+                    placeholder="Enter user email or UID (e.g. user@gmail.com)"
+                    value={manualUser}
+                    onChange={(e) => setManualUser(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border-color)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      boxSizing: 'border-box',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select
+                      value={manualPlan}
+                      onChange={(e) => setManualPlan(e.target.value)}
+                      style={{
+                        padding: '7px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-color)',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: 'var(--bg-card)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value="monthly">30 Days Pass</option>
+                      <option value="yearly">1 Year Saver</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => handleManualSet('active')}
+                      disabled={manualSubmitting || !manualUser.trim()}
+                      style={{
+                        flex: 1,
+                        padding: '7px 8px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <i className="fas fa-bolt" />
+                      ⚡ Activate
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleManualSet('revoked')}
+                      disabled={manualSubmitting || !manualUser.trim()}
+                      style={{
+                        flex: 1,
+                        padding: '7px 8px',
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <i className="fas fa-ban" />
+                      ⛔ Deactivate
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* UPI Payment Audit & Revocation Manager */}
