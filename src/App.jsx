@@ -148,7 +148,7 @@ export default function App() {
     try {
       const sub = await getSubscriptionStatus(user)
       setSubscriptionState(sub)
-      // If non-admin and inactive/expired, show subscription modal automatically
+      // If non-admin and inactive/expired/pending, show subscription modal automatically
       if (!sub.active && !sub.isAdmin) {
         setShowSubscriptionModal(true)
       }

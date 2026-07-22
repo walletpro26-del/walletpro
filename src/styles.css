@@ -2,6 +2,11 @@
    WALLET PRO — Premium Design System
    ═══════════════════════════════════════════════════════════════ */
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.95); }
+}
+
 /* --- CSS Custom Properties --- */
 :root {
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

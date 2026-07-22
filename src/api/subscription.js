@@ -10,6 +10,7 @@ import {
   orderBy,
   Timestamp,
   updateDoc,
+  onSnapshot,
 } from 'firebase/firestore'
 
 // List of Admin Emails that have free lifetime access
@@ -63,16 +64,18 @@ export async function getSubscriptionStatus(user) {
     if (snap.exists()) {
       const data = snap.data()
       const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+      const isPending = data.status === 'pending_verification'
       const isActive = data.status === 'active' && expiresAt && expiresAt > new Date()
 
       return {
         active: isActive,
-        status: isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired'),
+        status: isPending ? 'pending_verification' : (isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired')),
         plan: data.plan || 'monthly',
         expiresAt,
         isAdmin: false,
         paymentId: data.paymentId || '',
         utr: data.utr || '',
+        orderId: data.orderId || '',
         revocationReason: data.revocationReason || '',
       }
     }
@@ -90,9 +93,10 @@ export async function getSubscriptionStatus(user) {
 }
 
 /**
- * Submit dynamic UPI UTR payment with INSTANT AUTOMATIC ACTIVATION
+ * Submit UPI UTR payment — sets status to PENDING_VERIFICATION.
+ * Admin must approve to activate the subscription.
  * @param {{ user: { uid: string, email: string, name?: string }, plan: 'monthly'|'yearly', amount: number, utr: string }} params
- * @returns {Promise<{ success: boolean, orderId: string, expiresAt: Date, message: string }>}
+ * @returns {Promise<{ success: boolean, orderId: string, message: string }>}
  */
 export async function submitUpiPayment({ user, plan, amount, utr }) {
   if (!user || !user.uid) throw new Error('User not logged in')
@@ -102,7 +106,7 @@ export async function submitUpiPayment({ user, plan, amount, utr }) {
     throw new Error('Please enter a valid 12-digit UTR / Bank Reference Number.')
   }
 
-  // 1. Uniqueness check on upi_payments (wrapped in try/catch in case of rule restrictions for non-admins)
+  // 1. Uniqueness check on upi_payments
   try {
     const utrCheckQ = query(collection(db, 'upi_payments'), where('utr', '==', cleanUtr))
     const utrSnap = await getDocs(utrCheckQ)
@@ -120,16 +124,9 @@ export async function submitUpiPayment({ user, plan, amount, utr }) {
   const now = new Date()
   const nowTs = Timestamp.now()
 
-  let expiresAt = new Date()
   let finalAmount = Number(amount) || (plan === 'yearly' ? 150 : 20)
 
-  if (plan === 'yearly') {
-    expiresAt.setFullYear(now.getFullYear() + 1)
-  } else {
-    expiresAt.setDate(now.getDate() + 30)
-  }
-
-  // 2. Save UTR payment record in upi_payments (wrapped in try/catch in case of rule restrictions)
+  // 2. Save UTR payment record in upi_payments as PENDING_VERIFICATION
   try {
     const paymentData = {
       orderId,
@@ -140,10 +137,9 @@ export async function submitUpiPayment({ user, plan, amount, utr }) {
       amount: finalAmount,
       plan: plan || 'monthly',
       merchantPhone: MERCHANT_PHONE,
-      status: 'AUTO_ACTIVATED',
+      status: 'PENDING_VERIFICATION',
       submittedAt: nowTs,
       updatedAt: nowTs,
-      expiresAt: Timestamp.fromDate(expiresAt),
     }
 
     const docRef = doc(db, 'upi_payments', orderId)
@@ -152,19 +148,18 @@ export async function submitUpiPayment({ user, plan, amount, utr }) {
     console.warn('[subscription] Bypassing upi_payments log creation due to rule restrictions:', err?.message)
   }
 
-  // 3. INSTANTLY Activate User Subscription in subscriptions/{uid} collection (guaranteed write under own-document rule)
+  // 3. Set user subscription to pending_verification (NOT active)
   const subRef = doc(db, 'subscriptions', user.uid)
   const subscriptionData = {
     userId: user.uid,
     email: user.email || '',
-    status: 'active',
+    status: 'pending_verification',
     plan: plan || 'monthly',
     amountPaid: finalAmount,
     currency: 'INR',
-    paidAt: Timestamp.fromDate(now),
-    expiresAt: Timestamp.fromDate(expiresAt),
+    submittedAt: Timestamp.fromDate(now),
     paymentId: `UPI_UTR_${cleanUtr}`,
-    gateway: 'upi_auto_instant',
+    gateway: 'upi_pending',
     utr: cleanUtr,
     orderId,
     updatedAt: nowTs,
@@ -175,9 +170,108 @@ export async function submitUpiPayment({ user, plan, amount, utr }) {
   return {
     success: true,
     orderId,
-    expiresAt,
-    message: '🎉 Subscription Activated Successfully!',
+    message: '⏳ Payment submitted! Awaiting admin verification.',
   }
+}
+
+/**
+ * Admin approves a pending UPI payment and activates the user subscription
+ * @param {string} userId
+ * @param {string} orderId
+ * @param {string} plan
+ * @param {number} amount
+ * @param {string} adminEmail
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function approveUpiPayment(userId, orderId, plan, amount, adminEmail) {
+  if (!userId) throw new Error('User ID required')
+
+  const now = new Date()
+  const nowTs = Timestamp.now()
+
+  let expiresAt = new Date()
+  if (plan === 'yearly') {
+    expiresAt.setFullYear(now.getFullYear() + 1)
+  } else {
+    expiresAt.setDate(now.getDate() + 30)
+  }
+
+  // 1. Activate the user subscription
+  const subRef = doc(db, 'subscriptions', userId)
+  await updateDoc(subRef, {
+    status: 'active',
+    paidAt: nowTs,
+    expiresAt: Timestamp.fromDate(expiresAt),
+    approvedBy: adminEmail || 'admin',
+    approvedAt: nowTs,
+    updatedAt: nowTs,
+  })
+
+  // 2. Update upi_payments record status to APPROVED
+  if (orderId) {
+    try {
+      const payRef = doc(db, 'upi_payments', orderId)
+      await updateDoc(payRef, {
+        status: 'APPROVED',
+        expiresAt: Timestamp.fromDate(expiresAt),
+        approvedBy: adminEmail || 'admin',
+        approvedAt: nowTs,
+        updatedAt: nowTs,
+      })
+    } catch (err) {
+      console.warn('[subscription] Could not update upi_payments doc:', err?.message)
+    }
+  }
+
+  return { success: true, expiresAt }
+}
+
+/**
+ * Real-time listener for a user's subscription status changes.
+ * Fires callback whenever status changes (e.g., pending → active).
+ * @param {string} uid
+ * @param {function} callback - called with subscription data object
+ * @returns {function} unsubscribe function
+ */
+export function listenSubscriptionStatus(uid, callback) {
+  if (!uid) return () => {}
+  const subRef = doc(db, 'subscriptions', uid)
+  return onSnapshot(subRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data()
+      const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+      const isPending = data.status === 'pending_verification'
+      const isActive = data.status === 'active' && expiresAt && expiresAt > new Date()
+      callback({
+        active: isActive,
+        status: isPending ? 'pending_verification' : (isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired')),
+        plan: data.plan || 'monthly',
+        expiresAt,
+        isAdmin: false,
+        paymentId: data.paymentId || '',
+        utr: data.utr || '',
+        orderId: data.orderId || '',
+      })
+    }
+  }, (err) => {
+    console.warn('[subscription] Realtime listener error:', err?.message)
+  })
+}
+
+/**
+ * Real-time listener for pending UPI payments (Admin use).
+ * Fires callback with all upi_payments docs whenever any changes.
+ * @param {function} callback - called with array of payment objects
+ * @returns {function} unsubscribe function
+ */
+export function listenPendingPayments(callback) {
+  const q = query(collection(db, 'upi_payments'), orderBy('submittedAt', 'desc'))
+  return onSnapshot(q, (snap) => {
+    const payments = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    callback(payments)
+  }, (err) => {
+    console.warn('[subscription] Pending payments listener error:', err?.message)
+  })
 }
 
 /**
@@ -268,7 +362,7 @@ export async function reactivateSubscription(userId, orderId, adminEmail) {
     try {
       const payRef = doc(db, 'upi_payments', orderId)
       await updateDoc(payRef, {
-        status: 'AUTO_ACTIVATED',
+        status: 'APPROVED',
         updatedAt: nowTs,
       })
     } catch (e) {}

@@ -19,6 +19,9 @@ export async function signIn(email, password) {
 
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider()
+  provider.setCustomParameters({
+    prompt: 'select_account',
+  })
   const cred = await signInWithPopup(auth, provider)
   return {
     success: true,

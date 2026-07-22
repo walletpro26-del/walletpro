@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
   submitUpiPayment,
+  listenSubscriptionStatus,
   DEFAULT_MERCHANT_UPI,
   MERCHANT_NAME,
   MERCHANT_PHONE,
 } from '../api/subscription'
+import { requestNotificationPermission, sendNativeNotification } from '../utils/notification'
 
 export default function SubscriptionModal({
   user,
@@ -16,7 +18,7 @@ export default function SubscriptionModal({
   isBlocking = false,
 }) {
   const [selectedPlan, setSelectedPlan] = useState('yearly')
-  const [step, setStep] = useState('select') // 'select' | 'success'
+  const [step, setStep] = useState('select') // 'select' | 'pending' | 'success'
 
   const merchantUpi = appConfig?.merchantUpi || DEFAULT_MERCHANT_UPI
   const monthlyPrice = appConfig?.monthlyPrice || 20
@@ -34,7 +36,44 @@ export default function SubscriptionModal({
   const [activationResult, setActivationResult] = useState(null)
   const [copiedUpi, setCopiedUpi] = useState(false)
   const [copiedPhone, setCopiedPhone] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' && window.innerWidth > 640))
   const [payMode, setPayMode] = useState('app') // 'app' | 'qr'
+
+  useEffect(() => {
+    function handleResize() {
+      setIsDesktop(window.innerWidth > 640)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Request notification permission early (for mobile notification bar)
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [])
+
+  // Real-time listener: watch subscription status for admin approval
+  useEffect(() => {
+    if (!user?.uid) return
+    const unsub = listenSubscriptionStatus(user.uid, (sub) => {
+      if (sub.status === 'active' && sub.active) {
+        // Admin approved! Show success + native notification
+        setActivationResult({
+          orderId: sub.orderId || orderId,
+          expiresAt: sub.expiresAt,
+        })
+        setStep('success')
+        onSubscriptionSuccess?.(sub)
+        sendNativeNotification('🎉 Subscription Activated!', {
+          body: `Your WalletVibe Pro ${sub.plan?.toUpperCase()} plan is now active. Expires: ${sub.expiresAt ? new Date(sub.expiresAt).toLocaleDateString('en-IN') : 'N/A'}`,
+          tag: 'wv-sub-approved',
+        })
+      } else if (sub.status === 'pending_verification' && step !== 'pending') {
+        setStep('pending')
+      }
+    })
+    return unsub
+  }, [user?.uid])
 
   const upiUri = `upi://pay?pa=${encodeURIComponent(merchantUpi)}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${amount}&tn=${encodeURIComponent(orderId)}&cu=INR`
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiUri)}`
@@ -44,7 +83,7 @@ export default function SubscriptionModal({
     setError('')
     const cleanUtr = String(utr || '').trim()
     if (cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
-      setError('Enter a valid 12-digit UTR number.')
+      setError('Enter a valid 12-digit Ref/UTR number.')
       return
     }
     setSubmitting(true)
@@ -52,11 +91,10 @@ export default function SubscriptionModal({
       const res = await submitUpiPayment({ user, plan: selectedPlan, amount, utr: cleanUtr })
       if (res.success) {
         setActivationResult(res)
-        setStep('success')
-        onSubscriptionSuccess?.(res)
+        setStep('pending')
       }
     } catch (err) {
-      setError(err?.message || 'Failed to activate. Try again.')
+      setError(err?.message || 'Failed to submit. Try again.')
     } finally {
       setSubmitting(false)
     }
@@ -91,7 +129,7 @@ export default function SubscriptionModal({
           flexShrink: 0,
         }}>
           {/* Close / Logout button */}
-          {!isBlocking || step === 'success' ? (
+          {!isBlocking || step === 'success' || step === 'pending' ? (
             <button
               className="modal-close"
               style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
@@ -111,14 +149,14 @@ export default function SubscriptionModal({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 70 }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>
-              {isAdmin ? '👑' : step === 'success' ? '🎉' : '⚡'}
+              {isAdmin ? '👑' : step === 'success' ? '🎉' : step === 'pending' ? '⏳' : '⚡'}
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, lineHeight: 1.2 }}>
-                {isAdmin ? 'Admin Access' : step === 'success' ? 'Activated!' : 'WalletVibe Pro'}
+                {isAdmin ? 'Admin Access' : step === 'success' ? 'Activated!' : step === 'pending' ? 'Pending Verification' : 'WalletVibe Pro'}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: 10, color: '#a5b4fc', lineHeight: 1.2 }}>
-                {isAdmin ? 'Free lifetime admin access' : step === 'success' ? 'Your account is upgraded' : '0% Commission • Instant UPI Activation'}
+                {isAdmin ? 'Free lifetime admin access' : step === 'success' ? 'Your account is upgraded' : step === 'pending' ? 'Admin will verify your payment' : '0% Commission • UPI Activation'}
               </p>
             </div>
           </div>
@@ -128,7 +166,7 @@ export default function SubscriptionModal({
         <div style={{ padding: '12px 14px', flex: 1 }}>
 
           {/* User email bar (compact) */}
-          {user?.email && step !== 'success' && (
+          {user?.email && step !== 'success' && step !== 'pending' && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 10, fontSize: 11, padding: '6px 10px', background: 'var(--bg-body, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8 }}>
               <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary, #1e293b)' }}>
                 <i className="fas fa-user-circle" style={{ color: '#6366f1', marginRight: 5, fontSize: 12 }} />
@@ -186,6 +224,48 @@ export default function SubscriptionModal({
               </button>
             </div>
 
+          /* ── PENDING VERIFICATION ── */
+          ) : step === 'pending' ? (
+            <div style={{ textAlign: 'center', padding: '20px 14px' }}>
+              {/* Animated waiting spinner */}
+              <div style={{ fontSize: 40, marginBottom: 10, animation: 'pulse 2s ease-in-out infinite' }}>⏳</div>
+              <h4 style={{ margin: '0 0 6px', color: '#d97706', fontWeight: 800, fontSize: 16 }}>Payment Under Verification</h4>
+              <p style={{ margin: '0 0 14px', fontSize: 12, color: '#92400e', lineHeight: 1.4 }}>
+                Your UTR has been submitted. Admin will verify and activate your account shortly.
+                <br /><strong>You'll receive a notification when approved.</strong>
+              </p>
+
+              {/* Submission details card */}
+              <div style={{ background: 'rgba(251,191,36,0.08)', border: '1.5px solid #f59e0b', borderRadius: 10, padding: '10px 14px', fontSize: 11, textAlign: 'left', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#92400e' }}>Email:</span>
+                  <strong style={{ color: '#78350f' }}>{user?.email}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#92400e' }}>Plan:</span>
+                  <strong style={{ color: '#78350f' }}>{selectedPlan.toUpperCase()}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#92400e' }}>Amount:</span>
+                  <strong style={{ color: '#78350f' }}>₹{amount}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#92400e' }}>Order:</span>
+                  <strong style={{ color: '#78350f' }}>{activationResult?.orderId || orderId}</strong>
+                </div>
+              </div>
+
+              {/* Live status indicator */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, color: '#d97706', fontWeight: 700 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                Waiting for admin approval...
+              </div>
+
+              <p style={{ margin: '14px 0 0', fontSize: 10, color: '#78350f', opacity: 0.7 }}>
+                This page will update automatically once approved. You can also close and check back later.
+              </p>
+            </div>
+
           /* ── MAIN PAYMENT FLOW ── */
           ) : (
             <>
@@ -236,109 +316,122 @@ export default function SubscriptionModal({
                 </div>
               </div>
 
-              {/* STEP 2: Pay via UPI or QR Code (Compact Tab Switcher) */}
+              {/* STEP 2: Payment Section (Responsive: QR only on Desktop, Intent & Copy on Mobile) */}
               <div style={{ background: 'var(--bg-body, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>2. Pay ₹{amount}:</span>
-                  
-                  {/* Mode Tab Switcher: Pay via UPI | QR Code */}
-                  <div style={{ display: 'flex', background: 'var(--border-color, #e2e8f0)', borderRadius: 6, padding: 2, gap: 2 }}>
-                    <button
-                      type="button"
-                      onClick={() => setPayMode('app')}
-                      style={{
-                        border: 'none',
-                        background: payMode === 'app' ? '#ffffff' : 'transparent',
-                        color: payMode === 'app' ? '#2563eb' : '#64748b',
-                        fontSize: 10,
-                        fontWeight: 800,
-                        padding: '4px 10px',
-                        borderRadius: 5,
-                        cursor: 'pointer',
-                        boxShadow: payMode === 'app' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                        transition: 'all 0.15s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <i className="fas fa-mobile-alt" style={{ fontSize: 10 }} />
-                      Pay via UPI
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPayMode('qr')}
-                      style={{
-                        border: 'none',
-                        background: payMode === 'qr' ? '#ffffff' : 'transparent',
-                        color: payMode === 'qr' ? '#2563eb' : '#64748b',
-                        fontSize: 10,
-                        fontWeight: 800,
-                        padding: '4px 10px',
-                        borderRadius: 5,
-                        cursor: 'pointer',
-                        boxShadow: payMode === 'qr' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                        transition: 'all 0.15s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <i className="fas fa-qrcode" style={{ fontSize: 10 }} />
-                      QR Code
-                    </button>
-                  </div>
-                </div>
-
-                {payMode === 'app' ? (
-                  <>
-                    {/* Pay via UPI App Button */}
-                    <a
-                      href={upiUri}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        width: '100%', padding: '9px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                        color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 800, fontSize: 12,
-                        boxSizing: 'border-box', marginBottom: 6,
-                      }}
-                    >
-                      <i className="fas fa-mobile-alt" /> Pay via UPI App (GPay / PhonePe / Paytm)
-                    </a>
-
-                    {/* Copy buttons row */}
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      <button type="button"
-                        onClick={() => { navigator.clipboard.writeText(merchantUpi); setCopiedUpi(true); setTimeout(() => setCopiedUpi(false), 2500) }}
-                        style={{ flex: 1, padding: '6px', background: copiedUpi ? '#10b981' : '#4f46e5', color: '#fff', border: 'none', borderRadius: 5, fontSize: 9, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                        <i className={copiedUpi ? 'fas fa-check' : 'fas fa-copy'} />
-                        {copiedUpi ? 'Copied ✅' : 'Copy UPI ID'}
-                      </button>
-                      <button type="button"
-                        onClick={() => { navigator.clipboard.writeText('9682547458'); setCopiedPhone(true); setTimeout(() => setCopiedPhone(false), 2500) }}
-                        style={{ flex: 1, padding: '6px', background: copiedPhone ? '#10b981' : '#0284c7', color: '#fff', border: 'none', borderRadius: 5, fontSize: 9, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                        <i className={copiedPhone ? 'fas fa-check' : 'fas fa-phone-alt'} />
-                        {copiedPhone ? 'Copied ✅' : 'Pay to 9682547458'}
-                      </button>
+                {isDesktop ? (
+                  /* DESKTOP VIEW: ONLY Dynamic QR Code displayed */
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>2. Scan QR Code to Pay ₹{amount}:</span>
+                      <span style={{ fontSize: 8, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: 99, fontWeight: 700 }}>{orderId}</span>
                     </div>
-                  </>
+                    <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                      <img
+                        src={qrCodeUrl}
+                        alt="UPI Payment Dynamic QR Code"
+                        width="130"
+                        height="130"
+                        style={{
+                          border: '2px solid #e2e8f0',
+                          borderRadius: 8,
+                          padding: 4,
+                          background: '#ffffff',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                        }}
+                      />
+                      <p style={{ fontSize: 10, color: '#64748b', marginTop: 4, margin: 0 }}>
+                        Scan QR in GPay / PhonePe / Paytm • VPA: <strong style={{ color: '#1e293b' }}>{merchantUpi}</strong>
+                      </p>
+                    </div>
+                  </div>
                 ) : (
-                  /* QR Code Tab View */
-                  <div style={{ textAlign: 'center', padding: '4px 0' }}>
-                    <img
-                      src={qrCodeUrl}
-                      alt="UPI Payment Dynamic QR Code"
-                      width="120"
-                      height="120"
-                      style={{
-                        border: '2px solid #e2e8f0',
-                        borderRadius: 8,
-                        padding: 4,
-                        background: '#ffffff',
-                      }}
-                    />
-                    <p style={{ fontSize: 9, color: '#64748b', marginTop: 3, margin: 0 }}>
-                      Scan QR in any UPI app • VPA: <strong style={{ color: '#1e293b' }}>{merchantUpi}</strong>
-                    </p>
+                  /* MOBILE VIEW: Pay via UPI tab options */
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>2. Pay ₹{amount}:</span>
+                      
+                      {/* Mode Tab Switcher on Mobile: Pay via UPI | QR Code */}
+                      <div style={{ display: 'flex', background: 'var(--border-color, #e2e8f0)', borderRadius: 6, padding: 2, gap: 2 }}>
+                        <button
+                          type="button"
+                          onClick={() => setPayMode('app')}
+                          style={{
+                            border: 'none',
+                            background: payMode === 'app' ? '#ffffff' : 'transparent',
+                            color: payMode === 'app' ? '#2563eb' : '#64748b',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            padding: '4px 10px',
+                            borderRadius: 5,
+                            cursor: 'pointer',
+                            boxShadow: payMode === 'app' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <i className="fas fa-mobile-alt" style={{ fontSize: 10 }} />
+                          Pay via UPI
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPayMode('qr')}
+                          style={{
+                            border: 'none',
+                            background: payMode === 'qr' ? '#ffffff' : 'transparent',
+                            color: payMode === 'qr' ? '#2563eb' : '#64748b',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            padding: '4px 10px',
+                            borderRadius: 5,
+                            cursor: 'pointer',
+                            boxShadow: payMode === 'qr' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <i className="fas fa-qrcode" style={{ fontSize: 10 }} />
+                          QR Code
+                        </button>
+                      </div>
+                    </div>
+
+                    {payMode === 'app' ? (
+                      /* Pay via UPI App Button */
+                      <a
+                        href={upiUri}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          width: '100%', padding: '10px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                          color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 800, fontSize: 12,
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <i className="fas fa-mobile-alt" /> Pay via UPI App (GPay / PhonePe / Paytm)
+                      </a>
+                    ) : (
+                      /* Mobile QR Code Tab View */
+                      <div style={{ textAlign: 'center', padding: '4px 0' }}>
+                        <img
+                          src={qrCodeUrl}
+                          alt="UPI Payment Dynamic QR Code"
+                          width="120"
+                          height="120"
+                          style={{
+                            border: '2px solid #e2e8f0',
+                            borderRadius: 8,
+                            padding: 4,
+                            background: '#ffffff',
+                          }}
+                        />
+                        <p style={{ fontSize: 9, color: '#64748b', marginTop: 3, margin: 0 }}>
+                          Scan QR in any UPI app • VPA: <strong style={{ color: '#1e293b' }}>{merchantUpi}</strong>
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -347,25 +440,25 @@ export default function SubscriptionModal({
               <form onSubmit={handleSubmitUTR} style={{ background: 'rgba(16,185,129,0.08)', border: '2px solid #10b981', borderRadius: 10, padding: 10, marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ background: '#10b981', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 99 }}>STEP 3</span>
-                  <span style={{ fontSize: 10, color: '#047857', fontWeight: 800 }}>Enter 12-Digit UTR Number:</span>
+                  <span style={{ fontSize: 10, color: '#047857', fontWeight: 800 }}>Enter 12-Digit Ref/UTR Number:</span>
                 </div>
                 
                 <input
                   type="text"
                   inputMode="numeric"
                   maxLength={12}
-                  placeholder="Enter 12-digit UTR (e.g. 420192837465)"
+                  placeholder="e.g. 420192837465"
                   value={utr}
                   onChange={(e) => setUtr(e.target.value.replace(/\D/g, ''))}
                   required
                   style={{
                     width: '100%',
-                    padding: '8px 10px',
+                    padding: '7px 9px',
                     borderRadius: 6,
                     border: '1.5px solid #10b981',
-                    fontSize: 13,
-                    letterSpacing: '1px',
-                    fontWeight: 700,
+                    fontSize: 11,
+                    letterSpacing: '0.5px',
+                    fontWeight: 600,
                     boxSizing: 'border-box',
                     background: '#ffffff',
                     color: '#064e3b',
@@ -383,7 +476,7 @@ export default function SubscriptionModal({
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 6,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: 800,
                     cursor: 'pointer',
                     display: 'flex',
@@ -396,12 +489,12 @@ export default function SubscriptionModal({
                   {submitting ? (
                     <>
                       <i className="fas fa-spinner fa-spin" />
-                      Activating...
+                      Submitting...
                     </>
                   ) : (
                     <>
-                      <i className="fas fa-bolt" />
-                      Activate Instantly
+                      <i className="fas fa-paper-plane" />
+                      Submit for Verification
                     </>
                   )}
                 </button>

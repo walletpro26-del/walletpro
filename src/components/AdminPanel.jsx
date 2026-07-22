@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
 import {
   isAdminEmail,
@@ -8,7 +8,10 @@ import {
   revokeSubscription,
   reactivateSubscription,
   adminSetSubscriptionByEmailOrUid,
+  approveUpiPayment,
+  listenPendingPayments,
 } from '../api/subscription'
+import { requestNotificationPermission, sendNativeNotification } from '../utils/notification'
 
 export default function AdminPanel({ auth, onClose }) {
   const [config, setConfig] = useState(null)
@@ -36,9 +39,31 @@ export default function AdminPanel({ auth, onClose }) {
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [razorpayEnabled, setRazorpayEnabled] = useState(false)
 
+  const prevPendingCountRef = useRef(0)
+
   useEffect(() => {
     loadConfig()
     loadUpiPayments()
+    requestNotificationPermission()
+
+    // Real-time listener for UPI payments — triggers native notification on new pending payments
+    const unsub = listenPendingPayments((payments) => {
+      const pendingCount = payments.filter(p => p.status === 'PENDING_VERIFICATION').length
+      // If a NEW pending payment arrived (count went up), send native notification
+      if (pendingCount > prevPendingCountRef.current && prevPendingCountRef.current >= 0) {
+        const newest = payments.find(p => p.status === 'PENDING_VERIFICATION')
+        if (newest) {
+          sendNativeNotification('💳 New Payment Pending!', {
+            body: `${newest.userEmail} submitted ₹${newest.amount} (${newest.plan?.toUpperCase()}) — UTR: ${newest.utr}. Tap to verify.`,
+            tag: 'wv-admin-pending-' + newest.orderId,
+          })
+        }
+      }
+      prevPendingCountRef.current = pendingCount
+      setUpiPayments(payments)
+    })
+
+    return () => unsub()
   }, [])
 
   async function loadUpiPayments() {
@@ -54,6 +79,21 @@ export default function AdminPanel({ auth, onClose }) {
       console.warn('[AdminPanel] Failed to load payments/subscriptions:', err?.message)
     } finally {
       setUpiLoading(false)
+    }
+  }
+
+  async function handleApprove(pay) {
+    if (!pay?.userId) return
+    setSaving(true)
+    try {
+      await approveUpiPayment(pay.userId, pay.orderId, pay.plan, pay.amount, auth?.email)
+      setToast(`✅ Payment approved & subscription activated for ${pay.userEmail}!`)
+      setTimeout(() => setToast(''), 4000)
+      await loadUpiPayments()
+    } catch (err) {
+      setError(err?.message || 'Approval failed')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -578,17 +618,23 @@ export default function AdminPanel({ auth, onClose }) {
                     No UPI payment submissions logged yet.
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }} className="custom-scrollbar">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }} className="custom-scrollbar">
                     {upiPayments.map((pay) => {
+                      const isPending = pay.status === 'PENDING_VERIFICATION'
                       const isRevoked = pay.status === 'REVOKED' || pay.status === 'REJECTED'
+                      const isApproved = pay.status === 'APPROVED'
+
+                      const borderColor = isPending ? '#f59e0b' : isRevoked ? 'rgba(239,68,68,0.4)' : isApproved ? 'rgba(16,185,129,0.4)' : 'var(--border-color)'
+                      const bgColor = isPending ? 'rgba(251,191,36,0.06)' : isRevoked ? 'rgba(239,68,68,0.06)' : isApproved ? 'rgba(16,185,129,0.04)' : 'var(--bg-subtle)'
+
                       return (
                         <div
                           key={pay.id || pay.orderId}
                           style={{
                             padding: '10px 12px',
                             borderRadius: 8,
-                            border: isRevoked ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--border-color)',
-                            background: isRevoked ? 'rgba(239,68,68,0.06)' : 'var(--bg-subtle)',
+                            border: `1.5px solid ${borderColor}`,
+                            background: bgColor,
                             fontSize: 12,
                           }}
                         >
@@ -606,32 +652,59 @@ export default function AdminPanel({ auth, onClose }) {
                                 padding: '2px 6px',
                                 borderRadius: 99,
                                 textTransform: 'uppercase',
-                                background: isRevoked ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
-                                color: isRevoked ? '#ef4444' : '#10b981',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: isPending ? 'rgba(245,158,11,0.15)' : isRevoked ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                                color: isPending ? '#d97706' : isRevoked ? '#ef4444' : '#10b981',
                               }}
                             >
-                              {isRevoked ? 'REVOKED / INACTIVE' : 'AUTO ACTIVATED ⚡'}
+                              {isPending && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />}
+                              {isPending ? 'PENDING' : isRevoked ? 'REVOKED' : 'APPROVED ✅'}
                             </span>
                           </div>
 
                           <div style={{ background: 'var(--bg-card)', padding: '6px 8px', borderRadius: 6, fontSize: 11, margin: '6px 0', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>12-Digit UTR: <strong style={{ letterSpacing: '0.5px', color: '#6366f1' }}>{pay.utr}</strong></span>
+                            <span>UTR: <strong style={{ letterSpacing: '0.5px', color: '#6366f1' }}>{pay.utr}</strong></span>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                               {pay.submittedAt?.seconds ? new Date(pay.submittedAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
                           </div>
 
                           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                            {!isRevoked ? (
+                            {isPending ? (
+                              <>
+                                {/* APPROVE Button */}
+                                <button
+                                  onClick={() => handleApprove(pay)}
+                                  disabled={saving}
+                                  className="btn-primary"
+                                  style={{ padding: '5px 10px', fontSize: 11, background: 'linear-gradient(135deg, #10b981, #059669)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                                >
+                                  <i className="fas fa-check-circle" />
+                                  ✅ Approve & Activate
+                                </button>
+                                {/* REJECT Button */}
+                                <button
+                                  onClick={() => handleRevoke(pay.userId, pay.orderId, pay.userEmail)}
+                                  disabled={saving}
+                                  className="btn-outline"
+                                  style={{ padding: '5px 10px', fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                                >
+                                  <i className="fas fa-times-circle" />
+                                  ❌ Reject
+                                </button>
+                              </>
+                            ) : !isRevoked ? (
                               <button
                                 onClick={() => handleRevoke(pay.userId, pay.orderId, pay.userEmail)}
                                 disabled={saving}
                                 className="btn-outline"
                                 style={{ padding: '4px 10px', fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', flex: 1 }}
-                                title="Click to instantly deactivate user subscription if payment was not received or fake UTR was submitted"
+                                title="Deactivate user subscription"
                               >
                                 <i className="fas fa-ban" style={{ marginRight: 4 }} />
-                                Deactivate / Revoke Subscription
+                                Deactivate / Revoke
                               </button>
                             ) : (
                               <button
