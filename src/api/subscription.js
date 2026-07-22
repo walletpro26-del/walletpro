@@ -16,9 +16,6 @@ import {
 // List of Admin Emails that have free lifetime access
 export const ADMIN_EMAILS = [
   'walletpro26@gmail.com',
-  'sheikhgulfam91@gmail.com',
-  'sheikhgulfam85@gmail.com',
-  'e.educational.24@gmail.com',
 ]
 
 // Default Merchant UPI credentials (linked to HDFC Bank & Axis Bank)

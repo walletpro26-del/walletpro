@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import WalletVibeLogo from './WalletVibeLogo'
 import { isAdminEmail } from '../api/subscription'
 
@@ -99,11 +100,16 @@ export default function Header({
   }
 
   const [showMenu, setShowMenu] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const menuRef = useRef(null)
+  const portalMenuRef = useRef(null)
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        portalMenuRef.current && !portalMenuRef.current.contains(e.target)
+      ) {
         setShowMenu(false)
       }
     }
@@ -124,20 +130,25 @@ export default function Header({
         </div>
 
         {/* ── Compact Header Actions Bar (Subscription Badge + Quick Menu Dropdown) ── */}
-        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative', zIndex: 50 }}>
           {/* Subscription Status Pill */}
           <button
-            className="header-btn"
+            type="button"
             onClick={onManageSubscription}
             title={subscription?.isAdmin ? 'Admin Account (Free Lifetime)' : (subscription?.active ? 'Pro Active' : 'Subscribe Now')}
             style={{
-              padding: '4px 10px',
-              borderRadius: 20,
+              height: 32,
+              padding: '0 12px',
+              borderRadius: 99,
               fontSize: 11,
               fontWeight: 800,
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
+              justifyContent: 'center',
+              gap: 5,
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              boxSizing: 'border-box',
               background: subscription?.isAdmin
                 ? 'rgba(16, 185, 129, 0.25)'
                 : (subscription?.active ? 'rgba(99, 102, 241, 0.25)' : 'rgba(239, 68, 68, 0.25)'),
@@ -147,10 +158,11 @@ export default function Header({
               border: `1px solid ${subscription?.isAdmin
                 ? 'rgba(16, 185, 129, 0.4)'
                 : (subscription?.active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(239, 68, 68, 0.5)')}`,
+              transition: 'all 0.15s ease',
             }}
           >
-            <span>{subscription?.isAdmin ? '👑' : (subscription?.active ? '⭐' : '⚡')}</span>
-            <span style={{ fontSize: 10, textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{subscription?.isAdmin ? '👑' : (subscription?.active ? '⭐' : '⚡')}</span>
+            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {subscription?.isAdmin ? 'Admin' : (subscription?.active ? 'Pro' : 'Upgrade')}
             </span>
           </button>
@@ -159,7 +171,13 @@ export default function Header({
           <div ref={menuRef} style={{ position: 'relative' }}>
             <button
               className="header-btn"
-              onClick={() => setShowMenu((prev) => !prev)}
+              onClick={(e) => {
+                if (!showMenu) {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+                }
+                setShowMenu((prev) => !prev)
+              }}
               title="Menu & Tools"
               style={{
                 width: 34,
@@ -179,116 +197,138 @@ export default function Header({
               <i className={showMenu ? 'fas fa-times' : 'fas fa-ellipsis-v'} />
             </button>
 
-            {/* Dropdown Menu Popup */}
-            {showMenu && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '120%',
-                  right: 0,
-                  width: 210,
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: 12,
-                  padding: '6px',
-                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5)',
-                  zIndex: 999,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 2,
-                  animation: 'fadeIn 0.15s ease-out',
-                }}
-              >
-                {/* User email info */}
-                {auth?.email && (
-                  <div style={{ padding: '8px 10px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: 2 }}>
-                    <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Signed in as</div>
-                    <div style={{ color: '#f8fafc', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                      {auth.email}
+            {/* Fixed-position Dropdown Menu (rendered into document.body via Portal to escape all stacking contexts) */}
+            {showMenu && createPortal(
+              <>
+                {/* Invisible overlay to close menu on outside click */}
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 999998 }}
+                  onClick={() => setShowMenu(false)}
+                />
+                <div
+                  ref={portalMenuRef}
+                  style={{
+                    position: 'fixed',
+                    top: menuPos.top,
+                    right: menuPos.right,
+                    width: 220,
+                    background: '#0f172a',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 12,
+                    padding: '6px',
+                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.8)',
+                    zIndex: 999999,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}
+                >
+                  {/* User email info */}
+                  {auth?.email && (
+                    <div style={{ padding: '8px 10px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: 2 }}>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Signed in as</div>
+                      <div style={{ color: '#f8fafc', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                        {auth.email}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Admin Control Panel item */}
-                {isAdminEmail(auth?.email) && (
+                  {/* Admin Control Panel item */}
+                  {isAdminEmail(auth?.email) && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowMenu(false); onAdminPanel?.() }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                        background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)',
+                        color: '#c4b5fd', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <i className="fas fa-crown" style={{ color: '#fbbf24', fontSize: 12 }} />
+                      Admin Control Panel
+                    </button>
+                  )}
+
+                  {/* Subscription & Plan item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onAdminPanel?.() }}
+                    onClick={() => { setShowMenu(false); onManageSubscription?.() }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)',
-                      color: '#c4b5fd', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 14 }} />
+                    Subscription & Plan
+                  </button>
+
+                  {/* Bank Search item */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onBankSearch?.() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <i className="fas fa-university" style={{ color: '#60a5fa', width: 14 }} />
+                    Bank IFSC Search
+                  </button>
+
+                  {/* App Settings item */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onSettings?.() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <i className="fas fa-cog" style={{ color: '#fbbf24', width: 14 }} />
+                    App Settings
+                  </button>
+
+                  {/* Refresh Data item */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onRefresh?.() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <i className="fas fa-sync-alt" style={{ color: '#34d399', width: 14 }} />
+                    Refresh Data
+                  </button>
+
+                  {/* Logout item */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onLogout?.() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5',
+                      borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginTop: 4,
                     }}
                   >
-                    <i className="fas fa-crown" style={{ color: '#fbbf24', fontSize: 12 }} />
-                    Admin Control Panel
+                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 14 }} />
+                    Log Out
                   </button>
-                )}
-
-                {/* Bank Search item */}
-                <button
-                  type="button"
-                  onClick={() => { setShowMenu(false); onBankSearch?.() }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                    background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <i className="fas fa-university" style={{ color: '#60a5fa', width: 14 }} />
-                  Bank IFSC Search
-                </button>
-
-                {/* App Settings item */}
-                <button
-                  type="button"
-                  onClick={() => { setShowMenu(false); onSettings?.() }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                    background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <i className="fas fa-cog" style={{ color: '#fbbf24', width: 14 }} />
-                  App Settings
-                </button>
-
-                {/* Refresh Data item */}
-                <button
-                  type="button"
-                  onClick={() => { setShowMenu(false); onRefresh?.() }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                    background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                    fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <i className="fas fa-sync-alt" style={{ color: '#34d399', width: 14 }} />
-                  Refresh Data
-                </button>
-
-                {/* Logout item */}
-                <button
-                  type="button"
-                  onClick={() => { setShowMenu(false); onLogout?.() }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5',
-                    borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginTop: 4,
-                  }}
-                >
-                  <i className="fas fa-power-off" style={{ color: '#ef4444', width: 14 }} />
-                  Log Out
-                </button>
-              </div>
+                </div>
+              </>,
+              document.body
             )}
           </div>
         </div>

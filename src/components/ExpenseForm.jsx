@@ -154,16 +154,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Date + Amount + Attach */}
-        <div className="compact-row">
-          <div className="compact-input-block" style={{ flex: 2 }}>
-            <label>Date</label>
-            <input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} required />
+        {/* Date + Amount + Attach (Fits on 1 row on mobile) */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'nowrap', width: '100%', marginBottom: 10 }}>
+          <div className="compact-input-block" style={{ flex: '1 1 38%', minWidth: 0 }}>
+            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Date</label>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => set('date', e.target.value)}
+              required
+              style={{ padding: '6px 4px', fontSize: 11, width: '100%', boxSizing: 'border-box' }}
+            />
           </div>
-          <div className="compact-input-block" style={{ flex: 3 }}>
-            <label>Amount</label>
-            <div className="amount-row">
-              <span className="currency-sym">₹</span>
+          <div className="compact-input-block" style={{ flex: '1 1 42%', minWidth: 0 }}>
+            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Amount</label>
+            <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
+              <span className="currency-sym" style={{ fontSize: 11, marginRight: 2 }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -172,12 +178,13 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
+                style={{ padding: '6px 4px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
               />
             </div>
           </div>
-          <label className="attach-btn" title="Attach Image or PDF (Max 130 KB)">
-            <div className="attach-icon"><i className="fas fa-paperclip"></i></div>
-            <span className="attach-label">{fileLabel}</span>
+          <label className="attach-btn" title="Attach Image or PDF (Max 130 KB)" style={{ flex: '0 0 auto', minWidth: 46, height: 42, padding: '4px 6px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: 0 }}>
+            <div className="attach-icon" style={{ fontSize: 12 }}><i className="fas fa-paperclip"></i></div>
+            <span className="attach-label" style={{ fontSize: 8, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 40 }}>{fileLabel}</span>
             <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFile} />
             {form.fileData && (
               <button type="button" className="attach-remove" onClick={(e) => { e.preventDefault(); clearFile() }}>

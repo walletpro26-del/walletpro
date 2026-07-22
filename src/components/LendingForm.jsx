@@ -258,15 +258,21 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         )}
 
         {/* Date + Amount */}
-        <div className="compact-row">
-          <div className="compact-input-block" style={{ flex: 2 }}>
-            <label>Date</label>
-            <input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} required />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'nowrap', width: '100%', marginBottom: 10 }}>
+          <div className="compact-input-block" style={{ flex: '1 1 45%', minWidth: 0 }}>
+            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Date</label>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => set('date', e.target.value)}
+              required
+              style={{ padding: '6px 4px', fontSize: 11, width: '100%', boxSizing: 'border-box' }}
+            />
           </div>
-          <div className="compact-input-block" style={{ flex: 3 }}>
-            <label>Amount</label>
-            <div className="amount-row">
-              <span className="currency-sym">₹</span>
+          <div className="compact-input-block" style={{ flex: '1 1 55%', minWidth: 0 }}>
+            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Amount</label>
+            <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
+              <span className="currency-sym" style={{ fontSize: 11, marginRight: 2 }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -275,6 +281,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
+                style={{ padding: '6px 4px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
               />
             </div>
           </div>
