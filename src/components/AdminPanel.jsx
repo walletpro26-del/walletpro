@@ -166,7 +166,7 @@ export default function AdminPanel({ auth, onClose }) {
       setMaintenanceMode(cfg.maintenanceMode || false)
       setRazorpayEnabled(cfg.razorpayEnabled !== false)
     } catch (err) {
-      setError('Failed to load config: ' + err?.message)
+      console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
     setLoading(false)
   }
