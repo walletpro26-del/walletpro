@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { compressImage, getAttachment } from '../api/attachments'
+import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import MultiSelectCombobox from './MultiSelectCombobox'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
@@ -74,12 +74,14 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
     setAttachmentSuccess('')
     try {
       const dataUrl = await compressImage(f)
+      const sizeKB = (getBase64ByteSize(dataUrl) / 1024).toFixed(1)
       setForm((s) => ({ ...s, fileData: dataUrl, fileName: f.name, mimeType: f.type || 'application/octet-stream' }))
       setFileLabel(f.name.length > 6 ? f.name.slice(0, 6) + '…' : f.name)
-      setAttachmentSuccess(`✔ Attached: ${f.name}`)
-    } catch {
+      setAttachmentSuccess(`✔ Attached: ${f.name} (${sizeKB} KB)`)
+    } catch (err) {
       setFileLabel('Error')
-      setAttachmentError('⚠ Failed to process image attachment.')
+      setAttachmentError(`⚠ ${err?.message || 'Failed to process attachment.'}`)
+      e.target.value = ''
     }
   }
 
@@ -173,7 +175,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               />
             </div>
           </div>
-          <label className="attach-btn">
+          <label className="attach-btn" title="Attach Image or PDF (Max 130 KB)">
             <div className="attach-icon"><i className="fas fa-paperclip"></i></div>
             <span className="attach-label">{fileLabel}</span>
             <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFile} />

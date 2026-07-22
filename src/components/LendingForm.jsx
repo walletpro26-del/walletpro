@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { compressImage, getAttachment } from '../api/attachments'
+import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import { getPersonContactMap } from '../utils/commUtils'
 import MultiSelectCombobox from './MultiSelectCombobox'
 
@@ -93,12 +93,14 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
     setAttachmentSuccess('')
     try {
       const dataUrl = await compressImage(f)
-      setForm((s) => ({ ...s, fileData: dataUrl, fileName: f.name, mimeType: f.type }))
+      const sizeKB = (getBase64ByteSize(dataUrl) / 1024).toFixed(1)
+      setForm((s) => ({ ...s, fileData: dataUrl, fileName: f.name, mimeType: f.type || 'application/octet-stream' }))
       setFileLabel(f.name.length > 5 ? f.name.slice(0, 5) + '…' : f.name)
-      setAttachmentSuccess(`✔ Attached: ${f.name}`)
-    } catch {
+      setAttachmentSuccess(`✔ Attached: ${f.name} (${sizeKB} KB)`)
+    } catch (err) {
       setFileLabel('Error')
-      setAttachmentError('⚠ Failed to process image attachment.')
+      setAttachmentError(`⚠ ${err?.message || 'Failed to process attachment.'}`)
+      e.target.value = ''
     }
   }
 
@@ -176,7 +178,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             <span className="dir-label">{outLabel}</span>
           </button>
 
-          <label className="attach-btn" style={{ minWidth: 44 }}>
+          <label className="attach-btn" style={{ minWidth: 44 }} title="Attach Image or PDF (Max 130 KB)">
             <div className="attach-icon"><i className="fas fa-paperclip"></i></div>
             <span className="attach-label">{fileLabel}</span>
             <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFile} />
