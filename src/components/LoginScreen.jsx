@@ -1,40 +1,16 @@
 import { useState } from 'react'
-import { signIn, signInWithGoogle } from '../api/auth'
+import { signInWithGoogle } from '../api/auth'
 import WalletVibeLogo from './WalletVibeLogo'
 
-export default function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      const res = await signIn(email, password)
-      if (res.success) onLogin(res)
-    } catch (err) {
-      const code = err?.code || ''
-      if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
-        setError('Invalid email or password')
-      } else if (code.includes('too-many-requests')) {
-        setError('Too many attempts. Please try again later.')
-      } else {
-        setError(err?.message || 'Login failed')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function handleGoogleLogin() {
     setError('')
     setLoading(true)
     try {
-      const res = await signInWithGoogle()
-      if (res.success) onLogin(res)
+      await signInWithGoogle()
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         setError(err?.message || 'Google Login failed')
@@ -45,77 +21,89 @@ export default function LoginScreen({ onLogin }) {
   }
 
   return (
-    <div className="login-overlay">
+    <div className="login-screen">
+      {/* Animated background orbs */}
+      <div className="login-orb login-orb-1" />
+      <div className="login-orb login-orb-2" />
+      <div className="login-orb login-orb-3" />
+
+      {/* Glassmorphic card */}
       <div className="login-card">
-        {/* Logo */}
-        <div className="login-logo-wrap">
+        {/* Logo with glow */}
+        <div className="login-logo-area">
           <div className="login-logo-glow" />
-          <WalletVibeLogo size={64} variant="icon" animate={true} className="login-logo-svg" />
+          <WalletVibeLogo size={72} variant="icon" animate={true} className="login-logo-svg" />
         </div>
 
-        <div className="login-title">
-          <h2>
-            <span className="login-brand-wallet">Wallet</span>
-            <span className="login-brand-vibe">Vibe</span>
-          </h2>
-          <p>Secure Personal Finance</p>
+        {/* Brand name */}
+        <h1 className="login-brand">
+          <span className="login-brand-wallet">Wallet</span>
+          <span className="login-brand-vibe">Vibe</span>
+        </h1>
+        <p className="login-tagline">Personal Finance, Simplified</p>
+
+        {/* Feature pills */}
+        <div className="login-features">
+          <div className="login-feature-pill">
+            <i className="fas fa-receipt" />
+            <span>Expenses</span>
+          </div>
+          <div className="login-feature-pill">
+            <i className="fas fa-handshake" />
+            <span>Lending</span>
+          </div>
+          <div className="login-feature-pill">
+            <i className="fas fa-chart-bar" />
+            <span>Reports</span>
+          </div>
+          <div className="login-feature-pill">
+            <i className="fas fa-university" />
+            <span>Bank</span>
+          </div>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="error-banner" style={{ margin: '0 0 16px', fontSize: 12 }}>
+          <div className="login-error">
+            <i className="fas fa-exclamation-circle" />
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-          <div className="float-group">
-            <input
-              type="email"
-              id="login-email"
-              className="float-input"
-              placeholder=" "
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-            <label htmlFor="login-email" className="float-label">Email Address</label>
-          </div>
+        {/* Google Sign In — the only login method */}
+        <button
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="login-google-btn"
+        >
+          {loading ? (
+            <>
+              <i className="fas fa-spinner fa-spin" />
+              Signing in...
+            </>
+          ) : (
+            <>
+              <img
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                alt="Google"
+                width="20"
+                height="20"
+              />
+              Continue with Google
+            </>
+          )}
+        </button>
 
-          <div className="float-group">
-            <input
-              type="password"
-              id="login-pw"
-              className="float-input"
-              placeholder=" "
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-            <label htmlFor="login-pw" className="float-label">Password</label>
-          </div>
+        {/* Security note */}
+        <p className="login-secure-note">
+          <i className="fas fa-shield-alt" />
+          End-to-end encrypted &middot; Secured by Firebase
+        </p>
+      </div>
 
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? (
-              <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Signing in...</>
-            ) : (
-              <><i className="fas fa-unlock-alt" style={{ marginRight: 6 }} />Access Wallet</>
-            )}
-          </button>
-
-          <div className="login-divider"><span>OR</span></div>
-
-          <button
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="google-signin-btn"
-          >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Logo" style={{ width: 18, height: 18 }} />
-            Sign in with Google
-          </button>
-        </form>
+      {/* Footer */}
+      <div className="login-footer">
+        © NextLifTechnologies
       </div>
     </div>
   )

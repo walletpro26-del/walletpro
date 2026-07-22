@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getAttachment } from '../api/attachments'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
+import ShareFormatModal from './ShareFormatModal'
 
 export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare }) {
   const [attachmentData, setAttachmentData] = useState(null)
@@ -8,6 +9,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
   const [attachmentError, setAttachmentError] = useState('')
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const [fullscreen, setFullscreen] = useState(false)
+  const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '' })
 
   if (!item) return null
 
@@ -213,8 +215,8 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
               type="button"
               className="btn-outline"
               style={{ background: '#25D366', color: '#fff', borderColor: '#25D366', flex: 'none', padding: '10px 12px' }}
-              onClick={() => openWhatsApp(item.mobileNo || item.phone, item)}
-              title="Send entry details via WhatsApp"
+              onClick={() => setShareModal({ open: true, channel: 'whatsapp', contact: item.mobileNo || item.phone || '' })}
+              title="Send entry details via WhatsApp (Text / PDF)"
             >
               <i className="fab fa-whatsapp" style={{ fontSize: 16 }}></i>
             </button>
@@ -224,8 +226,8 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                 type="button"
                 className="btn-outline"
                 style={{ background: '#3b82f6', color: '#fff', borderColor: '#3b82f6', flex: 'none', padding: '10px 12px' }}
-                onClick={() => openEmail(item.email, item)}
-                title="Send entry details via Email"
+                onClick={() => setShareModal({ open: true, channel: 'email', contact: item.email || '' })}
+                title="Send entry details via Email (Text / PDF)"
               >
                 <i className="fas fa-envelope" style={{ fontSize: 14 }}></i>
               </button>
@@ -233,6 +235,15 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
           </div>
         </div>
       </div>
+
+      {/* Share Format Selection Modal */}
+      <ShareFormatModal
+        isOpen={shareModal.open}
+        onClose={() => setShareModal({ ...shareModal, open: false })}
+        channel={shareModal.channel}
+        targetContact={shareModal.contact}
+        item={item}
+      />
 
       {/* Fullscreen Attachment */}
       {fullscreen && attachmentData && (

@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import WalletVibeLogo from './WalletVibeLogo'
 
 export default function Header({
-  auth, stats, activeTab, searchIndex,
+  auth, stats, activeTab, searchIndex, subscription,
   onLogout, onRefresh, onSettings, onBankSearch,
-  onSearchSelect,
+  onSearchSelect, onManageSubscription,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -110,6 +110,24 @@ export default function Header({
 
         </div>
         <div className="header-actions">
+          <button
+            className="header-btn"
+            onClick={onManageSubscription}
+            title={subscription?.isAdmin ? 'Admin Account (Free Lifetime)' : (subscription?.active ? 'Pro Active' : 'Subscribe Now')}
+            style={{
+              background: subscription?.isAdmin
+                ? 'rgba(16, 185, 129, 0.2)'
+                : (subscription?.active ? 'rgba(99, 102, 241, 0.2)' : 'rgba(239, 68, 68, 0.25)'),
+              color: subscription?.isAdmin
+                ? '#6ee7b7'
+                : (subscription?.active ? '#a5b4fc' : '#fca5a5'),
+              borderColor: subscription?.isAdmin
+                ? 'rgba(16, 185, 129, 0.4)'
+                : (subscription?.active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(239, 68, 68, 0.5)'),
+            }}
+          >
+            {subscription?.isAdmin ? '👑' : (subscription?.active ? '⭐' : '⚡')}
+          </button>
           <button className="header-btn" onClick={onBankSearch} title="Bank Search">
             <i className="fas fa-university"></i>
           </button>
@@ -157,15 +175,15 @@ export default function Header({
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">{s1.label}</div>
-          <div className="stat-value">{s1.value}</div>
+          <div className="stat-value" style={{ fontSize: s1.value.length > 13 ? '10px' : s1.value.length > 10 ? '11px' : '12px' }}>{s1.value}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">{s2.label}</div>
-          <div className="stat-value">{s2.value}</div>
+          <div className="stat-value" style={{ fontSize: s2.value.length > 13 ? '10px' : s2.value.length > 10 ? '11px' : '12px' }}>{s2.value}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">{s3.label}</div>
-          <div className="stat-value">{s3.value}</div>
+          <div className="stat-value" style={{ fontSize: s3.value.length > 13 ? '10px' : s3.value.length > 10 ? '11px' : '12px' }}>{s3.value}</div>
         </div>
       </div>
     </header>

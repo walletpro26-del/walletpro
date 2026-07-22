@@ -9,6 +9,9 @@ import {
   getAllLending, computeLendingStatsLocally,
 } from './api/lending'
 
+import { getSubscriptionStatus } from './api/subscription'
+import SubscriptionModal from './components/SubscriptionModal'
+
 import LoginScreen from './components/LoginScreen'
 import InstallBanner from './components/InstallBanner'
 import UpdateBanner from './components/UpdateBanner'
@@ -70,6 +73,10 @@ export default function App() {
   const [editExpense, setEditExpense] = useState(null)
   const [editLending, setEditLending] = useState(null)
 
+  // Subscription state
+  const [subscriptionState, setSubscriptionState] = useState({ active: true, isAdmin: false, status: 'checking', plan: 'none' })
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+
   // Auth listener
   useEffect(() => {
     const unsub = onAuthChange((state) => {
@@ -85,10 +92,26 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
-  // Load data when logged in
+  // Load data & subscription when logged in
   useEffect(() => {
-    if (authState.loggedIn) loadDashboard()
-  }, [authState.loggedIn])
+    if (authState.loggedIn) {
+      checkSubscription(authState)
+      loadDashboard()
+    }
+  }, [authState.loggedIn, authState.uid])
+
+  const checkSubscription = useCallback(async (user) => {
+    try {
+      const sub = await getSubscriptionStatus(user)
+      setSubscriptionState(sub)
+      // If non-admin and inactive/expired, show subscription modal automatically
+      if (!sub.active && !sub.isAdmin) {
+        setShowSubscriptionModal(true)
+      }
+    } catch (err) {
+      console.warn('[App] Check subscription failed:', err?.message)
+    }
+  }, [])
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
@@ -255,11 +278,13 @@ export default function App() {
         stats={stats}
         activeTab={activeTab}
         searchIndex={searchIndex}
+        subscription={subscriptionState}
         onLogout={handleLogout}
         onRefresh={loadDashboard}
         onSettings={() => setShowSettings(true)}
         onBankSearch={() => setShowBankSearch(true)}
         onSearchSelect={(item) => setSelectedTxn(item)}
+        onManageSubscription={() => setShowSubscriptionModal(true)}
       />
 
       {/* Tab Bar */}
@@ -365,12 +390,27 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           auth={authState}
+          subscription={subscriptionState}
           onClose={() => setShowSettings(false)}
           onSave={() => {}}
           onMigrate={(url) => {
             setMigrationUrl(url)
             setShowSettings(false)
             setShowMigration(true)
+          }}
+          onManageSubscription={() => setShowSubscriptionModal(true)}
+        />
+      )}
+      {showSubscriptionModal && (
+        <SubscriptionModal
+          user={authState}
+          subscription={subscriptionState}
+          isBlocking={!subscriptionState.active && !subscriptionState.isAdmin}
+          onClose={() => setShowSubscriptionModal(false)}
+          onSubscriptionSuccess={() => {
+            checkSubscription(authState)
+            setToast('🎉 Subscription activated successfully!')
+            setTimeout(() => setToast(''), 4000)
           }}
         />
       )}

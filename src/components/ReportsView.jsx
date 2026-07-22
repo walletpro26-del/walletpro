@@ -3,6 +3,7 @@ import { getAllExpenses } from '../api/expenses'
 import { getAllLending, normalizeLendingType } from '../api/lending'
 import { loadSnapshot } from '../api/localCache'
 import { openWhatsApp, openEmail, getPersonContactMap, openWhatsAppPerson, openEmailPerson } from '../utils/commUtils'
+import ShareFormatModal from './ShareFormatModal'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -95,6 +96,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
   const [downloading, setDownloading] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [personSearch, setPersonSearch] = useState('')
+  const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '', person: '', personData: null })
 
   // Build contact map from ALL lending transactions (most recent phone/email per person)
   const personContactMap = useMemo(() => getPersonContactMap(allLending), [allLending])
@@ -994,7 +996,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           <div className="report-summary">
             <div className="report-stat">
               <div className="label">Total</div>
-              <div className="value">₹{expenseReport.total.toLocaleString('en-IN')}</div>
+              <div className="value" style={{ fontSize: String(expenseReport.total).length > 9 ? '11px' : String(expenseReport.total).length > 6 ? '12px' : '15px' }}>₹{expenseReport.total.toLocaleString('en-IN')}</div>
             </div>
             <div className="report-stat">
               <div className="label">Transactions</div>
@@ -1077,11 +1079,11 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           <div className="report-summary">
             <div className="report-stat">
               <div className="label">Receivable</div>
-              <div className="value" style={{ color: 'var(--emerald-600)' }}>₹{lendingReport.receivable.toLocaleString('en-IN')}</div>
+              <div className="value" style={{ color: 'var(--emerald-600)', fontSize: String(lendingReport.receivable).length > 9 ? '11px' : String(lendingReport.receivable).length > 6 ? '12px' : '15px' }}>₹{lendingReport.receivable.toLocaleString('en-IN')}</div>
             </div>
             <div className="report-stat">
               <div className="label">Payable</div>
-              <div className="value" style={{ color: 'var(--red-500)' }}>₹{lendingReport.payable.toLocaleString('en-IN')}</div>
+              <div className="value" style={{ color: 'var(--red-500)', fontSize: String(lendingReport.payable).length > 9 ? '11px' : String(lendingReport.payable).length > 6 ? '12px' : '15px' }}>₹{lendingReport.payable.toLocaleString('en-IN')}</div>
             </div>
           </div>
 
@@ -1133,7 +1135,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
                     {hasPhone && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openWhatsAppPerson(contactInfo.mobileNo, person, data, normalizeLendingType) }}
+                        onClick={(e) => { e.stopPropagation(); setShareModal({ open: true, channel: 'whatsapp', contact: contactInfo.mobileNo, person, personData: data }) }}
                         title={`WhatsApp ${person} (${contactInfo.mobileNo})`}
                         style={{ border: 'none', background: 'rgba(37,211,102,0.12)', color: '#25D366', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, flexShrink: 0 }}
                       >
@@ -1143,7 +1145,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
                     {hasEmail && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openEmailPerson(contactInfo.email, person, data, normalizeLendingType) }}
+                        onClick={(e) => { e.stopPropagation(); setShareModal({ open: true, channel: 'email', contact: contactInfo.email, person, personData: data }) }}
                         title={`Email ${person} (${contactInfo.email})`}
                         style={{ border: 'none', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}
                       >
@@ -1199,11 +1201,11 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           <div className="report-summary">
             <div className="report-stat">
               <div className="label">Total Debits</div>
-              <div className="value negative" style={{ color: 'var(--red-500)' }}>₹{bankStats.debit.toLocaleString('en-IN')}</div>
+              <div className="value negative" style={{ color: 'var(--red-500)', fontSize: String(bankStats.debit).length > 9 ? '11px' : String(bankStats.debit).length > 6 ? '12px' : '15px' }}>₹{bankStats.debit.toLocaleString('en-IN')}</div>
             </div>
             <div className="report-stat">
               <div className="label">Total Credits</div>
-              <div className="value positive" style={{ color: 'var(--emerald-600)' }}>₹{bankStats.credit.toLocaleString('en-IN')}</div>
+              <div className="value positive" style={{ color: 'var(--emerald-600)', fontSize: String(bankStats.credit).length > 9 ? '11px' : String(bankStats.credit).length > 6 ? '12px' : '15px' }}>₹{bankStats.credit.toLocaleString('en-IN')}</div>
             </div>
             <div className="report-stat">
               <div className="label">Transactions</div>
@@ -1224,43 +1226,35 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
                   Bank Records ({filteredBankTxns.length})
                 </span>
               </div>
-              <div style={{ overflowX: 'hidden', width: '100%' }}>
-                <table className="ledger-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
-                  <colgroup>
-                    <col style={{ width: '16%' }} />
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '32%' }} />
-                    <col style={{ width: '14%' }} />
-                    <col style={{ width: '14%' }} />
-                    <col style={{ width: '12%' }} />
-                  </colgroup>
+              <div className="custom-scrollbar" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+                <table className="ledger-table" style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse', fontSize: 11 }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '6px 4px' }}>Date</th>
-                      <th style={{ padding: '6px 4px' }}>Bank</th>
-                      <th style={{ padding: '6px 4px' }}>Description</th>
-                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Debit</th>
-                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Credit</th>
-                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Balance</th>
+                      <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>Date</th>
+                      <th style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>Bank</th>
+                      <th style={{ padding: '8px 6px' }}>Description</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>Debit</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>Credit</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredBankTxns.map((b, idx) => (
                       <tr key={b.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '6px 4px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 10 }}>
+                        <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 11 }}>
                           {b.dateObj ? b.dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}
                         </td>
-                        <td style={{ padding: '6px 4px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 10 }}>{b.bank}</td>
-                        <td style={{ padding: '6px 4px', color: 'var(--text-secondary)', wordBreak: 'break-word', overflowWrap: 'break-word', lineHeight: 1.3, fontSize: 10 }} title={b.description}>
+                        <td style={{ padding: '8px 6px', fontWeight: 700, color: 'var(--text-primary)', fontSize: 11, whiteSpace: 'nowrap' }}>{b.bank}</td>
+                        <td style={{ padding: '8px 6px', color: 'var(--text-secondary)', fontSize: 11, minWidth: 160, wordBreak: 'break-word' }} title={b.description}>
                           {b.description}
                         </td>
-                        <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--red-500)', fontWeight: b.debit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 10 }}>
+                        <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--red-500)', fontWeight: b.debit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 11 }}>
                           {b.debit ? `-₹${parseFloat(b.debit).toLocaleString('en-IN')}` : '-'}
                         </td>
-                        <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--emerald-600)', fontWeight: b.credit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 10 }}>
+                        <td style={{ padding: '8px 6px', textAlign: 'right', color: 'var(--emerald-600)', fontWeight: b.credit ? 700 : 400, whiteSpace: 'nowrap', fontSize: 11 }}>
                           {b.credit ? `+₹${parseFloat(b.credit).toLocaleString('en-IN')}` : '-'}
                         </td>
-                        <td style={{ padding: '6px 4px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', fontSize: 10 }}>
+                        <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', fontSize: 11 }}>
                           {b.balance ? `₹${parseFloat(b.balance).toLocaleString('en-IN')}` : '-'}
                         </td>
                       </tr>
@@ -1461,6 +1455,17 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
           </>
         )}
       </div>
+
+      {/* Share Format Selection Modal */}
+      <ShareFormatModal
+        isOpen={shareModal.open}
+        onClose={() => setShareModal({ ...shareModal, open: false })}
+        channel={shareModal.channel}
+        targetContact={shareModal.contact}
+        person={shareModal.person}
+        personData={shareModal.personData}
+        normalizeFn={normalizeLendingType}
+      />
     </div>
   )
 }

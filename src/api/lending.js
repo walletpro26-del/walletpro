@@ -86,28 +86,27 @@ export async function addLending(data) {
         collection: COL,
         data: { ...data, _offline: true },
       })
-      // Optimistically update snapshot
-      const snapshot = loadSnapshot('lending') || []
+      const currentUid = auth.currentUser?.uid || ''
+      const snapshot = loadSnapshot('lending', currentUid) || []
       const norm = normalizeLendingType(data.type || 'Lend')
       let label = data.type || 'Loan Given'
       if (norm === 'LEND') label = 'Loan Given'
       else if (norm === 'BORROW') label = 'Borrowed'
       else if (norm === 'THEY_RETURN') label = 'Received Return'
       else if (norm === 'I_RETURN') label = 'I Returned'
-      else if (norm === 'FORGIVE') label = 'Forgiven'
       const optimistic = {
         id: tempId,
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
         dateObj: data.date ? new Date(data.date) : new Date(),
-        type: data.type || 'Lend',
-        label,
         person: data.person || '',
-        amount: Math.abs(parseFloat(data.amount)) || 0,
+        type: data.type || 'LEND',
+        label,
+        amount: parseFloat(data.amount) || 0,
         remarks: data.remarks || '',
-        mobileNo: data.mobileNo || data.phone || '',
+        mobileNo: data.mobileNo || '',
         email: data.email || '',
-        fileName: '',
-        mimeType: '',
+        fileName: data.fileName || '',
+        mimeType: data.mimeType || '',
         hasAttachment: false,
         hasChunkedAttachment: false,
         isLend: true,
@@ -115,7 +114,7 @@ export async function addLending(data) {
         _pending: true,
       }
       snapshot.unshift(optimistic)
-      saveSnapshot('lending', snapshot)
+      saveSnapshot('lending', snapshot, currentUid)
       return { success: true, id: tempId, offline: true }
     }
     throw err
@@ -172,11 +171,11 @@ export async function getAllLending() {
     let items = snapScoped.docs.map(fromFirestore)
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
-    saveSnapshot('lending', sorted)
+    saveSnapshot('lending', sorted, currentUid)
     return sorted
   } catch (err) {
     console.warn('Lending fetch failed, using local cache:', err?.message)
-    const cached = loadSnapshot('lending')
+    const cached = loadSnapshot('lending', currentUid)
     if (cached) return cached.sort((a, b) => new Date(b.date) - new Date(a.date))
     return []
   }

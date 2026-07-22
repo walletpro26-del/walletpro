@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function SettingsModal({ auth, onClose, onSave, onMigrate }) {
+export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
   const [currency, setCurrency] = useState(localStorage.getItem('wv_currency') || localStorage.getItem('wp_currency') || '₹')
   const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
@@ -133,6 +133,53 @@ export default function SettingsModal({ auth, onClose, onSave, onMigrate }) {
             }}>
               <i className="fas fa-shield-alt" style={{ marginRight: 4 }} /> Cloud Sync
             </span>
+          </div>
+
+          {/* Subscription Status Card */}
+          <div style={{
+            background: subscription?.isAdmin
+              ? 'rgba(16, 185, 129, 0.08)'
+              : (subscription?.active ? 'rgba(99, 102, 241, 0.08)' : 'rgba(239, 68, 68, 0.08)'),
+            borderRadius: 'var(--radius-lg)',
+            border: `1px solid ${
+              subscription?.isAdmin
+                ? 'rgba(16, 185, 129, 0.25)'
+                : (subscription?.active ? 'rgba(99, 102, 241, 0.25)' : 'rgba(239, 68, 68, 0.25)')
+            }`,
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12
+          }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Subscription Plan
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
+                {subscription?.isAdmin
+                  ? '👑 Free Lifetime Admin'
+                  : (subscription?.active ? `⭐ Active ${subscription?.plan === 'yearly' ? 'Yearly' : 'Monthly'}` : '⚠️ Inactive / Expired')}
+              </div>
+              {subscription?.expiresAt && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Valid until {new Date(subscription.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+              )}
+            </div>
+
+            {!subscription?.isAdmin && (
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  onClose?.()
+                  onManageSubscription?.()
+                }}
+                style={{ padding: '6px 12px', fontSize: 11 }}
+              >
+                {subscription?.active ? 'Manage Plan' : 'Subscribe'}
+              </button>
+            )}
           </div>
 
           {/* Theme Selector */}

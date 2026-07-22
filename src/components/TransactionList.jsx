@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { normalizeLendingType } from '../api/lending'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
+import ShareFormatModal from './ShareFormatModal'
 
 export default function TransactionList({ items = [], title, onSelect }) {
+  const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '', item: null })
+
   if (!items.length) {
     return (
       <div style={{ margin: '16px 0', textAlign: 'center', padding: '32px 16px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
@@ -79,8 +83,8 @@ export default function TransactionList({ items = [], title, onSelect }) {
                 {isLending && (item.mobileNo || item.phone) && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); openWhatsApp(item.mobileNo || item.phone, item) }}
-                    title="Send details via WhatsApp"
+                    onClick={(e) => { e.stopPropagation(); setShareModal({ open: true, channel: 'whatsapp', contact: item.mobileNo || item.phone, item }) }}
+                    title="Send details via WhatsApp (Text / PDF)"
                     style={{
                       border: 'none',
                       background: 'rgba(37, 211, 102, 0.1)',
@@ -102,8 +106,8 @@ export default function TransactionList({ items = [], title, onSelect }) {
                 {isLending && item.email && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); openEmail(item.email, item) }}
-                    title="Send details via Email"
+                    onClick={(e) => { e.stopPropagation(); setShareModal({ open: true, channel: 'email', contact: item.email, item }) }}
+                    title="Send details via Email (Text / PDF)"
                     style={{
                       border: 'none',
                       background: 'rgba(59, 130, 246, 0.1)',
@@ -168,6 +172,15 @@ export default function TransactionList({ items = [], title, onSelect }) {
           )
         })}
       </ul>
+
+      {/* Share Format Selection Modal */}
+      <ShareFormatModal
+        isOpen={shareModal.open}
+        onClose={() => setShareModal({ ...shareModal, open: false })}
+        channel={shareModal.channel}
+        targetContact={shareModal.contact}
+        item={shareModal.item}
+      />
     </div>
   )
 }

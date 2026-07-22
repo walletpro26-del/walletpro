@@ -1,16 +1,18 @@
 /**
- * localCache.js — WalletVibe offline-first local cache
+ * localCache.js — WalletVibe offline-first user-isolated local cache
  *
  * Provides:
- *  - Snapshot storage: last-known expenses & lending data
+ *  - Snapshot storage: last-known expenses & lending data (isolated by user UID)
  *  - Pending queue: offline writes that need to sync
  *  - All stored in localStorage (browser-local, not sent anywhere)
  */
 
-const KEYS = {
-  expenses: 'wv_cache_expenses',
-  lending: 'wv_cache_lending',
-  bank: 'wv_cache_bank',
+function getKey(type, uid = '') {
+  const userPrefix = uid ? `_${uid}` : ''
+  return `wv_cache${userPrefix}_${type}`
+}
+
+const PENDING_KEYS = {
   pending: 'wv_pending_queue',
   pendingId: 'wv_pending_id',
 }
@@ -19,13 +21,13 @@ const KEYS = {
 
 /**
  * Save a data snapshot locally (called after successful Firebase fetch)
- * @param {'expenses'|'lending'} type
+ * @param {'expenses'|'lending'|'bank'} type
  * @param {Array} data
+ * @param {string} uid
  */
-export function saveSnapshot(type, data) {
+export function saveSnapshot(type, data, uid = '') {
   try {
-    const key = KEYS[type]
-    if (!key) return
+    const key = getKey(type, uid)
     // Store only essential fields to keep size manageable and prevent QuotaExceededError
     const slim = data.map((item) => {
       const { dateObj, fileData, ...rest } = item
@@ -34,20 +36,19 @@ export function saveSnapshot(type, data) {
     localStorage.setItem(key, JSON.stringify(slim))
     localStorage.setItem(key + '_ts', Date.now().toString())
   } catch (err) {
-    // localStorage might be full — fail silently
     console.warn('[localCache] saveSnapshot failed:', err?.message)
   }
 }
 
 /**
  * Load last-known data snapshot from local storage
- * @param {'expenses'|'lending'} type
+ * @param {'expenses'|'lending'|'bank'} type
+ * @param {string} uid
  * @returns {Array|null}
  */
-export function loadSnapshot(type) {
+export function loadSnapshot(type, uid = '') {
   try {
-    const key = KEYS[type]
-    if (!key) return null
+    const key = getKey(type, uid)
     const raw = localStorage.getItem(key)
     if (!raw) return null
     const items = JSON.parse(raw)
@@ -63,21 +64,39 @@ export function loadSnapshot(type) {
 
 /**
  * Get snapshot age in ms (or null if no snapshot)
+ * @param {'expenses'|'lending'|'bank'} type
+ * @param {string} uid
  */
-export function getSnapshotAge(type) {
+export function getSnapshotAge(type, uid = '') {
   try {
-    const key = KEYS[type]
+    const key = getKey(type, uid)
     const ts = localStorage.getItem(key + '_ts')
     if (!ts) return null
     return Date.now() - parseInt(ts, 10)
   } catch { return null }
 }
 
+/**
+ * Clear cached user snapshot
+ * @param {string} uid
+ */
+export function clearUserCache(uid = '') {
+  try {
+    if (!uid) return
+    localStorage.removeItem(getKey('expenses', uid))
+    localStorage.removeItem(getKey('expenses', uid) + '_ts')
+    localStorage.removeItem(getKey('lending', uid))
+    localStorage.removeItem(getKey('lending', uid) + '_ts')
+    localStorage.removeItem(getKey('bank', uid))
+    localStorage.removeItem(getKey('bank', uid) + '_ts')
+  } catch {}
+}
+
 // ── Pending Queue (offline writes) ───────────────────────────────────────────
 
 function generatePendingId() {
-  const n = parseInt(localStorage.getItem(KEYS.pendingId) || '0', 10) + 1
-  localStorage.setItem(KEYS.pendingId, n.toString())
+  const n = parseInt(localStorage.getItem(PENDING_KEYS.pendingId) || '0', 10) + 1
+  localStorage.setItem(PENDING_KEYS.pendingId, n.toString())
   return `pending_${n}_${Date.now()}`
 }
 
@@ -91,7 +110,7 @@ export function addPending(op) {
     const queue = getPendingQueue()
     const tempId = op.tempId || generatePendingId()
     queue.push({ ...op, tempId, createdAt: Date.now() })
-    localStorage.setItem(KEYS.pending, JSON.stringify(queue))
+    localStorage.setItem(PENDING_KEYS.pending, JSON.stringify(queue))
     return tempId
   } catch (err) {
     console.warn('[localCache] addPending failed:', err?.message)
@@ -105,7 +124,7 @@ export function addPending(op) {
  */
 export function getPendingQueue() {
   try {
-    const raw = localStorage.getItem(KEYS.pending)
+    const raw = localStorage.getItem(PENDING_KEYS.pending)
     return raw ? JSON.parse(raw) : []
   } catch { return [] }
 }
@@ -118,7 +137,7 @@ export function clearPending(tempIds) {
   try {
     const queue = getPendingQueue()
     const remaining = queue.filter((op) => !tempIds.includes(op.tempId))
-    localStorage.setItem(KEYS.pending, JSON.stringify(remaining))
+    localStorage.setItem(PENDING_KEYS.pending, JSON.stringify(remaining))
   } catch (err) {
     console.warn('[localCache] clearPending failed:', err?.message)
   }
@@ -136,6 +155,6 @@ export function getPendingCount() {
  */
 export function clearAllPending() {
   try {
-    localStorage.setItem(KEYS.pending, '[]')
+    localStorage.setItem(PENDING_KEYS.pending, '[]')
   } catch {}
 }

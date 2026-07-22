@@ -65,8 +65,9 @@ export async function addExpense(data) {
         collection: COL,
         data: { ...data, _offline: true },
       })
+      const currentUid = auth.currentUser?.uid || ''
       // Optimistically update snapshot
-      const snapshot = loadSnapshot('expenses') || []
+      const snapshot = loadSnapshot('expenses', currentUid) || []
       const optimistic = {
         id: tempId,
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
@@ -84,7 +85,7 @@ export async function addExpense(data) {
         _pending: true,
       }
       snapshot.unshift(optimistic)
-      saveSnapshot('expenses', snapshot)
+      saveSnapshot('expenses', snapshot, currentUid)
       return { success: true, id: tempId, offline: true }
     }
     throw err
@@ -141,13 +142,13 @@ export async function getAllExpenses() {
     let items = snapScoped.docs.map(fromFirestore)
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
-    // Save to local cache for offline use
-    saveSnapshot('expenses', sorted)
+    // Save to user-scoped local cache for offline use
+    saveSnapshot('expenses', sorted, currentUid)
     return sorted
   } catch (err) {
     console.warn('Expenses fetch failed, using local cache:', err?.message)
-    // Offline fallback — return cached data
-    const cached = loadSnapshot('expenses')
+    // Offline fallback — return cached data for this user
+    const cached = loadSnapshot('expenses', currentUid)
     if (cached) return cached.sort((a, b) => new Date(b.date) - new Date(a.date))
     return []
   }
