@@ -668,8 +668,15 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
   }
 
   function formatDate(iso) {
-    try { return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) }
-    catch { return '' }
+    try {
+      if (!iso) return ''
+      const d = new Date(iso)
+      if (isNaN(d.getTime())) return ''
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      return `${day}-${month}-${year}`
+    } catch { return '' }
   }
 
   return (

@@ -283,7 +283,8 @@ export default function MultiSelectCombobox({
                 }}
                 title="Close dropdown"
               >
-                <i className="fas fa-times" style={{ fontSize: 10 }} />
+                <i className="fas fa-times" style={{ fontSize: 9 }} />
+                <span>Close</span>
               </button>
             </div>
           </div>
