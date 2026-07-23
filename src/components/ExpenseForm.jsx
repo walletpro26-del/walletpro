@@ -155,21 +155,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
       <form onSubmit={handleSubmit}>
         {/* Date + Amount + Attach (Fits on 1 row on mobile) */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'nowrap', width: '100%', marginBottom: 10 }}>
-          <div className="compact-input-block" style={{ flex: '1 1 38%', minWidth: 0 }}>
-            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Date</label>
+        {/* Date + Amount + Attach (Less wider, bigger fonts) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', maxWidth: 350, width: '100%', marginBottom: 14 }}>
+          <div className="compact-input-block" style={{ flex: '1 1 125px', minWidth: 0, padding: '4px 8px' }}>
+            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Date</label>
             <input
               type="date"
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
               required
-              style={{ padding: '6px 4px', fontSize: 11, width: '100%', boxSizing: 'border-box' }}
+              style={{ padding: '2px 0', fontSize: 15, fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
             />
           </div>
-          <div className="compact-input-block" style={{ flex: '1 1 42%', minWidth: 0 }}>
-            <label style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2, display: 'block' }}>Amount</label>
+          <div className="compact-input-block" style={{ flex: '1 1 145px', minWidth: 0, padding: '4px 8px' }}>
+            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Amount</label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 11, marginRight: 2 }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 18, fontWeight: 500, marginRight: 3, color: 'var(--text-muted)' }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -178,7 +179,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '6px 4px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
+                style={{ padding: '0', fontSize: 24, fontWeight: 800, width: '100%', boxSizing: 'border-box' }}
               />
             </div>
           </div>
