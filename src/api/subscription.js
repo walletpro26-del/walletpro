@@ -114,17 +114,51 @@ export function loadRazorpaySDK() {
 export async function activateSubscriptionRazorpay(user, plan, paymentId, amount) {
   if (!user || !user.uid) throw new Error('User not logged in')
 
-  const now = new Date()
-  let expiresAt = new Date()
-  let finalAmount = amount || (plan === 'yearly' ? 150 : 20)
+  const subRef = doc(db, 'subscriptions', user.uid)
+  const snap = await getDoc(subRef)
 
-  if (plan === 'yearly') {
-    expiresAt.setFullYear(now.getFullYear() + 1)
-  } else {
-    expiresAt.setDate(now.getDate() + 30)
+  let currentActive = false
+  let currentExpires = null
+  let isTrialClaimed = false
+
+  if (snap.exists()) {
+    const data = snap.data()
+    isTrialClaimed = !!data.trialClaimed
+    const exp = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+    if (data.status === 'active' && exp && exp > new Date()) {
+      currentActive = true
+      currentExpires = exp
+    }
   }
 
-  const subRef = doc(db, 'subscriptions', user.uid)
+  const now = new Date()
+  let baseDate = now
+
+  // Stack new duration on top of current active trial or subscription
+  if (currentActive && currentExpires) {
+    baseDate = currentExpires
+  }
+
+  let expiresAt = new Date(baseDate.getTime())
+  let extraDays = 0
+
+  // If the user hasn't claimed their 3-day free trial yet, add it automatically to their paid time
+  if (!isTrialClaimed) {
+    extraDays = 3
+  }
+
+  if (plan === 'yearly') {
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+  } else {
+    expiresAt.setDate(expiresAt.getDate() + 30)
+  }
+
+  if (extraDays > 0) {
+    expiresAt.setDate(expiresAt.getDate() + extraDays)
+  }
+
+  let finalAmount = amount || (plan === 'yearly' ? 150 : 20)
+
   const payload = {
     userId: user.uid,
     email: user.email || '',
@@ -136,6 +170,7 @@ export async function activateSubscriptionRazorpay(user, plan, paymentId, amount
     expiresAt: Timestamp.fromDate(expiresAt),
     paymentId: paymentId || '',
     gateway: 'razorpay',
+    trialClaimed: true, // Mark trial as claimed/consumed
     updatedAt: Timestamp.fromDate(now),
   }
 
