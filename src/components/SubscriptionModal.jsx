@@ -208,6 +208,46 @@ export default function SubscriptionModal({
 
           ) : (
             <>
+              {/* App Features List */}
+              <div style={{ marginBottom: 16, background: 'var(--bg-body, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted, #64748b)', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>WalletVibe Pro Features</span>
+                  <a href="/WalletVibe_Pro_Features.pdf" target="_blank" download style={{ textTransform: 'none', color: '#6366f1', textDecoration: 'none', fontWeight: 700, fontSize: 9, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <i className="fas fa-file-pdf" style={{ fontSize: 10 }} /> Features.pdf
+                  </a>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 10 }}>
+                    <span style={{ fontSize: 11, background: '#e0e7ff', padding: '3px 5px', borderRadius: 6 }}>🚀</span>
+                    <div>
+                      <strong style={{ color: 'var(--text-primary, #1e293b)', display: 'block', fontSize: 10 }}>Unlimited Logs</strong>
+                      <span style={{ color: '#64748b', fontSize: 8.5 }}>Record infinite cash flows</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 10 }}>
+                    <span style={{ fontSize: 11, background: '#e0e7ff', padding: '3px 5px', borderRadius: 6 }}>📊</span>
+                    <div>
+                      <strong style={{ color: 'var(--text-primary, #1e293b)', display: 'block', fontSize: 10 }}>Visual Charts</strong>
+                      <span style={{ color: '#64748b', fontSize: 8.5 }}>Deep visual breakdown</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 10 }}>
+                    <span style={{ fontSize: 11, background: '#e0e7ff', padding: '3px 5px', borderRadius: 6 }}>💾</span>
+                    <div>
+                      <strong style={{ color: 'var(--text-primary, #1e293b)', display: 'block', fontSize: 10 }}>Real-time Sync</strong>
+                      <span style={{ color: '#64748b', fontSize: 8.5 }}>Secure cloud database</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 10 }}>
+                    <span style={{ fontSize: 11, background: '#e0e7ff', padding: '3px 5px', borderRadius: 6 }}>📥</span>
+                    <div>
+                      <strong style={{ color: 'var(--text-primary, #1e293b)', display: 'block', fontSize: 10 }}>Reports Export</strong>
+                      <span style={{ color: '#64748b', fontSize: 8.5 }}>Premium PDF/Excel sheets</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* STEP 1: Plan Selection */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)', marginBottom: 8 }}>
