@@ -22,6 +22,7 @@ export default function AdminPanel({ auth, onClose }) {
   // Subscriptions list
   const [allSubscriptions, setAllSubscriptions] = useState([])
   const [searchFilter, setSearchFilter] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
   // Manual User Lookup & Activation State
   const [manualUser, setManualUser] = useState('')
@@ -77,6 +78,20 @@ export default function AdminPanel({ auth, onClose }) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
     setLoading(false)
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      await loadConfig()
+      const subs = await getAllSubscriptions()
+      if (subs && subs.length > 0) setAllSubscriptions(subs)
+      showToast('🔄 Accounts refreshed successfully!')
+    } catch (err) {
+      console.warn('[AdminPanel] Refresh warning:', err?.message)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   async function handleManualSet(status, targetInput = null, planOverride = null) {
@@ -389,10 +404,10 @@ export default function AdminPanel({ auth, onClose }) {
                   />
                 </div>
                 <button
-                  onClick={loadUpiPayments}
+                  onClick={handleRefresh}
                   style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  <i className={`fas fa-sync-alt ${upiLoading ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh
+                  <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh
                 </button>
               </div>
 
