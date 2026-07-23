@@ -209,81 +209,87 @@ export default function SubscriptionModal({
           ) : (
             <>
               {/* STEP 1: Plan Selection */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #475569)', marginBottom: 6 }}>
-                  1. Choose Subscription Plan:
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)', marginBottom: 8 }}>
+                  Select a subscription plan
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {/* Monthly Card */}
                   <div
                     onClick={() => setSelectedPlan('monthly')}
                     style={{
                       flex: 1,
-                      border: `2px solid ${selectedPlan === 'monthly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
-                      background: selectedPlan === 'monthly' ? 'rgba(99,102,241,0.08)' : 'var(--bg-card, #fff)',
-                      borderRadius: 8,
-                      padding: '10px 12px',
+                      border: `1.5px solid ${selectedPlan === 'monthly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'monthly' ? 'var(--bg-card-active, rgba(99,102,241,0.04))' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 12,
+                      padding: '12px 14px',
                       cursor: 'pointer',
-                      transition: 'all 0.15s',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: selectedPlan === 'monthly' ? '0 4px 12px rgba(99,102,241,0.06)' : 'none',
                     }}
                   >
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>Monthly Pass</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
-                      ₹{monthlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/mo</span>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: selectedPlan === 'monthly' ? '#6366f1' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Monthly Pass</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 4 }}>
+                      ₹{monthlyPrice}<span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/mo</span>
                     </div>
                   </div>
+
+                  {/* Yearly Card */}
                   <div
                     onClick={() => setSelectedPlan('yearly')}
                     style={{
                       flex: 1,
-                      border: `2px solid ${selectedPlan === 'yearly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
-                      background: selectedPlan === 'yearly' ? 'rgba(99,102,241,0.08)' : 'var(--bg-card, #fff)',
-                      borderRadius: 8,
-                      padding: '10px 12px',
+                      border: `1.5px solid ${selectedPlan === 'yearly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'yearly' ? 'var(--bg-card-active, rgba(99,102,241,0.04))' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 12,
+                      padding: '12px 14px',
                       cursor: 'pointer',
-                      transition: 'all 0.15s',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       position: 'relative',
+                      boxShadow: selectedPlan === 'yearly' ? '0 4px 12px rgba(99,102,241,0.06)' : 'none',
                     }}
                   >
-                    <div style={{ position: 'absolute', top: -7, right: 6, background: '#10b981', color: '#fff', fontSize: 7, fontWeight: 900, padding: '1px 5px', borderRadius: 99 }}>
-                      SAVE {Math.round((1 - (yearlyPrice / (monthlyPrice * 12))) * 100)}%
+                    <div style={{ position: 'absolute', top: -7, right: 8, background: '#10b981', color: '#fff', fontSize: 7, fontWeight: 900, padding: '2px 6px', borderRadius: 99, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                      Save {Math.round((1 - (yearlyPrice / (monthlyPrice * 12))) * 100)}%
                     </div>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase' }}>Yearly Saver</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
-                      ₹{yearlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/yr</span>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: selectedPlan === 'yearly' ? '#6366f1' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Yearly Saver</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 4 }}>
+                      ₹{yearlyPrice}<span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/yr</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* STEP 2: Online Payment Gateway Checkout */}
-              <div style={{ background: 'var(--bg-body, #f8fafc)', border: '1.5px solid #6366f1', borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>2. Secure Online Checkout:</span>
-                  <span style={{ fontSize: 8, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: 99, fontWeight: 800 }}>INSTANT ACTIVATION</span>
+              {/* STEP 2: Checkout Action */}
+              <div style={{ background: 'var(--bg-card, #ffffff)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)' }}>Secure Online Checkout</span>
+                  <span style={{ fontSize: 8, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '2px 8px', borderRadius: 99, fontWeight: 800, letterSpacing: '0.3px', textTransform: 'uppercase' }}>Instant Grant</span>
                 </div>
 
-                {/* Razorpay Gateway Button (Default / Active) */}
+                {/* Razorpay Gateway Button */}
                 {appConfig?.razorpayEnabled !== false && (
                   <button
                     type="button"
                     onClick={handleRazorpayCheckout}
                     disabled={submitting}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       width: '100%', padding: '12px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                      color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 13,
-                      cursor: 'pointer', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                      color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12,
+                      cursor: 'pointer', transition: 'all 0.15s ease',
+                      boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)',
                     }}
                   >
                     {submitting ? (
-                      <><i className="fas fa-spinner fa-spin" /> Launching Razorpay...</>
+                      <><i className="fas fa-spinner fa-spin" /> Starting Secure Checkout...</>
                     ) : (
-                      <><i className="fas fa-bolt" /> Pay ₹{amount} via Razorpay (UPI / Cards / Banking)</>
+                      <><i className="fas fa-shield-alt" style={{ fontSize: 11 }} /> Continue to Pay ₹{amount}</>
                     )}
                   </button>
                 )}
 
-                {/* Cashfree Payment Gateway Button (if enabled exclusively) */}
+                {/* Cashfree Payment Gateway Button */}
                 {appConfig?.cashfreeEnabled && (
                   <button
                     type="button"
@@ -291,34 +297,35 @@ export default function SubscriptionModal({
                       alert(`Cashfree Gateway (${appConfig?.cashfreeMode === 'sandbox' ? 'TEST Mode' : 'LIVE Mode'}): Initiating payment session for ${selectedPlan?.toUpperCase()} (₹${amount})...`)
                     }}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       width: '100%', padding: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                      color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 13,
-                      cursor: 'pointer', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)', marginTop: appConfig?.razorpayEnabled !== false ? 8 : 0,
+                      color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12,
+                      cursor: 'pointer', transition: 'all 0.15s ease',
+                      boxShadow: '0 4px 14px rgba(2, 132, 199, 0.25)', marginTop: appConfig?.razorpayEnabled !== false ? 8 : 0,
                     }}
                   >
-                    <i className="fas fa-credit-card" /> Pay ₹{amount} via Cashfree Gateway
+                    <i className="fas fa-credit-card" style={{ fontSize: 11 }} /> Pay ₹{amount} via Cashfree
                   </button>
                 )}
 
-                <div style={{ fontSize: 9, color: '#64748b', marginTop: 8, textAlign: 'center' }}>
-                  🔒 100% Encrypted &amp; PCI-DSS Compliant • Instant Automated Subscription Grant
+                <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 10, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <i className="fas fa-lock" /> PCI-DSS Compliant • 256-bit SSL secure payment connection
                 </div>
               </div>
             </>
           )}
 
           {/* Legal footer */}
-          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 9, color: 'var(--text-muted, #64748b)' }}>
+          <div style={{ textAlign: 'center', marginTop: 10, fontSize: 9, color: 'var(--text-muted, #64748b)' }}>
             <div>
-              <i className="fas fa-shield-alt" style={{ fontSize: 8, marginRight: 3, color: '#10b981' }} />
-              Secured Payment Gateway • Instant Access
+              <i className="fas fa-check-circle" style={{ fontSize: 8, marginRight: 3, color: '#10b981' }} />
+              Automated Subscription Activator
             </div>
-            <div style={{ marginTop: 2, opacity: 0.85 }}>
+            <div style={{ marginTop: 3, opacity: 0.8 }}>
               By subscribing, you agree to our{' '}
-              <a href="#terms" onClick={(e) => { e.preventDefault(); window.location.hash = '#terms' }} style={{ color: '#6366f1' }}>Terms</a>,{' '}
-              <a href="#privacy" onClick={(e) => { e.preventDefault(); window.location.hash = '#privacy' }} style={{ color: '#6366f1' }}>Privacy</a> &amp;{' '}
-              <a href="#refund" onClick={(e) => { e.preventDefault(); window.location.hash = '#refund' }} style={{ color: '#6366f1' }}>Refund Policy</a>.
+              <a href="#terms" onClick={(e) => { e.preventDefault(); window.location.hash = '#terms' }} style={{ color: '#6366f1', textDecoration: 'none' }}>Terms</a>,{' '}
+              <a href="#privacy" onClick={(e) => { e.preventDefault(); window.location.hash = '#privacy' }} style={{ color: '#6366f1', textDecoration: 'none' }}>Privacy</a> &amp;{' '}
+              <a href="#refund" onClick={(e) => { e.preventDefault(); window.location.hash = '#refund' }} style={{ color: '#6366f1', textDecoration: 'none' }}>Refunds</a>.
             </div>
           </div>
         </div>
