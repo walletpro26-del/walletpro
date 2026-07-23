@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isAdminEmail } from '../api/subscription'
 
 export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
@@ -6,6 +7,8 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
   const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
   const [gasUrl, setGasUrl] = useState(localStorage.getItem('wv_gas_url') || localStorage.getItem('wp_gas_url') || import.meta.env.VITE_GAS_URL || '')
   
+  const isAdmin = subscription?.isAdmin || isAdminEmail(auth?.email)
+
   // Confirmations
   const [confirmStep, setConfirmStep] = useState(0) // 0: none, 1: warn 1, 2: warn 2, 3: type text
   const [confirmInput, setConfirmInput] = useState('')
@@ -259,7 +262,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
               <i className="fas fa-database" style={{ color: 'var(--accent-500)', marginRight: 6 }} /> Data Tools & Backup
             </h4>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr' : '1fr', gap: 8, marginBottom: 12 }}>
               <button
                 type="button"
                 onClick={handleExportBackup}
@@ -281,44 +284,48 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                 <i className="fas fa-file-export" style={{ color: 'var(--accent-600)' }} /> Backup JSON
               </button>
 
-              <button 
-                type="button"
-                onClick={() => {
-                  if (!gasUrl.trim()) {
-                    alert('Please enter a Google Apps Script Exec URL below first!')
-                    return
-                  }
-                  setConfirmStep(1)
-                }} 
-                style={{
-                  padding: 10,
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--accent-200)',
-                  background: 'var(--accent-50)',
-                  color: 'var(--accent-600)',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6
-                }}
-              >
-                <i className="fas fa-file-import" /> Legacy Import
-              </button>
+              {isAdmin && (
+                <button 
+                  type="button"
+                  onClick={() => {
+                    if (!gasUrl.trim()) {
+                      alert('Please enter a Google Apps Script Exec URL below first!')
+                      return
+                    }
+                    setConfirmStep(1)
+                  }} 
+                  style={{
+                    padding: 10,
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--accent-200)',
+                    background: 'var(--accent-50)',
+                    color: 'var(--accent-600)',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <i className="fas fa-file-import" /> Legacy Import
+                </button>
+              )}
             </div>
 
-            <div className="float-group" style={{ marginBottom: 12 }}>
-              <input
-                type="text"
-                className="float-input"
-                placeholder="https://script.google.com/macros/s/.../exec"
-                value={gasUrl}
-                onChange={(e) => setGasUrl(e.target.value)}
-              />
-              <label className="float-label active">Google Apps Script URL (Legacy)</label>
-            </div>
+            {isAdmin && (
+              <div className="float-group" style={{ marginBottom: 12 }}>
+                <input
+                  type="text"
+                  className="float-input"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={gasUrl}
+                  onChange={(e) => setGasUrl(e.target.value)}
+                />
+                <label className="float-label active">Google Apps Script URL (Legacy)</label>
+              </div>
+            )}
 
             <button onClick={handleClearCache} style={{
               width: '100%', padding: 10, border: '1px solid var(--red-200)', borderRadius: 'var(--radius-md)',
