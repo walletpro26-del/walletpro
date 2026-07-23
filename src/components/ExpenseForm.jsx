@@ -154,8 +154,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Date + Amount + Attach (Fits on 1 row on mobile) */}
-        {/* Date + Amount + Attach (Less wider, bigger fonts) */}
+        {/* Date + Amount + Attach (Less wider, compact layout) */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', maxWidth: 350, width: '100%', marginBottom: 14 }}>
           <div className="compact-input-block" style={{ flex: '1 1 125px', minWidth: 0, padding: '4px 8px' }}>
             <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Date</label>
@@ -164,13 +163,13 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
               required
-              style={{ padding: '2px 0', fontSize: 15, fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
+              style={{ padding: '2px 0', fontSize: 12, fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
             />
           </div>
           <div className="compact-input-block" style={{ flex: '1 1 145px', minWidth: 0, padding: '4px 8px' }}>
             <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Amount</label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 18, fontWeight: 500, marginRight: 3, color: 'var(--text-muted)' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 14, fontWeight: 500, marginRight: 3, color: 'var(--text-muted)' }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -179,7 +178,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '0', fontSize: 24, fontWeight: 800, width: '100%', boxSizing: 'border-box' }}
+                style={{ padding: '0', fontSize: 19, fontWeight: 800, width: '100%', boxSizing: 'border-box' }}
               />
             </div>
           </div>

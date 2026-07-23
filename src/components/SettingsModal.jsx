@@ -36,7 +36,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
       
       const backupData = {
         app: 'WalletVibe',
-        version: '1.2.5',
+        version: '1.0.0',
         exportDate: new Date().toISOString(),
         user: auth?.email || 'user',
         data: {
@@ -339,7 +339,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
 
           {/* App Info Footer */}
           <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--text-muted)', fontSize: 11 }}>
-            <div style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>WalletVibe v1.2.5</div>
+            <div style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>WalletVibe v1.0.0</div>
             <div>Personal Finance Manager · PWA Ready</div>
             <div style={{ marginTop: 2 }}>
               Need help? <a href="mailto:walletpro26@gmail.com" style={{ color: 'var(--accent-600)', textDecoration: 'none', fontWeight: 600 }}>walletpro26@gmail.com</a>
