@@ -110,12 +110,12 @@ def generate_pdf():
     story.append(Paragraph("Why Upgrade to WalletVibe Pro?", section_heading))
     
     comparison_data = [
-        ["Feature Category", "WalletVibe Free", "WalletVibe Pro"],
-        ["Transaction Logs", "Limited to 50 logs", "Unlimited Logs"],
-        ["Data Security & Sync", "Local Storage only", "Safe Cloud Sync (Real-time)"],
-        ["Financial Analytics", "Basic overview", "Deep Visual Category Breakdowns"],
-        ["Data Export Format", "Text summary", "Clean Excel / PDF Export Sheets"],
-        ["Personal Budgets", "1 Active budget", "Unlimited Budgets & Alerts"],
+        ["Feature Category", "3-Day Free Trial", "WalletVibe Pro"],
+        ["Access Duration", "Expires after 3 days", "Uninterrupted monthly / yearly access"],
+        ["Transaction Logs", "Unlimited Logs (during trial)", "Unlimited Logs"],
+        ["Data Security & Sync", "Safe Cloud Sync (Real-time)", "Safe Cloud Sync (Real-time)"],
+        ["Data Export Format", "Excel / PDF Export Sheets", "Excel / PDF Export Sheets"],
+        ["Claim Limit", "Once per email address", "Renew or extend anytime"],
         ["Customer Support", "Standard email", "Priority 24/7 Ticketing Support"]
     ]
     

@@ -3,6 +3,7 @@ import {
   listenSubscriptionStatus,
   loadRazorpaySDK,
   createRazorpayOptions,
+  claimFreeTrial,
 } from '../api/subscription'
 
 export default function SubscriptionModal({
@@ -77,6 +78,23 @@ export default function SubscriptionModal({
       rzp.open()
     } catch (err) {
       setError(err?.message || 'Could not launch payment gateway')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleClaimTrial() {
+    setError('')
+    setSubmitting(true)
+    try {
+      const res = await claimFreeTrial(user)
+      if (res.success) {
+        setActivationResult(res)
+        setStep('success')
+        onSubscriptionSuccess?.(res)
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to claim free trial.')
     } finally {
       setSubmitting(false)
     }
@@ -247,6 +265,49 @@ export default function SubscriptionModal({
                   </div>
                 </div>
               </div>
+
+              {/* 3-Day Free Trial Action Card */}
+              {!subscription?.trialClaimed && (
+                <div style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.12))',
+                  border: '1.5px dashed #10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#047857', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      🎁 Free Trial Available!
+                    </div>
+                    <div style={{ fontSize: 9, color: '#065f46', marginTop: 2 }}>
+                      Get 3 days of Pro access completely free
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClaimTrial}
+                    disabled={submitting}
+                    style={{
+                      padding: '6px 12px',
+                      background: '#10b981',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 2px 6px rgba(16,185,129,0.2)'
+                    }}
+                  >
+                    {submitting ? 'Claiming...' : 'Claim 3D Free'}
+                  </button>
+                </div>
+              )}
 
               {/* STEP 1: Plan Selection */}
               <div style={{ marginBottom: 16 }}>

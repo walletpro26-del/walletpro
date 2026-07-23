@@ -402,3 +402,43 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
   await setDoc(subRef, payload, { merge: true })
   return { success: true, userId: targetUid, status, expiresAt }
 }
+
+/**
+ * Claim the 3-day free trial for a user (can only be claimed once)
+ * @param {{ uid: string, email: string }} user
+ * @returns {Promise<{ success: boolean, expiresAt: Date, plan: string }>}
+ */
+export async function claimFreeTrial(user) {
+  if (!user || !user.uid) throw new Error('User not logged in')
+
+  const subRef = doc(db, 'subscriptions', user.uid)
+  const snap = await getDoc(subRef)
+
+  if (snap.exists()) {
+    const data = snap.data()
+    if (data.trialClaimed) {
+      throw new Error('You have already claimed your 3-day free trial on this account.')
+    }
+  }
+
+  const now = new Date()
+  const expiresAt = new Date()
+  expiresAt.setDate(now.getDate() + 3) // 3 Days Trial
+
+  const payload = {
+    userId: user.uid,
+    email: user.email || '',
+    status: 'active',
+    plan: 'trial',
+    amountPaid: 0,
+    currency: 'INR',
+    paidAt: Timestamp.fromDate(now),
+    expiresAt: Timestamp.fromDate(expiresAt),
+    gateway: 'free_trial',
+    trialClaimed: true,
+    updatedAt: Timestamp.fromDate(now),
+  }
+
+  await setDoc(subRef, payload, { merge: true })
+  return { success: true, expiresAt, plan: 'trial' }
+}
