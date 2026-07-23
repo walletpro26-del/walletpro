@@ -15,6 +15,11 @@ const DEFAULTS = {
   announcementType: 'info', // 'info' | 'warning' | 'success'
   maintenanceMode: false,
   razorpayEnabled: true,
+  razorpayMode: 'test',   // 'test' | 'live'
+  razorpayKeyId: '',
+  cashfreeEnabled: false,
+  cashfreeMode: 'sandbox', // 'sandbox' (Test Environment) | 'production' (Live Environment)
+  cashfreeAppId: '',
 }
 
 let _cachedConfig = null

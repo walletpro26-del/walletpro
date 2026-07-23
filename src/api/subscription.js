@@ -92,145 +92,98 @@ export async function getSubscriptionStatus(user) {
 }
 
 /**
- * Submit UPI UTR payment — sets status to PENDING_VERIFICATION.
- * Admin must approve to activate the subscription.
- * @param {{ user: { uid: string, email: string, name?: string }, plan: 'monthly'|'yearly', amount: number, utr: string }} params
- * @returns {Promise<{ success: boolean, orderId: string, message: string }>}
+ * Load Razorpay Checkout SDK dynamically
  */
-export async function submitUpiPayment({ user, plan, amount, utr }) {
-  if (!user || !user.uid) throw new Error('User not logged in')
-
-  const cleanUtr = String(utr || '').trim()
-  if (cleanUtr.length !== 12 || !/^\d{12}$/.test(cleanUtr)) {
-    throw new Error('Please enter a valid 12-digit UTR / Bank Reference Number.')
-  }
-
-  // 1. Uniqueness check on upi_payments
-  try {
-    const utrCheckQ = query(collection(db, 'upi_payments'), where('utr', '==', cleanUtr))
-    const utrSnap = await getDocs(utrCheckQ)
-    if (!utrSnap.empty) {
-      throw new Error('This 12-digit UTR has already been used. Please check your bank transaction receipt or contact support.')
+export function loadRazorpaySDK() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true)
+      return
     }
-  } catch (err) {
-    if (err.message && err.message.includes('already been used')) {
-      throw err
-    }
-    console.warn('[subscription] Bypassing global UTR check due to rule restrictions:', err?.message)
-  }
-
-  const orderId = `WV_ORD_${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`
-  const now = new Date()
-  const nowTs = Timestamp.now()
-
-  let finalAmount = Number(amount) || (plan === 'yearly' ? 150 : 20)
-
-  // 2. Save UTR payment record in upi_payments as PENDING_VERIFICATION
-  try {
-    const paymentData = {
-      orderId,
-      userId: user.uid,
-      userEmail: user.email || '',
-      userName: user.name || '',
-      utr: cleanUtr,
-      amount: finalAmount,
-      plan: plan || 'monthly',
-      merchantPhone: MERCHANT_PHONE,
-      status: 'PENDING_VERIFICATION',
-      submittedAt: nowTs,
-      updatedAt: nowTs,
-    }
-
-    const docRef = doc(db, 'upi_payments', orderId)
-    await setDoc(docRef, paymentData)
-  } catch (err) {
-    console.warn('[subscription] Bypassing upi_payments log creation due to rule restrictions:', err?.message)
-  }
-
-  // 3. Set user subscription to pending_verification (NOT active)
-  const subRef = doc(db, 'subscriptions', user.uid)
-  const subscriptionData = {
-    userId: user.uid,
-    email: user.email || '',
-    status: 'pending_verification',
-    plan: plan || 'monthly',
-    amountPaid: finalAmount,
-    currency: 'INR',
-    submittedAt: Timestamp.fromDate(now),
-    paymentId: `UPI_UTR_${cleanUtr}`,
-    gateway: 'upi_pending',
-    utr: cleanUtr,
-    orderId,
-    updatedAt: nowTs,
-  }
-
-  await setDoc(subRef, subscriptionData, { merge: true })
-
-  return {
-    success: true,
-    orderId,
-    message: '⏳ Payment submitted! Awaiting admin verification.',
-  }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
 }
 
 /**
- * Admin approves a pending UPI payment and activates the user subscription
- * @param {string} userId
- * @param {string} orderId
- * @param {string} plan
- * @param {number} amount
- * @param {string} adminEmail
- * @returns {Promise<{ success: boolean }>}
+ * Activate subscription via Razorpay Payment Gateway
  */
-export async function approveUpiPayment(userId, orderId, plan, amount, adminEmail) {
-  if (!userId) throw new Error('User ID required')
+export async function activateSubscriptionRazorpay(user, plan, paymentId, amount) {
+  if (!user || !user.uid) throw new Error('User not logged in')
 
   const now = new Date()
-  const nowTs = Timestamp.now()
-
   let expiresAt = new Date()
+  let finalAmount = amount || (plan === 'yearly' ? 150 : 20)
+
   if (plan === 'yearly') {
     expiresAt.setFullYear(now.getFullYear() + 1)
   } else {
     expiresAt.setDate(now.getDate() + 30)
   }
 
-  // 1. Activate the user subscription
-  const subRef = doc(db, 'subscriptions', userId)
-  await updateDoc(subRef, {
+  const subRef = doc(db, 'subscriptions', user.uid)
+  const payload = {
+    userId: user.uid,
+    email: user.email || '',
     status: 'active',
-    paidAt: nowTs,
+    plan,
+    amountPaid: finalAmount,
+    currency: 'INR',
+    paidAt: Timestamp.fromDate(now),
     expiresAt: Timestamp.fromDate(expiresAt),
-    approvedBy: adminEmail || 'admin',
-    approvedAt: nowTs,
-    updatedAt: nowTs,
-  })
-
-  // 2. Update upi_payments record status to APPROVED
-  if (orderId) {
-    try {
-      const payRef = doc(db, 'upi_payments', orderId)
-      await updateDoc(payRef, {
-        status: 'APPROVED',
-        expiresAt: Timestamp.fromDate(expiresAt),
-        approvedBy: adminEmail || 'admin',
-        approvedAt: nowTs,
-        updatedAt: nowTs,
-      })
-    } catch (err) {
-      console.warn('[subscription] Could not update upi_payments doc:', err?.message)
-    }
+    paymentId: paymentId || '',
+    gateway: 'razorpay',
+    updatedAt: Timestamp.fromDate(now),
   }
 
-  return { success: true, expiresAt }
+  await setDoc(subRef, payload, { merge: true })
+  return { success: true, expiresAt, plan, orderId: paymentId }
+}
+
+/**
+ * Create Razorpay Payment Options Configuration
+ */
+export function createRazorpayOptions({ user, plan, amount, razorpayKey, onSuccess, onError }) {
+  const amountPaise = Math.round((amount || (plan === 'yearly' ? 150 : 20)) * 100)
+  const isYearly = plan === 'yearly'
+  const planTitle = isYearly ? `WalletVibe Yearly Subscription (₹${amount}/year)` : `WalletVibe Monthly Subscription (₹${amount}/month)`
+
+  return {
+    key: razorpayKey || 'rzp_test_walletvibe',
+    amount: amountPaise,
+    currency: 'INR',
+    name: 'WalletVibe',
+    description: planTitle,
+    image: '/favicon.ico',
+    prefill: {
+      name: user?.name || '',
+      email: user?.email || '',
+    },
+    theme: {
+      color: '#6366f1',
+    },
+    handler: async function (response) {
+      try {
+        const result = await activateSubscriptionRazorpay(user, plan, response.razorpay_payment_id, amount)
+        if (result.success) {
+          onSuccess?.(result)
+        }
+      } catch (err) {
+        onError?.(err)
+      }
+    },
+    modal: {
+      ondismiss: function () {},
+    },
+  }
 }
 
 /**
  * Real-time listener for a user's subscription status changes.
- * Fires callback whenever status changes (e.g., pending → active).
- * @param {string} uid
- * @param {function} callback - called with subscription data object
- * @returns {function} unsubscribe function
+ * Fires callback whenever status changes.
  */
 export function listenSubscriptionStatus(uid, callback) {
   if (!uid) return () => {}
@@ -239,16 +192,14 @@ export function listenSubscriptionStatus(uid, callback) {
     if (snap.exists()) {
       const data = snap.data()
       const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
-      const isPending = data.status === 'pending_verification'
       const isActive = data.status === 'active' && expiresAt && expiresAt > new Date()
       callback({
         active: isActive,
-        status: isPending ? 'pending_verification' : (isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired')),
+        status: data.status || 'inactive',
         plan: data.plan || 'monthly',
         expiresAt,
         isAdmin: false,
         paymentId: data.paymentId || '',
-        utr: data.utr || '',
         orderId: data.orderId || '',
       })
     }
@@ -258,48 +209,7 @@ export function listenSubscriptionStatus(uid, callback) {
 }
 
 /**
- * Real-time listener for pending UPI payments (Admin use).
- * Fires callback with all upi_payments docs whenever any changes.
- * @param {function} callback - called with array of payment objects
- * @returns {function} unsubscribe function
- */
-export function listenPendingPayments(callback) {
-  const q = query(collection(db, 'upi_payments'), orderBy('submittedAt', 'desc'))
-  return onSnapshot(q, (snap) => {
-    const payments = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    callback(payments)
-  }, (err) => {
-    console.warn('[subscription] Pending payments listener error:', err?.message)
-  })
-}
-
-/**
- * Fetch all UPI payment submissions for Admin Panel audit
- * @returns {Promise<Array<object>>}
- */
-export async function getAllUpiPayments() {
-  try {
-    const q = query(collection(db, 'upi_payments'), orderBy('submittedAt', 'desc'))
-    const snap = await getDocs(q)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-  } catch (err) {
-    console.warn('[subscription] Failed to fetch UPI payments:', err?.message)
-    try {
-      const snap = await getDocs(collection(db, 'upi_payments'))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    } catch (e) {
-      return []
-    }
-  }
-}
-
-/**
  * Revoke / Deactivate a user subscription if fake/tampered UTR is detected by Admin
- * @param {string} userId
- * @param {string} orderId
- * @param {string} adminEmail
- * @param {string} reason
- * @returns {Promise<{ success: boolean }>}
  */
 export async function revokeSubscription(userId, orderId, adminEmail, reason = '') {
   if (!userId) throw new Error('User ID required')

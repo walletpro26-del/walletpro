@@ -80,18 +80,35 @@ export default function App() {
     }
   }
 
-  // URL Hash or Query parameter listener for legal documents
+  // URL Hash or Query parameter listener for legal documents & notification deep links
   useEffect(() => {
     function handleHashOrQuery() {
+      const searchParams = new URLSearchParams(window.location.search)
       const hash = window.location.hash.replace('#', '').toLowerCase()
-      const search = new URLSearchParams(window.location.search).get('page')
-      const target = hash || search
-      if (['privacy', 'terms', 'refund', 'contact'].includes(target)) {
-        setLegalModalTab(target)
-        // Clean up hash from address bar so refreshing won't re-open the modal automatically
+      const pageTarget = searchParams.get('page')
+      const actionTarget = searchParams.get('action')
+
+      const legalTarget = hash || pageTarget
+      if (['privacy', 'terms', 'refund', 'contact'].includes(legalTarget)) {
+        setLegalModalTab(legalTarget)
         if (hash) {
           window.history.replaceState(null, '', window.location.pathname + window.location.search)
         }
+      }
+
+      if (actionTarget) {
+        const act = actionTarget.toLowerCase()
+        if (['subscription', 'upgrade', 'pro', 'plan'].includes(act)) {
+          setShowSubscriptionModal(true)
+        } else if (['admin', 'adminpanel'].includes(act)) {
+          setShowAdminPanel(true)
+        } else if (['bank', 'ifsc'].includes(act)) {
+          setShowBankSearch(true)
+        } else if (['settings', 'config'].includes(act)) {
+          setShowSettings(true)
+        }
+        // Clean query parameter after triggering action cleanly
+        window.history.replaceState(null, '', window.location.pathname)
       }
     }
     handleHashOrQuery()
@@ -332,27 +349,6 @@ export default function App() {
         onAdminPanel={() => setShowAdminPanel(true)}
       />
 
-      {/* Admin Announcement Banner */}
-      {appConfig?.announcement && (
-        <div style={{
-          background: appConfig.announcementType === 'warning' ? 'rgba(245, 158, 11, 0.15)' : appConfig.announcementType === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-          borderBottom: `1px solid ${appConfig.announcementType === 'warning' ? 'rgba(245, 158, 11, 0.3)' : appConfig.announcementType === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
-          color: appConfig.announcementType === 'warning' ? '#f59e0b' : appConfig.announcementType === 'success' ? '#10b981' : '#6366f1',
-          padding: '8px 16px',
-          fontSize: '12px',
-          fontWeight: 600,
-          textAlign: 'center',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          zIndex: 10,
-        }}>
-          <i className={`fas ${appConfig.announcementType === 'warning' ? 'fa-exclamation-triangle' : appConfig.announcementType === 'success' ? 'fa-check-circle' : 'fa-bullhorn'}`} />
-          {appConfig.announcement}
-        </div>
-      )}
-
       {/* Tab Bar */}
       <div className="tab-bar">
         <div className="tab-bar-inner">
@@ -379,6 +375,70 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {/* Global App Announcement Banner (Rendered below Tab Bar for clean un-cropped view) */}
+      {appConfig?.announcement && (
+        <div
+          onClick={() => {
+            const text = (appConfig.announcement || '').toLowerCase()
+            if (text.includes('pro') || text.includes('upgrade') || text.includes('offer') || text.includes('subscription')) {
+              setShowSubscriptionModal(true)
+            } else if (text.includes('bank') || text.includes('ifsc')) {
+              setShowBankSearch(true)
+            } else if (text.includes('admin')) {
+              setShowAdminPanel(true)
+            }
+          }}
+          style={{
+            margin: '12px 14px 4px 14px',
+            padding: '10px 14px',
+            borderRadius: '12px',
+            background: appConfig.announcementType === 'warning'
+              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.22))'
+              : appConfig.announcementType === 'success'
+              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.22))'
+              : 'linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.22))',
+            border: `1px solid ${
+              appConfig.announcementType === 'warning' ? 'rgba(245, 158, 11, 0.35)' : appConfig.announcementType === 'success' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(99, 102, 241, 0.35)'
+            }`,
+            color: appConfig.announcementType === 'warning' ? '#f59e0b' : appConfig.announcementType === 'success' ? '#34d399' : '#818cf8',
+            fontSize: '12px',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+            <span style={{ fontSize: 14, flexShrink: 0 }}>
+              {appConfig.announcementType === 'warning' ? '⚠️' : appConfig.announcementType === 'success' ? '✅' : '⚡'}
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {appConfig.announcement.replace('Ugrade', 'Upgrade').replace('Limit offer', 'Limited Time Offer')}
+            </span>
+          </div>
+          {(appConfig.announcement.toLowerCase().includes('pro') || appConfig.announcement.toLowerCase().includes('upgrade') || appConfig.announcement.toLowerCase().includes('offer')) && (
+            <span style={{
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              padding: '4px 10px',
+              borderRadius: '99px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              color: '#fff',
+              fontWeight: 800,
+              flexShrink: 0,
+              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+              whiteSpace: 'nowrap',
+            }}>
+              Upgrade &rarr;
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {error && <div className="error-banner">{error}</div>}

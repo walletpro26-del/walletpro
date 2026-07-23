@@ -87,6 +87,31 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
+// Notification Click Handler (works even when app is closed)
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const targetUrl = event.notification.data?.url || '/?action=subscription'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it and navigate
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl)
+          }
+          return client.focus()
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
+      }
+    })
+  )
+})
+
 // Periodic version check message from app
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'CHECK_VERSION') {

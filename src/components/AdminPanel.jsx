@@ -1,21 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
 import {
   isAdminEmail,
   ADMIN_EMAILS,
-  getAllUpiPayments,
   getAllSubscriptions,
   revokeSubscription,
   reactivateSubscription,
   adminSetSubscriptionByEmailOrUid,
-  approveUpiPayment,
-  listenPendingPayments,
   listenAllSubscriptions,
 } from '../api/subscription'
-import { requestNotificationPermission, sendNativeNotification } from '../utils/notification'
 
 export default function AdminPanel({ auth, onClose }) {
-  const [activeTab, setActiveTab] = useState('users') // 'users' | 'payments' | 'settings'
+  const [activeTab, setActiveTab] = useState('users') // 'users' | 'settings'
 
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -23,10 +19,8 @@ export default function AdminPanel({ auth, onClose }) {
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
 
-  // UPI Payments & Subscriptions lists
-  const [upiPayments, setUpiPayments] = useState([])
+  // Subscriptions list
   const [allSubscriptions, setAllSubscriptions] = useState([])
-  const [upiLoading, setUpiLoading] = useState(false)
   const [searchFilter, setSearchFilter] = useState('')
 
   // Manual User Lookup & Activation State
@@ -42,56 +36,24 @@ export default function AdminPanel({ auth, onClose }) {
   const [announcementType, setAnnouncementType] = useState('info')
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [razorpayEnabled, setRazorpayEnabled] = useState(false)
-
-  const prevPendingCountRef = useRef(0)
+  const [razorpayMode, setRazorpayMode] = useState('test')
+  const [razorpayKeyId, setRazorpayKeyId] = useState('')
+  const [cashfreeEnabled, setCashfreeEnabled] = useState(false)
+  const [cashfreeMode, setCashfreeMode] = useState('sandbox')
+  const [cashfreeAppId, setCashfreeAppId] = useState('')
 
   useEffect(() => {
     loadConfig()
-    loadUpiPayments()
-    requestNotificationPermission()
 
-    // 1. Real-time listener for UPI payments — triggers native notification on new pending payments
-    const unsubPayments = listenPendingPayments((payments) => {
-      const pendingCount = payments.filter((p) => p.status === 'PENDING_VERIFICATION').length
-      if (pendingCount > prevPendingCountRef.current && prevPendingCountRef.current >= 0) {
-        const newest = payments.find((p) => p.status === 'PENDING_VERIFICATION')
-        if (newest) {
-          sendNativeNotification('💳 New Payment Pending!', {
-            body: `${newest.userEmail} submitted ₹${newest.amount} (${newest.plan?.toUpperCase()}) — UTR: ${newest.utr}. Tap to verify.`,
-            tag: 'wv-admin-pending-' + newest.orderId,
-          })
-        }
-      }
-      prevPendingCountRef.current = pendingCount
-      setUpiPayments(payments)
-    })
-
-    // 2. Real-time listener for all user subscriptions
+    // Real-time listener for all user subscriptions
     const unsubSubs = listenAllSubscriptions((subs) => {
       setAllSubscriptions(subs)
     })
 
     return () => {
-      unsubPayments?.()
       unsubSubs?.()
     }
   }, [])
-
-  async function loadUpiPayments() {
-    setUpiLoading(true)
-    try {
-      const [payments, subs] = await Promise.all([
-        getAllUpiPayments(),
-        getAllSubscriptions(),
-      ])
-      if (payments && payments.length > 0) setUpiPayments(payments)
-      if (subs && subs.length > 0) setAllSubscriptions(subs)
-    } catch (err) {
-      console.warn('[AdminPanel] Failed to load payments/subscriptions:', err?.message)
-    } finally {
-      setUpiLoading(false)
-    }
-  }
 
   async function loadConfig() {
     setLoading(true)
@@ -106,25 +68,15 @@ export default function AdminPanel({ auth, onClose }) {
       setAnnouncementType(cfg.announcementType || 'info')
       setMaintenanceMode(cfg.maintenanceMode || false)
       setRazorpayEnabled(cfg.razorpayEnabled !== false)
+      setRazorpayMode(cfg.razorpayMode || 'test')
+      setRazorpayKeyId(cfg.razorpayKeyId || '')
+      setCashfreeEnabled(cfg.cashfreeEnabled || false)
+      setCashfreeMode(cfg.cashfreeMode || 'sandbox')
+      setCashfreeAppId(cfg.cashfreeAppId || '')
     } catch (err) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
     setLoading(false)
-  }
-
-  async function handleApprove(pay) {
-    if (!pay?.userId) return
-    setSaving(true)
-    setError('')
-    try {
-      await approveUpiPayment(pay.userId, pay.orderId, pay.plan, pay.amount, auth?.email)
-      showToast(`✅ Payment approved & subscription activated for ${pay.userEmail}!`)
-      await loadUpiPayments()
-    } catch (err) {
-      setError(err?.message || 'Approval failed')
-    } finally {
-      setSaving(false)
-    }
   }
 
   async function handleManualSet(status, targetInput = null, planOverride = null) {
@@ -145,7 +97,6 @@ export default function AdminPanel({ auth, onClose }) {
           : `⛔ Account ${input} deactivated!`
       )
       if (!targetInput) setManualUser('')
-      await loadUpiPayments()
     } catch (err) {
       setError(err?.message || 'Action failed')
     } finally {
@@ -157,7 +108,7 @@ export default function AdminPanel({ auth, onClose }) {
     if (!userId) return
     const reason = window.prompt(
       `Deactivate/Revoke subscription for ${userEmail || 'user'}? Enter reason:`,
-      'Payment UTR verification failed or unpaid'
+      'Account deactivated by admin'
     )
     if (reason === null) return
 
@@ -166,7 +117,6 @@ export default function AdminPanel({ auth, onClose }) {
     try {
       await revokeSubscription(userId, orderId, auth?.email, reason)
       showToast('🚨 Subscription revoked & account deactivated!')
-      await loadUpiPayments()
     } catch (err) {
       setError(err?.message || 'Revoke failed')
     } finally {
@@ -181,7 +131,6 @@ export default function AdminPanel({ auth, onClose }) {
     try {
       await reactivateSubscription(userId, orderId, auth?.email)
       showToast('✅ Subscription re-activated.')
-      await loadUpiPayments()
     } catch (err) {
       setError(err?.message || 'Reactivation failed')
     } finally {
@@ -211,6 +160,11 @@ export default function AdminPanel({ auth, onClose }) {
         announcementType,
         maintenanceMode,
         razorpayEnabled,
+        razorpayMode,
+        razorpayKeyId,
+        cashfreeEnabled,
+        cashfreeMode,
+        cashfreeAppId,
       })
 
       showToast('✅ Configuration saved successfully!')
@@ -246,7 +200,6 @@ export default function AdminPanel({ auth, onClose }) {
     return (s.email || '').toLowerCase().includes(term) || (s.userId || s.id || '').toLowerCase().includes(term) || (s.utr || '').toLowerCase().includes(term)
   })
 
-  const pendingPaymentsCount = upiPayments.filter((p) => p.status === 'PENDING_VERIFICATION').length
   const activeSubsCount = allSubscriptions.filter((s) => s.status === 'active').length
   const pendingSubsCount = allSubscriptions.filter((s) => s.status === 'pending_verification').length
   const revokedSubsCount = allSubscriptions.filter((s) => s.status === 'revoked' || s.status === 'expired').length
@@ -317,26 +270,6 @@ export default function AdminPanel({ auth, onClose }) {
               }}
             >
               <i className="fas fa-users" /> Accounts ({allSubscriptions.length})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('payments')}
-              style={{
-                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
-                background: activeTab === 'payments' ? '#ffffff' : 'transparent',
-                color: activeTab === 'payments' ? '#312e81' : '#cbd5e1',
-                fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                position: 'relative', transition: 'all 0.15s',
-              }}
-            >
-              <i className="fas fa-qrcode" />
-              UPI Audit
-              {pendingPaymentsCount > 0 && (
-                <span style={{ background: '#ef4444', color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 99 }}>
-                  {pendingPaymentsCount} PENDING
-                </span>
-              )}
             </button>
 
             <button
@@ -555,120 +488,7 @@ export default function AdminPanel({ auth, onClose }) {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════
-              TAB 2: UPI PAYMENTS & UTR VERIFICATION
-             ══════════════════════════════════════════════════════════ */}
-          {activeTab === 'payments' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                  UPI Payment Logs ({upiPayments.length} Total)
-                </span>
-                <button
-                  onClick={loadUpiPayments}
-                  style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  <i className={`fas fa-sync-alt ${upiLoading ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh Logs
-                </button>
-              </div>
 
-              {upiPayments.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 8, fontSize: 11, color: '#64748b' }}>
-                  No UPI payment submissions logged yet.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 340, overflowY: 'auto' }} className="custom-scrollbar">
-                  {upiPayments.map((pay) => {
-                    const isPending = pay.status === 'PENDING_VERIFICATION'
-                    const isRevoked = pay.status === 'REVOKED' || pay.status === 'REJECTED'
-                    const isApproved = pay.status === 'APPROVED'
-
-                    const borderColor = isPending ? '#f59e0b' : isRevoked ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)'
-                    const bgColor = isPending ? 'rgba(251,191,36,0.06)' : isRevoked ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.04)'
-
-                    return (
-                      <div
-                        key={pay.id || pay.orderId}
-                        style={{
-                          padding: '9px 11px',
-                          borderRadius: 8,
-                          border: `1.5px solid ${borderColor}`,
-                          background: bgColor,
-                          fontSize: 11,
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div>
-                            <strong style={{ color: 'var(--text-primary, #1e293b)' }}>{pay.userEmail}</strong>
-                            <div style={{ fontSize: 9, color: '#64748b', marginTop: 1 }}>
-                              Plan: <strong>{pay.plan?.toUpperCase()}</strong> (₹{pay.amount}) &bull; Order: {pay.orderId}
-                            </div>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 8, fontWeight: 900, padding: '2px 6px', borderRadius: 99, textTransform: 'uppercase',
-                              background: isPending ? 'rgba(245,158,11,0.15)' : isRevoked ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
-                              color: isPending ? '#d97706' : isRevoked ? '#ef4444' : '#10b981',
-                            }}
-                          >
-                            {isPending ? '⏳ PENDING' : isRevoked ? '🔴 REVOKED' : '🟢 APPROVED'}
-                          </span>
-                        </div>
-
-                        <div style={{ background: '#fff', padding: '5px 8px', borderRadius: 6, fontSize: 10, margin: '5px 0', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>12-Digit UTR: <strong style={{ color: '#6366f1', letterSpacing: '0.5px' }}>{pay.utr}</strong></span>
-                          <span style={{ color: '#94a3b8' }}>
-                            {pay.submittedAt?.seconds ? new Date(pay.submittedAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                          {isPending ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleApprove(pay)}
-                                disabled={saving}
-                                style={{ flex: 1, padding: '5px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ✅ Approve & Activate
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRevoke(pay.userId, pay.orderId, pay.userEmail)}
-                                disabled={saving}
-                                style={{ flex: 1, padding: '5px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ❌ Reject
-                              </button>
-                            </>
-                          ) : !isRevoked ? (
-                            <button
-                              type="button"
-                              onClick={() => handleRevoke(pay.userId, pay.orderId, pay.userEmail)}
-                              disabled={saving}
-                              style={{ width: '100%', padding: '4px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
-                            >
-                              ⛔ Deactivate / Revoke
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleReactivate(pay.userId, pay.orderId)}
-                              disabled={saving}
-                              style={{ width: '100%', padding: '4px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
-                            >
-                              🔄 Re-activate Access
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ══════════════════════════════════════════════════════════
               TAB 3: CONFIGURATION & SETTINGS
@@ -732,6 +552,162 @@ export default function AdminPanel({ auth, onClose }) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Razorpay Payment Gateway Settings */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1px solid ${razorpayEnabled ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 8, padding: 10, transition: 'border-color 0.2s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase' }}>
+                      ⚡ Razorpay Payment Gateway
+                    </div>
+                    <div style={{ fontSize: 9, color: '#64748b' }}>
+                      Enable Razorpay PG (Cards, Netbanking, UPI, Wallets)
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={razorpayEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setRazorpayEnabled(checked)
+                      if (checked) setCashfreeEnabled(false) // Exclusive: disable Cashfree
+                    }}
+                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {razorpayEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px solid #cbd5e1' }}>
+                    <div>
+                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                        Environment Mode
+                      </label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          type="button"
+                          onClick={() => setRazorpayMode('test')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            border: razorpayMode === 'test' ? '2px solid #f59e0b' : '1px solid #cbd5e1',
+                            background: razorpayMode === 'test' ? 'rgba(245, 158, 11, 0.15)' : '#fff',
+                            color: razorpayMode === 'test' ? '#b45309' : '#64748b',
+                          }}
+                        >
+                          🟡 TEST Mode (rzp_test_...)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRazorpayMode('live')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            border: razorpayMode === 'live' ? '2px solid #10b981' : '1px solid #cbd5e1',
+                            background: razorpayMode === 'live' ? 'rgba(16, 185, 129, 0.15)' : '#fff',
+                            color: razorpayMode === 'live' ? '#047857' : '#64748b',
+                          }}
+                        >
+                          🟢 LIVE Mode (rzp_live_...)
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 8, color: razorpayMode === 'test' ? '#d97706' : '#059669', marginTop: 3 }}>
+                        {razorpayMode === 'test'
+                          ? '⚡ Test mode: Use rzp_test_... key for sandbox payments.'
+                          : '🚀 Live mode: Processes real money using rzp_live_... key.'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                        Razorpay Key ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={razorpayMode === 'test' ? 'rzp_test_...' : 'rzp_live_...'}
+                        value={razorpayKeyId}
+                        onChange={(e) => setRazorpayKeyId(e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cashfree Payment Gateway Settings */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1px solid ${cashfreeEnabled ? '#0284c7' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 8, padding: 10, transition: 'border-color 0.2s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#0284c7', textTransform: 'uppercase' }}>
+                      💳 Cashfree Payment Gateway Integration
+                    </div>
+                    <div style={{ fontSize: 9, color: '#64748b' }}>
+                      Enable Cashfree PG (Cards, Netbanking, UPI, Wallets)
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={cashfreeEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setCashfreeEnabled(checked)
+                      if (checked) setRazorpayEnabled(false) // Exclusive: disable Razorpay
+                    }}
+                    style={{ width: 16, height: 16, accentColor: '#0284c7', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {cashfreeEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px solid #cbd5e1' }}>
+                    <div>
+                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                        Environment Mode
+                      </label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          type="button"
+                          onClick={() => setCashfreeMode('sandbox')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            border: cashfreeMode === 'sandbox' ? '2px solid #f59e0b' : '1px solid #cbd5e1',
+                            background: cashfreeMode === 'sandbox' ? 'rgba(245, 158, 11, 0.15)' : '#fff',
+                            color: cashfreeMode === 'sandbox' ? '#b45309' : '#64748b',
+                          }}
+                        >
+                          🟡 TEST / Sandbox (Immediate)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCashfreeMode('production')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            border: cashfreeMode === 'production' ? '2px solid #10b981' : '1px solid #cbd5e1',
+                            background: cashfreeMode === 'production' ? 'rgba(16, 185, 129, 0.15)' : '#fff',
+                            color: cashfreeMode === 'production' ? '#047857' : '#64748b',
+                          }}
+                        >
+                          🟢 PROD / Live (After KYC)
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 8, color: cashfreeMode === 'sandbox' ? '#d97706' : '#059669', marginTop: 3 }}>
+                        {cashfreeMode === 'sandbox'
+                          ? '⚡ Sandbox active: Can be used immediately right now for testing payments!'
+                          : '🚀 Live active: Processes real money payments once Cashfree KYC is approved.'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                        Cashfree App ID / Client ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 1048473TEST..."
+                        value={cashfreeAppId}
+                        onChange={(e) => setCashfreeAppId(e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Maintenance & Controls */}

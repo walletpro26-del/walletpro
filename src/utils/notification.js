@@ -27,6 +27,7 @@ export async function sendNativeNotification(title, options = {}) {
 
   try {
     if (Notification.permission === 'granted') {
+      const dataPayload = { url: options.url || '/?action=subscription', ...options.data }
       // 1. Try Service Worker Notification if registered (best for mobile PWA bar)
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         const reg = await navigator.serviceWorker.ready
@@ -38,6 +39,7 @@ export async function sendNativeNotification(title, options = {}) {
             tag: 'wv-notification',
             renotify: true,
             ...options,
+            data: dataPayload,
           })
           return true
         }
@@ -47,6 +49,7 @@ export async function sendNativeNotification(title, options = {}) {
         icon: '/icon-192.png',
         badge: '/icon-192.png',
         ...options,
+        data: dataPayload,
       })
       return true
     }
