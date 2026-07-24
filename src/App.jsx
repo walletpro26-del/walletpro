@@ -27,6 +27,7 @@ import ReportsView from './components/ReportsView'
 import SettingsModal from './components/SettingsModal'
 import CsvImportModal from './components/CsvImportModal'
 import BankSearchModal from './components/BankSearchModal'
+import BankHistoryView from './components/BankHistoryView'
 import MigrationTool from './components/MigrationTool'
 import WalletVibeLogo from './components/WalletVibeLogo'
 import LegalModal from './components/LegalModal'
@@ -381,6 +382,13 @@ export default function App() {
             Lend/Borrow
           </button>
           <button
+            className={`tab-btn ${activeTab === 'bank' ? 'active' : ''}`}
+            onClick={() => switchTab('bank')}
+          >
+            <i className="fas fa-university" style={{ marginRight: 5, fontSize: 10 }}></i>
+            Bank History
+          </button>
+          <button
             className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
             onClick={() => switchTab('reports')}
           >
@@ -502,6 +510,13 @@ export default function App() {
               onSelect={(item) => setSelectedTxn(item)}
             />
           </>
+        )}
+
+        {activeTab === 'bank' && (
+          <BankHistoryView
+            uid={authState.uid}
+            onOpenImport={() => setShowBankSearch(true)}
+          />
         )}
 
         {activeTab === 'reports' && (

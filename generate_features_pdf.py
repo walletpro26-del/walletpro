@@ -80,9 +80,11 @@ def generate_pdf():
     features = [
         ("🚀", "Unlimited Ledger Transactions", "Record, tag, and organize as many incomes and expenses as you need. WalletVibe Pro lifts all transaction limits, allowing you to maintain detailed historical logs of your financial life."),
         ("📊", "Interactive Financial Analytics", "Visualize cash flows dynamically with sleek pie charts, category breakdown tables, and monthly trend graphs to monitor your savings progress effortlessly."),
+        ("🏦", "Bank History Inline Tab", "Dedicated Bank History tab shows imported bank statements directly inside the main view with live search — no modal needed. Filter by date, amount, description or bank name in real-time."),
+        ("🔍", "Inline Smart Search Everywhere", "Every transaction list — Expenses, Lend/Borrow, and Bank History — now features a compact inline search bar with real-time filtering. Search by amount, category, person, date, or remarks instantly."),
         ("💾", "Real-Time Cloud Synchronization", "Sync your digital wallet safely across multiple devices using real-time database endpoints. Access your budgets on desktop, tablets, or mobile instantly."),
         ("📥", "Advanced Reports & Exports", "Generate financial ledger statements in premium PDF or structured Excel spreadsheets, ready for expense audits, taxes, or personal reviews."),
-        ("🔔", "Custom Budgets & Alerts", "Configure threshold warnings on category spending. Get alerts before exceeding limits to guard against unnecessary spending."),
+        ("🤖", "AI-Powered Bank Statement Import", "Upload any bank statement PDF or image — Gemini AI automatically extracts all transactions, matches dates, amounts and descriptions, and saves them with one click."),
         ("👑", "Seamless Offline Fallback", "Manage financial records on the go. Local device caches ensure seamless data input even when networks are offline, auto-syncing when connection restores.")
     ]
     
@@ -113,6 +115,9 @@ def generate_pdf():
         ["Feature Category", "3-Day Free Trial", "WalletVibe Pro"],
         ["Access Duration", "Expires after 3 days", "Uninterrupted monthly / yearly access"],
         ["Transaction Logs", "Unlimited Logs (during trial)", "Unlimited Logs"],
+        ["Bank History Tab", "Not available", "Inline bank statement view + live search"],
+        ["Inline Search", "Basic list view only", "Smart search on all transaction lists"],
+        ["AI PDF Import", "Not available", "Gemini AI bank statement extraction"],
         ["Data Security & Sync", "Safe Cloud Sync (Real-time)", "Safe Cloud Sync (Real-time)"],
         ["Data Export Format", "Excel / PDF Export Sheets", "Excel / PDF Export Sheets"],
         ["Claim Limit", "Once per email address", "Renew or extend anytime"],

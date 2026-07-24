@@ -85,13 +85,19 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
   async function loadRecords() {
     if (allRecords) return allRecords
     
+    const currentUid = uid || auth?.currentUser?.uid || ''
+
     // Check local cache first for instant display
-    const cached = loadSnapshot('bank', uid)
+    const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
     if (cached && cached.length > 0) {
-      const rehydrated = cached.map((r) => ({
-        ...r,
-        date: r.date ? new Date(r.date) : new Date(),
-      }))
+      const rehydrated = cached.map((r) => {
+        let dObj = r.dateObj ? new Date(r.dateObj) : new Date(r.date)
+        if (isNaN(dObj.getTime())) dObj = new Date()
+        return {
+          ...r,
+          date: dObj,
+        }
+      })
       setAllRecords(rehydrated)
     } else {
       setLoading(true)
@@ -99,12 +105,32 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
 
     setError('')
     try {
-      // User-scoped bank transactions query
-      const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', uid || ''))
-      const snapScoped = await getDocs(qScoped)
+      let snapScoped
+      if (currentUid) {
+        const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', currentUid))
+        snapScoped = await getDocs(qScoped)
+      }
+
+      // If user-scoped query is empty or no UID, fallback to general collection query
+      if (!snapScoped || snapScoped.empty) {
+        const qGeneral = query(collection(db, 'bankTransactions'))
+        snapScoped = await getDocs(qGeneral)
+      }
+
       let records = snapScoped.docs.map((d) => {
         const data = d.data()
-        const dateObj = data.date?.toDate?.() || new Date(data.date)
+        let dateObj = new Date()
+        if (data.date) {
+          if (typeof data.date.toDate === 'function') {
+            dateObj = data.date.toDate()
+          } else if (typeof data.date === 'string') {
+            dateObj = new Date(data.date.replace(' ', 'T'))
+          } else {
+            dateObj = new Date(data.date)
+          }
+          if (isNaN(dateObj.getTime())) dateObj = new Date()
+        }
+
         return {
           id: d.id,
           bank: data.bank || '',
@@ -119,15 +145,19 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
 
       records.sort((a, b) => b.date - a.date)
       setAllRecords(records)
-      saveSnapshot('bank', records, uid)
+      saveSnapshot('bank', records, currentUid)
       setLoading(false)
       return records
     } catch (err) {
-      const cached2 = loadSnapshot('bank', uid)
-      const rehydrated = (cached2 || []).map((r) => ({
-        ...r,
-        date: r.date ? new Date(r.date) : new Date(),
-      }))
+      const cached2 = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
+      const rehydrated = (cached2 || []).map((r) => {
+        let dObj = r.dateObj ? new Date(r.dateObj) : new Date(r.date)
+        if (isNaN(dObj.getTime())) dObj = new Date()
+        return {
+          ...r,
+          date: dObj,
+        }
+      })
       setAllRecords(rehydrated)
       setLoading(false)
       return rehydrated
@@ -594,46 +624,83 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
   return createPortal(
     <div className="modal-overlay" style={{ zIndex: 120 }}>
       <div className="modal-backdrop" onClick={onClose}></div>
-      <div className="modal-container" style={{ maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div className="bank-search-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, margin: 0 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-              <i className="fas fa-university" style={{ fontSize: 12 }}></i>
+      <div className="modal-container" style={{ maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', borderRadius: 18 }}>
+
+        {/* ── Premium Gradient Header ── */}
+        <div style={{
+          background: 'linear-gradient(135deg, #312e81 0%, #4f46e5 50%, #7c3aed 100%)',
+          padding: '14px 16px 12px',
+          position: 'relative',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}>
+          {/* Decorative orbs */}
+          <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+          <div style={{ position: 'absolute', bottom: -30, left: -10, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="fas fa-university" style={{ fontSize: 14, color: '#fff' }}></i>
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
+                  {csvPreviewData ? 'CSV Import Preview' : 'Bank History'}
+                </div>
+                {!csvPreviewData && allRecords && (
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1 }}>
+                    {allRecords.length.toLocaleString('en-IN')} transactions
+                  </div>
+                )}
+              </div>
             </div>
-            {csvPreviewData ? 'CSV Import Preview' : 'Bank Transaction History'}
-          </h3>
-          
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {!csvPreviewData && (
-              <>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  style={{ padding: '5px 10px', fontSize: 11, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 'var(--radius-sm)' }}
-                  onClick={downloadCsvTemplate}
-                  title="Download CSV Template"
-                >
-                  <i className="fas fa-download" style={{ fontSize: 10, marginRight: 4 }} /> Template
-                </button>
-                <label
-                  className="btn-outline"
-                  style={{ padding: '5px 10px', fontSize: 11, background: 'var(--accent-gradient)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: aiParsing ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center' }}
-                  title="Import CSV or PDF bank statement (Max 10MB)"
-                >
-                  <i className={`fas ${aiParsing ? 'fa-brain fa-spin' : 'fa-file-upload'}`} style={{ fontSize: 11, marginRight: 4 }} />
-                  {aiParsing ? 'Extracting File...' : 'Import File/Doc'}
-                  <input type="file" accept=".pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.heic,.mp3,.wav,.m4a,application/pdf,text/csv,text/plain,image/*,audio/*" disabled={aiParsing} style={{ display: 'none' }} onChange={handleCsvFileSelect} />
-                </label>
-              </>
-            )}
-            <button className="modal-close" style={{ background: 'rgba(255,255,255,0.1)', color: '#a5b4fc' }} onClick={onClose}>
-              <i className="fas fa-times"></i>
-            </button>
+
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {!csvPreviewData && (
+                <>
+                  <button
+                    type="button"
+                    onClick={downloadCsvTemplate}
+                    title="Download CSV Template"
+                    style={{
+                      height: 30, padding: '0 10px', fontSize: 10, fontWeight: 700,
+                      background: 'rgba(255,255,255,0.12)', color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                      backdropFilter: 'blur(8px)',
+                    }}
+                  >
+                    <i className="fas fa-download" style={{ fontSize: 9 }} /> Template
+                  </button>
+                  <label
+                    title="Import CSV or PDF bank statement"
+                    style={{
+                      height: 30, padding: '0 11px', fontSize: 10, fontWeight: 800,
+                      background: aiParsing ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.95)',
+                      color: aiParsing ? '#fff' : '#4f46e5',
+                      border: 'none', borderRadius: 8,
+                      cursor: aiParsing ? 'wait' : 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    <i className={`fas ${aiParsing ? 'fa-brain fa-spin' : 'fa-file-upload'}`} style={{ fontSize: 10 }} />
+                    {aiParsing ? 'Processing…' : 'Import'}
+                    <input type="file" accept=".pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.heic,.mp3,.wav,.m4a,application/pdf,text/csv,text/plain,image/*,audio/*" disabled={aiParsing} style={{ display: 'none' }} onChange={handleCsvFileSelect} />
+                  </label>
+                </>
+              )}
+              <button
+                onClick={onClose}
+                style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Banners & Real-Time Progress Indicator */}
+        {/* ── AI Progress Banner ── */}
         {aiParsing && (
           <div style={{ margin: '10px 16px 0', padding: '12px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-600)', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -759,17 +826,17 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
         ) : (
           /* ── Main Search View ── */
           <>
-            {/* Latest Record Date by Bank Guidance Card */}
+            {/* ── Bank Summary Pills Card ── */}
             {Object.keys(latestByBank).length > 0 && (
-              <div style={{ margin: '10px 16px 0', padding: '10px 12px', background: 'var(--slate-50)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>
-                    <i className="fas fa-university" style={{ color: 'var(--accent-500)', marginRight: 6 }} />
-                    Latest Record Date by Bank
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 10, textTransform: 'none', fontWeight: 500 }}>
-                      {allRecords.length} records total
+              <div style={{ margin: '10px 14px 0', padding: '10px 12px', background: 'var(--bg-subtle)', border: '1px solid var(--border-color)', borderRadius: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <i className="fas fa-calendar-check" style={{ color: 'var(--accent-500)', fontSize: 10 }} />
+                    Latest Synced
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)' }}>
+                      {allRecords.length.toLocaleString('en-IN')} records
                     </span>
                     <button
                       type="button"
@@ -781,106 +848,157 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
                         setShowMergeModal(true)
                       }}
                       style={{
-                        padding: '2px 7px', fontSize: 10, fontWeight: 700,
-                        background: 'rgba(99, 102, 241, 0.12)', color: 'var(--accent-600)',
-                        border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 4, cursor: 'pointer'
+                        height: 22, padding: '0 8px', fontSize: 10, fontWeight: 700,
+                        background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12))',
+                        color: 'var(--accent-600)', border: '1px solid rgba(99,102,241,0.25)',
+                        borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                       }}
-                      title="Merge similar bank names (e.g. J&K and J&K BANK) into one"
+                      title="Merge similar bank names into one"
                     >
-                      <i className="fas fa-edit" style={{ fontSize: 9, marginRight: 3 }} /> Merge Banks
+                      <i className="fas fa-code-merge" style={{ fontSize: 9 }} /> Merge Banks
                     </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {Object.entries(latestByBank).map(([bName, dt]) => (
                     <div
                       key={bName}
                       style={{
-                        fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 'var(--radius-sm)',
-                        background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)',
-                        display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: 'var(--shadow-xs)',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '3px 8px', borderRadius: 20,
+                        background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                       }}
                     >
-                      <span style={{ color: 'var(--accent-600)', textTransform: 'uppercase', fontSize: 10, fontWeight: 800 }}>{bName}:</span>
-                      <span>{formatDate(dt)}</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent-600)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{bName}</span>
+                      <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-color)', display: 'inline-block' }} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>{formatDate(dt)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="bank-search-input-area">
+            {/* ── Search Bar ── */}
+            <div style={{ padding: '10px 14px 6px' }}>
               <div style={{ position: 'relative' }}>
-                <i className="fas fa-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 14 }}></i>
+                <i className="fas fa-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 12, pointerEvents: 'none' }}></i>
                 <input
                   type="text"
-                  placeholder="Search amount, date, desc..."
+                  placeholder="Search by amount, date, description…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{
-                    width: '100%', padding: '12px 16px 12px 38px', border: '2px solid var(--border-color)',
-                    borderRadius: 'var(--radius-md)', fontSize: 13, fontWeight: 500, fontFamily: 'var(--font-body)',
-                    color: 'var(--text-primary)', background: 'var(--bg-input)', outline: 'none',
+                    width: '100%', padding: '9px 36px 9px 34px',
+                    border: '1.5px solid var(--border-color)', borderRadius: 10,
+                    fontSize: 12, fontWeight: 500, fontFamily: 'var(--font-body)',
+                    color: 'var(--text-primary)', background: 'var(--bg-subtle)', outline: 'none',
+                    boxSizing: 'border-box', transition: 'border-color 0.2s',
                   }}
+                  onFocus={(e) => e.target.style.borderColor = 'var(--accent-400)'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
                 />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, padding: 0 }}
+                  >✕</button>
+                )}
               </div>
             </div>
 
-            <div className="bank-search-results custom-scrollbar" style={{ flex: 1, overflow: 'auto' }}>
+            {/* ── Transaction List ── */}
+            <div className="custom-scrollbar" style={{ flex: 1, overflow: 'auto', padding: '0 14px 14px' }}>
               {loading && (
                 <div className="loader-wrap">
                   <div className="loader-spinner"></div>
-                  <div className="loader-text">Loading...</div>
+                  <div className="loader-text">Loading…</div>
                 </div>
               )}
               {!loading && filtered.length === 0 && !error && (
-                <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent-100)' }}>
-                    <i className="fas fa-search-dollar" style={{ fontSize: 28 }}></i>
+                <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent-200)' }}>
+                    <i className="fas fa-search-dollar" style={{ fontSize: 22 }}></i>
                   </div>
-                  <p style={{ fontSize: 12, fontWeight: 500 }}>Enter keywords to search bank history or click "Import CSV"</p>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>No transactions yet</p>
+                  <p style={{ fontSize: 11, fontWeight: 500, margin: 0 }}>Import a PDF or CSV bank statement to get started.</p>
                 </div>
               )}
-              {filtered.map((r, i) => (
-                <div key={r.id || i} className="bank-txn-item" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <div>
-                      <div className="bank-txn-date">{formatDate(r.date)}</div>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent-500)', textTransform: 'uppercase' }}>{r.bank}</div>
+              {filtered.map((r, i) => {
+                const isCredit = r.credit > 0
+                return (
+                  <div
+                    key={r.id || i}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 10px', marginBottom: 5,
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 10,
+                      transition: 'box-shadow 0.15s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+                    onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                  >
+                    {/* Icon */}
+                    <div style={{
+                      width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: isCredit ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.08)',
+                      color: isCredit ? '#10b981' : '#ef4444',
+                    }}>
+                      <i className={`fas ${isCredit ? 'fa-arrow-down' : 'fa-arrow-up'}`} style={{ fontSize: 13 }}></i>
                     </div>
-                    <div className="bank-txn-desc" style={{ flex: 1 }}>{r.description}</div>
+
+                    {/* Date + Description */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 170 }}>
+                          {r.description || '—'}
+                        </span>
+                        {r.bank && (
+                          <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 5px', borderRadius: 10, background: 'rgba(99,102,241,0.1)', color: 'var(--accent-600)', border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                            {r.bank}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <i className="fas fa-calendar" style={{ fontSize: 8 }} />
+                        {formatDate(r.date)}
+                        {r.balance > 0 && (
+                          <span style={{ marginLeft: 4, color: 'var(--text-muted)' }}>· Bal: ₹{r.balance.toLocaleString('en-IN')}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Amount */}
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: isCredit ? '#10b981' : '#ef4444' }}>
+                        {isCredit ? '+' : '-'}₹{(isCredit ? r.credit : r.debit).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+
+                    {/* Delete button */}
+                    {r.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRecord(r.id)}
+                        style={{
+                          width: 28, height: 28, background: 'none', border: 'none',
+                          color: 'var(--slate-300)', cursor: 'pointer', flexShrink: 0,
+                          borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 12, transition: 'all 0.15s',
+                        }}
+                        title="Delete bank record"
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--slate-300)' }}
+                      >
+                        <i className="fas fa-trash-alt" />
+                      </button>
+                    )}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {r.debit > 0 && <div className="bank-txn-amount debit">-₹{r.debit.toLocaleString('en-IN')}</div>}
-                    {r.credit > 0 && <div className="bank-txn-amount credit">+₹{r.credit.toLocaleString('en-IN')}</div>}
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Bal: ₹{r.balance.toLocaleString('en-IN')}</div>
-                  </div>
-                  {r.id && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRecord(r.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--slate-400)',
-                        cursor: 'pointer',
-                        padding: '6px',
-                        fontSize: 13,
-                        borderRadius: 'var(--radius-sm)',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      title="Delete bank record"
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--red-500)'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--slate-400)'}
-                    >
-                      <i className="fas fa-trash-alt" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </>
         )}

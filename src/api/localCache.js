@@ -48,16 +48,49 @@ export function saveSnapshot(type, data, uid = '') {
  */
 export function loadSnapshot(type, uid = '') {
   try {
-    const key = getKey(type, uid)
-    const raw = localStorage.getItem(key)
+    let key = getKey(type, uid)
+    let raw = localStorage.getItem(key)
+
+    // Fallback 1: Try without uid prefix
+    if (!raw && uid) {
+      key = getKey(type, '')
+      raw = localStorage.getItem(key)
+    }
+
+    // Fallback 2: Dynamic localStorage key scanner
+    if (!raw) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && (k.endsWith(`_${type}`) || k.includes(`_${type}_`))) {
+          const val = localStorage.getItem(k)
+          if (val && val.startsWith('[')) {
+            raw = val
+            break
+          }
+        }
+      }
+    }
+
     if (!raw) return null
     const items = JSON.parse(raw)
-    // Rehydrate date objects
-    return items.map((item) => ({
-      ...item,
-      dateObj: item.date ? new Date(item.date) : new Date(),
-    }))
-  } catch {
+    // Rehydrate date objects safely for mobile browsers
+    return items.map((item) => {
+      let dateObj = new Date()
+      if (item.date) {
+        if (typeof item.date === 'string') {
+          dateObj = new Date(item.date.replace(' ', 'T'))
+        } else {
+          dateObj = new Date(item.date)
+        }
+        if (isNaN(dateObj.getTime())) dateObj = new Date()
+      }
+      return {
+        ...item,
+        dateObj,
+      }
+    })
+  } catch (err) {
+    console.warn('[localCache] loadSnapshot warning:', err?.message)
     return null
   }
 }

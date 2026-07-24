@@ -7,20 +7,23 @@ import { loadSnapshot } from '../api/localCache'
 
 export default function TransactionList({ items = [], title, onSelect }) {
   const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '', item: null })
+  const [searchTerm, setSearchTerm] = useState('')
 
   const cachedBankRecords = useMemo(() => loadSnapshot('bank') || [], [])
 
-  if (!items.length) {
-    return (
-      <div style={{ margin: '16px 0', textAlign: 'center', padding: '32px 16px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--accent-400)' }}>
-          <i className="fas fa-receipt" style={{ fontSize: 20 }}></i>
-        </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>No recent activity yet</div>
-        <div style={{ fontSize: 11, marginTop: 4 }}>Saved transactions will appear here automatically.</div>
-      </div>
-    )
-  }
+  // Filter items based on search term
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return items
+    const terms = searchTerm.toLowerCase().split(/\s+/).filter(Boolean)
+    return items.filter((item) => {
+      const searchStr = [
+        item.category, item.details, item.remarks, item.person,
+        item.forWhom, item.type, item.label, item.paymentMode,
+        item.date, String(item.amount || ''),
+      ].filter(Boolean).join(' ').toLowerCase()
+      return terms.every((t) => searchStr.includes(t))
+    })
+  }, [items, searchTerm])
 
   function formatDate(iso) {
     try {
@@ -37,7 +40,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
   function getAmountDetails(item) {
     const isLending = item.isLend || item.sheet === 'lending'
     const amt = (item.amount || 0).toLocaleString('en-IN')
-    
+
     if (isLending) {
       const norm = normalizeLendingType(item.type || item.label)
       if (norm === 'LEND' || norm === 'I_RETURN') {
@@ -48,7 +51,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
       }
       return { cls: '', text: `₹${amt}` }
     }
-    
+
     return { cls: 'negative', text: `-₹${amt}` }
   }
 
@@ -64,14 +67,70 @@ export default function TransactionList({ items = [], title, onSelect }) {
     return { cls: 'expense', icon: 'fa-receipt' }
   }
 
+  if (!items.length) {
+    return (
+      <div style={{ margin: '16px 0', textAlign: 'center', padding: '32px 16px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--accent-400)' }}>
+          <i className="fas fa-receipt" style={{ fontSize: 20 }}></i>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>No recent activity yet</div>
+        <div style={{ fontSize: 11, marginTop: 4 }}>Saved transactions will appear here automatically.</div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <div className="section-title">{title || 'Recent Activity'}</div>
+      {/* Section Title + Inline Search Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <div className="section-title" style={{ margin: 0 }}>{title || 'Recent Activity'}</div>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <i
+            className="fas fa-search"
+            style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}
+          />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search..."
+            style={{
+              paddingLeft: 26,
+              paddingRight: searchTerm ? 26 : 10,
+              paddingTop: 5,
+              paddingBottom: 5,
+              fontSize: 11,
+              fontWeight: 500,
+              border: '1px solid var(--border-color)',
+              borderRadius: 20,
+              background: 'var(--bg-subtle)',
+              color: 'var(--text-primary)',
+              outline: 'none',
+              width: 120,
+              transition: 'all 0.2s ease',
+            }}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, fontSize: 10, lineHeight: 1 }}
+            >✕</button>
+          )}
+        </div>
+      </div>
+
+      {/* No search results */}
+      {filteredItems.length === 0 && searchTerm && (
+        <div style={{ textAlign: 'center', padding: '20px 16px', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
+          No results for "<strong>{searchTerm}</strong>"
+        </div>
+      )}
+
       <ul className="txn-list">
-        {items.map((item, i) => {
+        {filteredItems.map((item, i) => {
           const icon = getIcon(item)
           const isLending = item.isLend || item.sheet === 'lending'
-          const title = isLending ? (item.person || item.label || '') : (item.category || item.details || '')
+          const titleText = isLending ? (item.person || item.label || '') : (item.category || item.details || '')
           const sub = isLending
             ? `${item.label || item.type} — ${item.remarks || ''}`
             : `${item.forWhom || ''} — ${item.details || ''}`
@@ -87,7 +146,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
 
               <div className="txn-info">
                 <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>{title}</span>
+                  <span>{titleText}</span>
                   {bankMatch && (
                     <span
                       title={`Verified Bank Statement Proof (${bankMatch.bankTransaction.bank || 'Bank'})`}
@@ -118,14 +177,11 @@ export default function TransactionList({ items = [], title, onSelect }) {
                       border: 'none',
                       background: 'rgba(37, 211, 102, 0.1)',
                       color: '#25D366',
-                      width: 26,
-                      height: 26,
+                      width: 26, height: 26,
                       borderRadius: '50%',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12,
                     }}
                   >
                     <i className="fab fa-whatsapp" />
@@ -141,14 +197,11 @@ export default function TransactionList({ items = [], title, onSelect }) {
                       border: 'none',
                       background: 'rgba(59, 130, 246, 0.1)',
                       color: '#3b82f6',
-                      width: 26,
-                      height: 26,
+                      width: 26, height: 26,
                       borderRadius: '50%',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11,
                     }}
                   >
                     <i className="fas fa-envelope" />
@@ -159,22 +212,19 @@ export default function TransactionList({ items = [], title, onSelect }) {
                   {amtInfo.text}
                 </div>
 
-                {/* Small attachment preview / icon at the right extreme */}
+                {/* Attachment icon */}
                 {(item.fileData || item.hasAttachment) && (
-                  <div 
-                    title={item.fileName || "View attachment"}
-                    style={{ 
-                      width: 32, 
-                      height: 32, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      background: 'var(--bg-subtle)', 
-                      border: '1px solid var(--border-color)', 
-                      borderRadius: 'var(--radius-sm)', 
-                      marginLeft: 6, 
-                      flexShrink: 0, 
-                      overflow: 'hidden' 
+                  <div
+                    title={item.fileName || 'View attachment'}
+                    style={{
+                      width: 32, height: 32,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'var(--bg-subtle)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      marginLeft: 6,
+                      flexShrink: 0,
+                      overflow: 'hidden',
                     }}
                   >
                     {item.fileData ? (

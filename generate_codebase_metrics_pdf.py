@@ -110,11 +110,11 @@ def generate_pdf():
     # 2. Executive Stat Cards (2x2 Grid)
     stat_cards_data = [
         [
-            [Paragraph("TOTAL CODEBASE LINES & TOKENS", card_label_style), Paragraph("20,693 LOC", card_val_style), Paragraph("213,648 Base Tokens (56 Files)", card_sub_style)],
-            [Paragraph("EST. 15X AGENTIC API COST", card_label_style), Paragraph("$12.82 USD", card_val_style), Paragraph("≈ ₹1,070 INR (15x Iteration Multiplier)", card_sub_style)]
+            [Paragraph("TOTAL CODEBASE LINES & TOKENS", card_label_style), Paragraph("16,798 LOC", card_val_style), Paragraph("191,877 Base Tokens (46 Files)", card_sub_style)],
+            [Paragraph("EST. 15X AGENTIC API COST", card_label_style), Paragraph("$11.54 USD", card_val_style), Paragraph("≈ ₹964 INR (15x Iteration Multiplier)", card_sub_style)]
         ],
         [
-            [Paragraph("HUMAN ENG. EQUIVALENT", card_label_style), Paragraph("828 Hours", card_val_style), Paragraph("≈ $41,400 USD Value Created", card_sub_style)],
+            [Paragraph("HUMAN ENG. EQUIVALENT", card_label_style), Paragraph("672 Hours", card_val_style), Paragraph("≈ $33,600 USD Value Created", card_sub_style)],
             [Paragraph("FIRESTORE TIER LIMIT", card_label_style), Paragraph("1.0 GB", card_val_style), Paragraph("Firebase Spark Free Quota Active", card_sub_style)]
         ]
     ]
@@ -147,9 +147,9 @@ def generate_pdf():
     # Overall Cost Summary Callout Box
     total_cost_summary_text = (
         "<b>💰 TOTAL OVERALL DEVELOPMENT COST SUMMARY:</b><br/>"
-        "• <b>TOTAL AGENTIC DEVELOPMENT COST (15x Tokens):</b> <font color='#10b981'><b>$12.82 USD (≈ ₹1,070 INR)</b></font><br/>"
-        "• <b>EQUIVALENT HUMAN SOFTWARE DEV COST (828 Hours):</b> <b>$41,400.00 USD (≈ ₹34,57,000 INR)</b><br/>"
-        "• <b>TOTAL ENGINEERING COST SAVINGS:</b> <font color='#6366f1'><b>$41,387.18 USD (99.97% Cost Savings via Agentic Automation)</b></font>"
+        "• <b>TOTAL AGENTIC DEVELOPMENT COST (15x Tokens):</b> <font color='#10b981'><b>$11.54 USD (≈ ₹964 INR)</b></font><br/>"
+        "• <b>EQUIVALENT HUMAN SOFTWARE DEV COST (672 Hours):</b> <b>$33,600.00 USD (≈ ₹28,05,000 INR)</b><br/>"
+        "• <b>TOTAL ENGINEERING COST SAVINGS:</b> <font color='#6366f1'><b>$33,588.46 USD (99.97% Cost Savings via Agentic Automation)</b></font>"
     )
     summary_box = Table([[Paragraph(total_cost_summary_text, ParagraphStyle('SummaryBoxText', parent=body_style, fontSize=9.5, leading=14, textColor=indigo_dark))]], colWidths=[520])
     summary_box.setStyle(TableStyle([
@@ -179,9 +179,9 @@ def generate_pdf():
     story.append(Paragraph("2. Agentic Cost & Token Trajectory Breakdown (15x Iteration Model)", section_heading))
     
     note_text = (
-        "<b>NOTE ON ITERATION MULTIPLIER:</b> To develop a 20,693 LOC production codebase, multiple agentic iterations "
+        "<b>NOTE ON ITERATION MULTIPLIER:</b> To develop a 16,798 LOC production codebase, multiple agentic iterations "
         "happen (prompting, file reading, code generation, debugging & refactoring). The overall cost is calculated using a "
-        "<b>15x iteration multiplier</b> (15 × 213,648 = <b>3,204,720 Total Tokens</b>)."
+        "<b>15x iteration multiplier</b> (15 \u00d7 191,877 = <b>2,878,155 Total Tokens</b>)."
     )
     story.append(Paragraph(note_text, ParagraphStyle('NoteText', parent=body_style, textColor=indigo_dark, backColor=colors.HexColor("#e0e7ff"), borderPadding=6, spaceAfter=8)))
 
@@ -198,27 +198,27 @@ def generate_pdf():
         ],
         [
             Paragraph("Raw Codebase Snapshot", table_cell_bold),
-            Paragraph("213,648 Tokens", table_cell_style),
-            Paragraph("1.0x Base Repository (20,693 LOC)", table_cell_style),
+            Paragraph("191,877 Tokens", table_cell_style),
+            Paragraph("1.0x Base Repository (16,798 LOC)", table_cell_style),
             Paragraph("Static Code Base", table_cell_style)
         ],
         [
             Paragraph("Agentic Input Trajectory", table_cell_bold),
-            Paragraph("2,563,776 Tokens", table_cell_style),
+            Paragraph("2,302,524 Tokens", table_cell_style),
             Paragraph("12.0x Context & Workspace Reads", table_cell_style),
-            Paragraph("$6.41 USD (@ $2.50/1M)", table_cell_style)
+            Paragraph("$5.76 USD (@ $2.50/1M)", table_cell_style)
         ],
         [
             Paragraph("Agentic Output Tokens", table_cell_bold),
-            Paragraph("640,944 Tokens", table_cell_style),
+            Paragraph("575,631 Tokens", table_cell_style),
             Paragraph("3.0x Generated Code & Refactors", table_cell_style),
-            Paragraph("$6.41 USD (@ $10.00/1M)", table_cell_style)
+            Paragraph("$5.76 USD (@ $10.00/1M)", table_cell_style)
         ],
         [
             Paragraph("<b>TOTAL 15X AGENTIC COST</b>", ParagraphStyle('THB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=indigo_dark)),
-            Paragraph("<b>3,204,720 Tokens</b>", table_cell_bold),
+            Paragraph("<b>2,878,155 Tokens</b>", table_cell_bold),
             Paragraph("<b>15.0x Full Development Cycle</b>", table_cell_bold),
-            Paragraph("<b>$12.82 USD (≈ ₹1,070 INR)</b>", ParagraphStyle('THB2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=success_green))
+            Paragraph("<b>$11.54 USD (\u2248 \u20b9964 INR)</b>", ParagraphStyle('THB2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=success_green))
         ]
     ]
 
@@ -241,20 +241,20 @@ def generate_pdf():
     story.append(Paragraph("3. Top Codebase Files by Token Density", section_heading))
 
     top_files = [
-        ("src/styles.css", "2,486", "59,624", "16,115 tokens"),
-        ("src/components/ReportsView.jsx", "1,775", "86,448", "23,365 tokens"),
-        ("src/components/BankSearchModal.jsx", "1,010", "43,569", "11,776 tokens"),
-        ("src/components/CsvImportModal.jsx", "924", "39,554", "10,691 tokens"),
-        ("src/components/AdminPanel.jsx", "865", "44,195", "11,945 tokens"),
-        ("src/components/PersonMergeModal.jsx", "731", "28,923", "7,818 tokens"),
-        ("src/api/subscription.js", "628", "18,943", "5,120 tokens"),
-        ("src/App.jsx", "622", "22,178", "5,995 tokens"),
-        ("src/components/RatingModal.jsx", "592", "22,241", "6,012 tokens"),
-        ("src/components/LegalModal.jsx", "530", "28,168", "7,613 tokens"),
-        ("src/components/SubscriptionModal.jsx", "515", "27,447", "7,419 tokens"),
-        ("src/components/MultiSelectCombobox.jsx", "440", "15,404", "4,164 tokens"),
-        ("src/components/SettingsModal.jsx", "423", "19,471", "5,263 tokens"),
-        ("src/components/Header.jsx", "416", "18,011", "4,868 tokens")
+        ("src/styles.css", "2,333", "60,982", "16,482 tokens"),
+        ("src/components/ReportsView.jsx", "1,664", "86,588", "23,403 tokens"),
+        ("src/components/BankSearchModal.jsx", "1,040", "49,792", "13,457 tokens"),
+        ("src/components/AdminPanel.jsx", "1,025", "56,098", "15,162 tokens"),
+        ("src/components/CsvImportModal.jsx", "834", "39,682", "10,724 tokens"),
+        ("src/components/PersonMergeModal.jsx", "683", "28,965", "7,828 tokens"),
+        ("src/App.jsx", "589", "22,818", "6,167 tokens"),
+        ("src/components/RatingModal.jsx", "567", "22,349", "6,040 tokens"),
+        ("src/api/subscription.js", "550", "18,947", "5,121 tokens"),
+        ("src/components/LegalModal.jsx", "495", "28,249", "7,637 tokens"),
+        ("src/components/SubscriptionModal.jsx", "486", "27,585", "7,454 tokens"),
+        ("src/components/MultiSelectCombobox.jsx", "416", "15,416", "4,166 tokens"),
+        ("src/components/SettingsModal.jsx", "399", "19,579", "5,291 tokens"),
+        ("src/components/Header.jsx", "392", "18,041", "4,879 tokens")
     ]
 
     file_table_data = [
@@ -276,10 +276,10 @@ def generate_pdf():
 
     # Add GROSS TOTAL row summarizing full workspace
     file_table_data.append([
-        Paragraph("<b>GROSS TOTAL (Entire 56 Workspace Files)</b>", ParagraphStyle('FTotalTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
-        Paragraph("<b>20,693 LOC</b>", ParagraphStyle('FTotalVal1', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
-        Paragraph("<b>790,497 Chars</b>", ParagraphStyle('FTotalVal2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
-        Paragraph("<b>213,648 Base Tokens (3.20M Trajectory)</b>", ParagraphStyle('FTotalVal3', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_primary))
+        Paragraph("<b>GROSS TOTAL (Entire 46 Workspace Files)</b>", ParagraphStyle('FTotalTitle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
+        Paragraph("<b>16,798 LOC</b>", ParagraphStyle('FTotalVal1', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
+        Paragraph("<b>710,974 Chars</b>", ParagraphStyle('FTotalVal2', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_dark)),
+        Paragraph("<b>191,877 Base Tokens (2.88M Trajectory)</b>", ParagraphStyle('FTotalVal3', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=indigo_primary))
     ])
 
     file_table = Table(file_table_data, colWidths=[200, 95, 105, 132])
