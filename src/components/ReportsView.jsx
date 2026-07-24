@@ -1,19 +1,24 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { db, auth } from '../firebase'
+import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllExpenses } from '../api/expenses'
 import { getAllLending, normalizeLendingType } from '../api/lending'
-import { loadSnapshot } from '../api/localCache'
+import { loadSnapshot, saveSnapshot } from '../api/localCache'
 import { openWhatsApp, openEmail, getPersonContactMap, openWhatsAppPerson, openEmailPerson } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
+import PersonMergeModal from './PersonMergeModal'
+import { normalizePersonName } from '../api/entityNormalizer'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
+export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid }) {
   const [reportType, setReportType] = useState('expense') // 'expense' | 'lending' | 'bank'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [isAllTime, setIsAllTime] = useState(true)
   const [activeRange, setActiveRange] = useState('allTime')
   const [bankRecords, setBankRecords] = useState([])
+  const [showMergeModal, setShowMergeModal] = useState(false)
   const [pdfSettings, setPdfSettings] = useState({
     showStats: true,
     showBreakdown: true,
@@ -32,14 +37,45 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
   })
 
   useEffect(() => {
-    const cached = loadSnapshot('bank')
+    const currentUid = uid || auth?.currentUser?.uid || ''
+    const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
     if (cached && cached.length > 0) {
       setBankRecords(cached.map((r) => ({
         ...r,
         dateObj: r.date ? new Date(r.date) : new Date(),
       })))
     }
-  }, [])
+
+    async function loadBankFromFirestore() {
+      try {
+        const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', currentUid || ''))
+        const snapScoped = await getDocs(qScoped)
+        let records = snapScoped.docs.map((d) => {
+          const data = d.data()
+          const dateObj = data.date?.toDate?.() || new Date(data.date)
+          return {
+            id: d.id,
+            bank: data.bank || '',
+            date: dateObj,
+            dateObj,
+            description: data.description || '',
+            debit: data.debit || 0,
+            credit: data.credit || 0,
+            balance: data.balance || 0,
+          }
+        })
+        records.sort((a, b) => b.dateObj - a.dateObj)
+        setBankRecords(records)
+        saveSnapshot('bank', records, currentUid)
+      } catch (err) {
+        // Fallback to cache quietly
+      }
+    }
+
+    if (currentUid) {
+      loadBankFromFirestore()
+    }
+  }, [uid])
 
   function toYYYYMMDD(date) {
     const y = date.getFullYear()
@@ -635,8 +671,9 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
     const byWhom = {}
     for (const e of filteredExpenses) {
       total += e.amount
+      const normWhom = normalizePersonName(e.forWhom || 'Self')
       byCat[e.category || 'Uncategorized'] = (byCat[e.category || 'Uncategorized'] || 0) + e.amount
-      byWhom[e.forWhom || 'Self'] = (byWhom[e.forWhom || 'Self'] || 0) + e.amount
+      byWhom[normWhom] = (byWhom[normWhom] || 0) + e.amount
     }
     return { total, byCat, byWhom, items: filteredExpenses }
   }, [filteredExpenses])
@@ -647,13 +684,14 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
     const byPerson = {}
     for (const l of filteredLending) {
       const norm = normalizeLendingType(l.type)
-      if (!byPerson[l.person]) byPerson[l.person] = { net: 0, items: [] }
-      byPerson[l.person].items.push(l)
-      if (norm === 'LEND') { receivable += l.amount; totalLent += l.amount; byPerson[l.person].net += l.amount }
-      else if (norm === 'BORROW') { payable += l.amount; totalBorrowed += l.amount; byPerson[l.person].net -= l.amount }
-      else if (norm === 'THEY_RETURN') { receivable -= l.amount; byPerson[l.person].net -= l.amount }
-      else if (norm === 'I_RETURN') { payable -= l.amount; byPerson[l.person].net += l.amount }
-      else if (norm === 'FORGIVE') { receivable -= l.amount; byPerson[l.person].net -= l.amount }
+      const normPerson = normalizePersonName(l.person || 'Person')
+      if (!byPerson[normPerson]) byPerson[normPerson] = { net: 0, items: [] }
+      byPerson[normPerson].items.push(l)
+      if (norm === 'LEND') { receivable += l.amount; totalLent += l.amount; byPerson[normPerson].net += l.amount }
+      else if (norm === 'BORROW') { payable += l.amount; totalBorrowed += l.amount; byPerson[normPerson].net -= l.amount }
+      else if (norm === 'THEY_RETURN') { receivable -= l.amount; byPerson[normPerson].net -= l.amount }
+      else if (norm === 'I_RETURN') { payable -= l.amount; byPerson[normPerson].net += l.amount }
+      else if (norm === 'FORGIVE') { receivable -= l.amount; byPerson[normPerson].net -= l.amount }
     }
     return { totalLent, totalBorrowed, receivable, payable, byPerson, items: filteredLending }
   }, [filteredLending])
@@ -688,6 +726,18 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
             <i className="fas fa-chart-pie"></i> Report Generator
           </h3>
           <div className="report-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+            {/* Person Name Merge Tool */}
+            <button
+              type="button"
+              onClick={() => setShowMergeModal(true)}
+              className="export-menu-btn"
+              title="Unify duplicate name variations across Expenses & Lending (e.g. Father, father_, My father → Father)"
+              style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' }}
+            >
+              <i className="fas fa-random" style={{ fontSize: 10 }}></i>
+              Merge Names
+            </button>
+
             {/* Unified Export / Download Menu */}
             <div style={{ position: 'relative' }}>
               <button
@@ -1473,6 +1523,18 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn }) {
         personData={shareModal.personData}
         normalizeFn={normalizeLendingType}
       />
+      {/* Person & Entity Merge Modal */}
+      {showMergeModal && (
+        <PersonMergeModal
+          allExpenses={allExpenses}
+          allLending={allLending}
+          uid={uid}
+          onClose={() => setShowMergeModal(false)}
+          onMergeComplete={() => {
+            // refresh data
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1550,6 +1612,49 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
             </span>
             
             <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+              {multiMode && options.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onChange([...options])}
+                    style={{
+                      padding: '2px 5px',
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      background: 'rgba(99,102,241,0.1)',
+                      color: '#6366f1',
+                      border: '1px solid rgba(99,102,241,0.25)',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title="Select all options"
+                  >
+                    ✓ All
+                  </button>
+                  {selected.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onChange([])}
+                      style={{
+                        padding: '2px 5px',
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.25)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Clear all selections"
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={() => setMultiMode(m => !m)}

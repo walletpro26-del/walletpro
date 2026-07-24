@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function LegalModal({ initialTab = 'privacy', onClose }) {
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -7,7 +8,7 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
     setActiveTab(initialTab)
   }, [initialTab])
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 200 }}>
       <div className="modal-backdrop" onClick={onClose} />
       <div
@@ -36,22 +37,23 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
         >
           <button
             onClick={onClose}
+            className="modal-close"
             style={{
               position: 'absolute',
-              top: 18,
-              right: 18,
+              top: 14,
+              right: 14,
               background: 'rgba(255, 255, 255, 0.15)',
-              border: 'none',
               color: '#ffffff',
-              width: 32,
-              height: 32,
+              width: 26,
+              height: 26,
               borderRadius: '50%',
+              border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 16,
-              transition: 'background 0.2s',
+              fontSize: 11,
+              transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
             aria-label="Close legal documents modal"
           >
@@ -523,6 +525,7 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

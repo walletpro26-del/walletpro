@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './styles.css'
+import { initSecurityGuardrails } from './utils/securityGuardrails'
+
+// Activate App Anti-Copy & IP Security Guardrails
+initSecurityGuardrails()
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

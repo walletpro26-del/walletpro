@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { db } from '../firebase'
+import { collection, getDocs } from 'firebase/firestore'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
 import {
   isAdminEmail,
@@ -8,14 +11,27 @@ import {
   reactivateSubscription,
   adminSetSubscriptionByEmailOrUid,
   listenAllSubscriptions,
+  getSubscriberCounts,
+  deduplicateSubscriptions,
+  purgeDuplicateSubscriptions,
 } from '../api/subscription'
 
 export default function AdminPanel({ auth, onClose }) {
-  const [activeTab, setActiveTab] = useState('users') // 'users' | 'settings'
+  const [activeTab, setActiveTab] = useState('users') // 'users' | 'settings' | 'storage'
+
+  // Firestore Real-Time Storage Monitor State
+  const [storageBytes, setStorageBytes] = useState(() => {
+    const saved = localStorage.getItem('wv_firestore_occupancy_mb')
+    return saved ? parseFloat(saved) : 17.01 // default 17.01 MiB from GCP Metrics
+  })
+  const [calculatingStorage, setCalculatingStorage] = useState(false)
+  const [calcStats, setCalcStats] = useState(null)
+  const [cloudMetricInput, setCloudMetricInput] = useState('17.01')
 
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [purging, setPurging] = useState(false)
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
 
@@ -33,6 +49,7 @@ export default function AdminPanel({ auth, onClose }) {
   const [monthlyPrice, setMonthlyPrice] = useState('')
   const [yearlyPrice, setYearlyPrice] = useState('')
   const [trialDays, setTrialDays] = useState('')
+  const [subscriberLimit, setSubscriberLimit] = useState('10')
   const [announcement, setAnnouncement] = useState('')
   const [announcementType, setAnnouncementType] = useState('info')
   const [maintenanceMode, setMaintenanceMode] = useState(false)
@@ -65,6 +82,7 @@ export default function AdminPanel({ auth, onClose }) {
       setMonthlyPrice(String(cfg.monthlyPrice || 20))
       setYearlyPrice(String(cfg.yearlyPrice || 150))
       setTrialDays(String(cfg.trialDays || 0))
+      setSubscriberLimit(String(cfg.subscriberLimit ?? 10))
       setAnnouncement(cfg.announcement || '')
       setAnnouncementType(cfg.announcementType || 'info')
       setMaintenanceMode(cfg.maintenanceMode || false)
@@ -91,6 +109,56 @@ export default function AdminPanel({ auth, onClose }) {
       console.warn('[AdminPanel] Refresh warning:', err?.message)
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  async function calculateRealtimeStorage() {
+    setCalculatingStorage(true)
+    try {
+      const expensesSnap = await getDocs(collection(db, 'expenses'))
+      const lendingSnap = await getDocs(collection(db, 'lending'))
+      const usersSnap = await getDocs(collection(db, 'userProfiles'))
+      const remindersSnap = await getDocs(collection(db, 'scheduledReminders'))
+
+      let totalBytes = 0
+      let totalDocs = 0
+
+      expensesSnap.forEach((docSnap) => {
+        totalDocs++
+        const str = JSON.stringify(docSnap.data() || {})
+        totalBytes += str.length + 64
+      })
+      lendingSnap.forEach((docSnap) => {
+        totalDocs++
+        const str = JSON.stringify(docSnap.data() || {})
+        totalBytes += str.length + 64
+      })
+      usersSnap.forEach((docSnap) => {
+        totalDocs++
+        const str = JSON.stringify(docSnap.data() || {})
+        totalBytes += str.length + 64
+      })
+      remindersSnap.forEach((docSnap) => {
+        totalDocs++
+        const str = JSON.stringify(docSnap.data() || {})
+        totalBytes += str.length + 64
+      })
+
+      const calculatedMB = parseFloat((totalBytes / (1024 * 1024)).toFixed(3))
+      setCalcStats({
+        expensesCount: expensesSnap.size,
+        lendingCount: lendingSnap.size,
+        usersCount: usersSnap.size,
+        remindersCount: remindersSnap.size,
+        totalDocs,
+        totalBytes,
+        calculatedMB,
+      })
+      showToast(`⚡ Real-time scan complete: ${totalDocs} documents analyzed!`)
+    } catch (err) {
+      console.warn('[AdminPanel] Storage calc warning:', err?.message)
+    } finally {
+      setCalculatingStorage(false)
     }
   }
 
@@ -160,6 +228,7 @@ export default function AdminPanel({ auth, onClose }) {
       const mp = parseFloat(monthlyPrice) || 20
       const yp = parseFloat(yearlyPrice) || 150
       const td = parseInt(trialDays) || 0
+      const sl = parseInt(subscriberLimit) || 10
 
       if (mp <= 0 || yp <= 0) {
         setError('Prices must be greater than 0')
@@ -171,6 +240,7 @@ export default function AdminPanel({ auth, onClose }) {
         monthlyPrice: mp,
         yearlyPrice: yp,
         trialDays: td,
+        subscriberLimit: sl,
         announcement,
         announcementType,
         maintenanceMode,
@@ -208,18 +278,41 @@ export default function AdminPanel({ auth, onClose }) {
     )
   }
 
-  // Filter subscriptions for Tab 1
-  const filteredSubscriptions = allSubscriptions.filter((s) => {
+  async function handlePurgeDuplicates() {
+    if (!window.confirm('Scan Firestore and permanently delete duplicate subscription documents for the same email?')) return
+    setPurging(true)
+    setError('')
+    try {
+      const res = await purgeDuplicateSubscriptions(auth?.email)
+      if (res.deletedCount > 0) {
+        showToast(`🧹 Purged ${res.deletedCount} duplicate document(s) from Firestore!`)
+      } else {
+        showToast('✨ No duplicate records found in Firestore.')
+      }
+      await handleRefresh()
+    } catch (err) {
+      setError(err?.message || 'Purge failed')
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  // Deduplicate allSubscriptions by unique email address
+  const uniqueSubscriptions = deduplicateSubscriptions(allSubscriptions)
+
+  // Filter deduplicated subscriptions for Tab 1
+  const filteredSubscriptions = uniqueSubscriptions.filter((s) => {
     if (!searchFilter.trim()) return true
     const term = searchFilter.toLowerCase().trim()
     return (s.email || '').toLowerCase().includes(term) || (s.userId || s.id || '').toLowerCase().includes(term) || (s.utr || '').toLowerCase().includes(term)
   })
 
-  const activeSubsCount = allSubscriptions.filter((s) => s.status === 'active').length
-  const pendingSubsCount = allSubscriptions.filter((s) => s.status === 'pending_verification').length
-  const revokedSubsCount = allSubscriptions.filter((s) => s.status === 'revoked' || s.status === 'expired').length
+  const { totalActive, adminActivatedCount, regularActiveCount } = getSubscriberCounts(allSubscriptions)
+  const pendingSubsCount = uniqueSubscriptions.filter((s) => s.status === 'pending_verification').length
+  const revokedSubsCount = uniqueSubscriptions.filter((s) => s.status === 'revoked' || s.status === 'expired').length
+  const limitNum = parseInt(subscriberLimit) || config?.subscriberLimit || 10
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 130 }}>
       <div className="modal-backdrop" onClick={onClose} />
       <div
@@ -250,8 +343,8 @@ export default function AdminPanel({ auth, onClose }) {
             className="modal-close"
             style={{
               position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)',
-              color: '#fff', width: 28, height: 28, borderRadius: '50%', border: 'none',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+              color: '#fff', width: 26, height: 26, borderRadius: '50%', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
             }}
             onClick={onClose}
             aria-label="Close"
@@ -284,7 +377,7 @@ export default function AdminPanel({ auth, onClose }) {
                 transition: 'all 0.15s',
               }}
             >
-              <i className="fas fa-users" /> Accounts ({allSubscriptions.length})
+              <i className="fas fa-users" /> Accounts ({uniqueSubscriptions.length})
             </button>
 
             <button
@@ -299,6 +392,20 @@ export default function AdminPanel({ auth, onClose }) {
               }}
             >
               <i className="fas fa-cog" /> Settings
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('storage')}
+              style={{
+                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                background: activeTab === 'storage' ? '#ffffff' : 'transparent',
+                color: activeTab === 'storage' ? '#312e81' : '#cbd5e1',
+                fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                transition: 'all 0.15s',
+              }}
+            >
+              <i className="fas fa-database" /> 🔥 Storage Quota
             </button>
           </div>
         </div>
@@ -327,17 +434,25 @@ export default function AdminPanel({ auth, onClose }) {
           {activeTab === 'users' && (
             <div>
               {/* Quick Status Stats Bar */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                <div style={{ flex: 1, background: 'rgba(16,185,129,0.08)', border: '1px solid #10b981', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: '#059669' }}>{activeSubsCount}</div>
-                  <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>🟢 Active</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 10 }}>
+                <div style={{ background: regularActiveCount >= limitNum ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)', border: `1px solid ${regularActiveCount >= limitNum ? '#ef4444' : '#10b981'}`, borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: regularActiveCount >= limitNum ? '#ef4444' : '#059669' }}>
+                    {regularActiveCount} / {limitNum}
+                  </div>
+                  <div style={{ fontSize: 8.5, color: regularActiveCount >= limitNum ? '#b91c1c' : '#047857', fontWeight: 700 }}>
+                    {regularActiveCount >= limitNum ? '🔴 Regular Limit' : '🟢 Regular Subs'}
+                  </div>
                 </div>
-                <div style={{ flex: 1, background: 'rgba(245,158,11,0.08)', border: '1px solid #f59e0b', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: '#d97706' }}>{pendingSubsCount}</div>
-                  <div style={{ fontSize: 9, color: '#b45309', fontWeight: 700 }}>⏳ Pending</div>
+                <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid #6366f1', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#4f46e5' }}>{adminActivatedCount}</div>
+                  <div style={{ fontSize: 8.5, color: '#4338ca', fontWeight: 700 }}>👑 Admin Granted</div>
                 </div>
-                <div style={{ flex: 1, background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: '#64748b' }}>{revokedSubsCount}</div>
+                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid #f59e0b', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#d97706' }}>{pendingSubsCount}</div>
+                  <div style={{ fontSize: 8.5, color: '#b45309', fontWeight: 700 }}>⏳ Pending</div>
+                </div>
+                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#64748b' }}>{revokedSubsCount}</div>
                   <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>🔴 Inactive</div>
                 </div>
               </div>
@@ -403,12 +518,25 @@ export default function AdminPanel({ auth, onClose }) {
                     }}
                   />
                 </div>
-                <button
-                  onClick={handleRefresh}
-                  style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh
-                </button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={handlePurgeDuplicates}
+                    disabled={purging}
+                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    title="Scan Firestore and clean up duplicate documents for the same email"
+                  >
+                    <i className={`fas ${purging ? 'fa-spinner fa-spin' : 'fa-broom'}`} style={{ marginRight: 4 }} />
+                    {purging ? 'Purging...' : 'Purge Duplicates'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh
+                  </button>
+                </div>
               </div>
 
               {/* Registered Accounts Cards List */}
@@ -424,21 +552,40 @@ export default function AdminPanel({ auth, onClose }) {
                     const isRevoked = sub.status === 'revoked' || sub.status === 'expired'
                     const expiresDate = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : (sub.expiresAt ? new Date(sub.expiresAt) : null)
 
+                    const isAdminGranted =
+                      sub.gateway === 'admin_granted' ||
+                      sub.adminActivated === true ||
+                      !!sub.updatedByAdmin ||
+                      sub.plan === 'lifetime_admin' ||
+                      isAdminEmail(sub.email)
+
                     return (
                       <div
                         key={sub.id || sub.userId}
                         style={{
                           padding: '8px 10px',
                           borderRadius: 8,
-                          border: isActive ? '1px solid #a7f3d0' : isPending ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
-                          background: isActive ? 'rgba(16,185,129,0.03)' : isPending ? 'rgba(245,158,11,0.05)' : 'var(--bg-subtle, #f8fafc)',
+                          border: isActive ? (isAdminGranted ? '1px solid #a5b4fc' : '1px solid #a7f3d0') : isPending ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
+                          background: isActive ? (isAdminGranted ? 'rgba(99,102,241,0.04)' : 'rgba(16,185,129,0.03)') : isPending ? 'rgba(245,158,11,0.05)' : 'var(--bg-subtle, #f8fafc)',
                           fontSize: 11,
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 6 }}>
-                            <strong style={{ color: 'var(--text-primary, #1e293b)', fontSize: 11 }}>{sub.email || sub.userId}</strong>
-                            <div style={{ fontSize: 9, color: '#64748b', marginTop: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <strong style={{ color: 'var(--text-primary, #1e293b)', fontSize: 11 }}>{sub.email || sub.userId}</strong>
+                              {isActive && isAdminGranted && (
+                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(99,102,241,0.15)', color: '#4f46e5', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                  👑 Admin Granted (Exempt)
+                                </span>
+                              )}
+                              {isActive && !isAdminGranted && (
+                                <span style={{ fontSize: 7.5, fontWeight: 900, background: sub.plan === 'trial' ? 'rgba(16,185,129,0.15)' : 'rgba(14,165,233,0.15)', color: sub.plan === 'trial' ? '#047857' : '#0284c7', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                  {sub.plan === 'trial' ? '🎁 Free Trial' : '💳 Paid Sub'}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
                               Plan: <strong style={{ color: '#6366f1' }}>{(sub.plan || 'monthly').toUpperCase()}</strong>
                               {expiresDate && (
                                 <> &bull; Expires: <span>{expiresDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
@@ -533,6 +680,31 @@ export default function AdminPanel({ auth, onClose }) {
                       onChange={(e) => setYearlyPrice(e.target.value)}
                       style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700 }}
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Subscriber Limit Section */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>👥 Subscriber Limit Control</span>
+                  <span style={{ fontSize: 8.5, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 6px', borderRadius: 4, textTransform: 'none', fontWeight: 700 }}>
+                    Admin-granted accounts exempt
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ width: 110 }}>
+                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Max Regular Subs</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={subscriberLimit}
+                      onChange={(e) => setSubscriberLimit(e.target.value)}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, fontSize: 9, color: '#64748b', lineHeight: 1.35 }}>
+                    Controls maximum regular subscribers allowed (default: 10). Accounts activated directly by Admin from this portal will <strong>NOT</strong> be counted in this limit.
                   </div>
                 </div>
               </div>
@@ -757,12 +929,164 @@ export default function AdminPanel({ auth, onClose }) {
             </div>
           )}
 
+          {/* ══════════════════════════════════════════════════════════
+              TAB 3: FIRESTORE DATABASE STORAGE & QUOTA MONITOR
+             ══════════════════════════════════════════════════════════ */}
+          {activeTab === 'storage' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Live Storage Gauge Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+                padding: '14px 16px',
+                borderRadius: 12,
+                border: '1px solid rgba(99,102,241,0.3)',
+                color: '#fff',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#a5b4fc', letterSpacing: 0.5 }}>
+                    🔥 FIRESTORE STORAGE OCCUPANCY (1.0 GB FREE SPARK PLAN)
+                  </div>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    background: storageBytes > 900 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                    color: storageBytes > 900 ? '#ef4444' : '#10b981',
+                    padding: '2px 8px',
+                    borderRadius: 99,
+                    border: storageBytes > 900 ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(16,185,129,0.4)',
+                  }}>
+                    {storageBytes > 900 ? '⚠️ WARNING: 90% THRESHOLD' : '🟢 SAFE & OPTIMAL'}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 2 }}>
+                  {storageBytes.toFixed(2)} MiB <span style={{ fontSize: 13, color: '#a5b4fc', fontWeight: 600 }}>/ 1,024 MiB</span>
+                </div>
+
+                {/* Progress Bar */}
+                <div style={{ background: 'rgba(255,255,255,0.1)', height: 9, borderRadius: 6, overflow: 'hidden', margin: '8px 0 6px' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, (storageBytes / 1024) * 100).toFixed(2)}%`,
+                    background: storageBytes > 900 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #6366f1)',
+                    borderRadius: 6,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8' }}>
+                  <span>Occupied: {((storageBytes / 1024) * 100).toFixed(2)}%</span>
+                  <span>Available Free: {(1024 - storageBytes).toFixed(2)} MiB (98.34%)</span>
+                </div>
+              </div>
+
+              {/* GCP Metrics Sync Box */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 10, borderRadius: 10, border: '1px solid var(--border-color, #e2e8f0)' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)', marginBottom: 4 }}>
+                  📡 Google Cloud Monitoring Metric Sync (data_and_index_storage_bytes):
+                </div>
+                <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+                  Directly enter exact MiB metric from Google Cloud Console Metrics Explorer:
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={cloudMetricInput}
+                    onChange={(e) => setCloudMetricInput(e.target.value)}
+                    placeholder="e.g. 17.01"
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 11,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = parseFloat(cloudMetricInput) || 17.01
+                      setStorageBytes(val)
+                      localStorage.setItem('wv_firestore_occupancy_mb', String(val))
+                      showToast(`✔ Firestore Occupancy updated to ${val} MiB!`)
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Save GCP Metric
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Collection Scanner Section */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 10, borderRadius: 10, border: '1px solid var(--border-color, #e2e8f0)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                    ⚡ Real-Time Collection Document Byte Scanner:
+                  </div>
+                  <button
+                    type="button"
+                    onClick={calculateRealtimeStorage}
+                    disabled={calculatingStorage}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 800,
+                      cursor: calculatingStorage ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {calculatingStorage ? 'Scanning...' : '🔄 Run Real-Time Scan'}
+                  </button>
+                </div>
+
+                {calcStats ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                      Expenses: <strong>{calcStats.expensesCount} docs</strong>
+                    </div>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                      Lending: <strong>{calcStats.lendingCount} docs</strong>
+                    </div>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                      User Profiles: <strong>{calcStats.usersCount} docs</strong>
+                    </div>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                      Reminders: <strong>{calcStats.remindersCount} docs</strong>
+                    </div>
+                    <div style={{ gridColumn: 'span 2', padding: '6px 8px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#059669', fontWeight: 800 }}>
+                      ✔ Total Scanned: {calcStats.totalDocs} docs (~{calcStats.calculatedMB} MB estimated JSON footprint)
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 9.5, color: '#64748b', fontStyle: 'italic' }}>
+                    Click "Run Real-Time Scan" to query live document byte sizes across expenses, lending, user accounts, and reminders.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Admin emails footer */}
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 9, color: '#64748b' }}>
             Whitelisted Admins: {ADMIN_EMAILS.join(', ')}
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

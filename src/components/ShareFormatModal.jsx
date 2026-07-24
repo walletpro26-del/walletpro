@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { shareViaWhatsApp, shareViaEmail } from '../utils/pdfShareUtils'
 
 export default function ShareFormatModal({
@@ -39,7 +40,7 @@ export default function ShareFormatModal({
     }
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 99999 }}>
       <div className="modal-backdrop" onClick={onClose} />
       <div className="modal-card card-premium" style={{ maxWidth: 360, width: '90%', padding: '20px 24px', position: 'relative', zIndex: 2 }}>
@@ -158,6 +159,7 @@ export default function ShareFormatModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

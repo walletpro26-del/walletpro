@@ -29,7 +29,7 @@ export default function MultiSelectCombobox({
       : [value.trim()].filter(Boolean)
   ) : []
 
-  const displayValue = selected.join(' · ')
+  const displayValue = selected.length > 1 ? `${selected.length} Selected` : (selected[0] || '')
 
   function closeAndSave(newVal) {
     const finalVal = newVal !== undefined ? newVal : (isDirty ? search.trim() : value)
@@ -44,6 +44,10 @@ export default function MultiSelectCombobox({
     setOpen(true)
     setSearch('')
     setIsDirty(false)
+    // Auto-scroll active input field into clear view so suggestions are immediately visible
+    setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    }, 50)
   }
 
   // Close when clicking or tapping outside
@@ -93,6 +97,15 @@ export default function MultiSelectCombobox({
     } else {
       singleSelect(item)
     }
+  }
+
+  function handleSelectAll() {
+    const all = Array.from(new Set([...selected, ...filteredSuggestions]))
+    onChange(all.join(SEPARATOR))
+  }
+
+  function handleClearAll() {
+    onChange('')
   }
 
   function editItem(item) {
@@ -230,6 +243,49 @@ export default function MultiSelectCombobox({
             </span>
             
             <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+              {multiMode && filteredSuggestions.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    style={{
+                      padding: '2px 5px',
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      background: 'rgba(99,102,241,0.1)',
+                      color: '#6366f1',
+                      border: '1px solid rgba(99,102,241,0.25)',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title="Select all matching suggestions"
+                  >
+                    ✓ All
+                  </button>
+                  {selected.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      style={{
+                        padding: '2px 5px',
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.25)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Clear all selected items"
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
+                </>
+              )}
+
               {allowMulti && (
                 <button
                   type="button"
@@ -307,7 +363,15 @@ export default function MultiSelectCombobox({
                 key={i}
                 className={`search-dropdown-item${selected.includes(item) ? ' selected' : ''}`}
                 onClick={() => handleItemClick(item)}
-                style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  background: selected.includes(item) ? 'rgba(99,102,241,0.08)' : 'transparent',
+                  borderLeft: selected.includes(item) ? '3px solid #6366f1' : '3px solid transparent',
+                  paddingLeft: selected.includes(item) ? 9 : 12,
+                }}
               >
                 {multiMode ? (
                   <input

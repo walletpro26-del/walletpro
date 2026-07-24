@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
   collection,
   getDocs,
   query,
@@ -375,12 +376,115 @@ export function listenAllSubscriptions(callback) {
     const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     callback(subs)
   }, (err) => {
-    console.warn('[subscription] Subscriptions listener error:', err?.message)
+    // Quietly fallback if non-admin user hits permission restrictions
+    if (!err?.message?.includes('permission') && err?.code !== 'permission-denied') {
+      console.warn('[subscription] Subscriptions listener warning:', err?.message)
+    }
+    callback([])
   })
 }
 
 /**
+ * Deduplicate raw subscription records by normalized email address
+ * Picks the most active / latest expiring record as primary for each unique email.
+ * @param {Array<object>} subscriptions
+ * @returns {Array<object>}
+ */
+export function deduplicateSubscriptions(subscriptions = []) {
+  const map = new Map()
+
+  subscriptions.forEach((sub) => {
+    const rawEmail = (sub.email || sub.userId || sub.id || '').toLowerCase().trim()
+    if (!rawEmail) return
+
+    const expiresAt = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : (sub.expiresAt ? new Date(sub.expiresAt) : null)
+    const isActive = sub.status === 'active' && (!expiresAt || expiresAt > new Date())
+    const score = (isActive ? 1000 : 0) + (sub.status === 'pending_verification' ? 500 : 0) + (expiresAt ? expiresAt.getTime() / 1e10 : 0)
+
+    const docId = sub.id || sub.userId
+
+    if (!map.has(rawEmail)) {
+      map.set(rawEmail, {
+        ...sub,
+        email: sub.email || rawEmail,
+        _score: score,
+        docIds: docId ? [docId] : [],
+      })
+    } else {
+      const existing = map.get(rawEmail)
+      if (docId && !existing.docIds.includes(docId)) {
+        existing.docIds.push(docId)
+      }
+
+      // If new doc has a higher priority/status score, replace primary details
+      if (score > existing._score) {
+        map.set(rawEmail, {
+          ...sub,
+          email: sub.email || rawEmail,
+          _score: score,
+          docIds: existing.docIds,
+        })
+      }
+    }
+  })
+
+  return Array.from(map.values()).map(({ _score, ...rest }) => rest)
+}
+
+/**
+ * Permanently purge duplicate subscription documents for the same email in Firestore
+ * @param {string} adminEmail
+ * @returns {Promise<{ success: boolean, deletedCount: number }>}
+ */
+export async function purgeDuplicateSubscriptions(adminEmail) {
+  if (!isAdminEmail(adminEmail)) {
+    throw new Error('Only whitelisted admins can purge duplicate records')
+  }
+
+  const snap = await getDocs(collection(db, 'subscriptions'))
+  const rawSubs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
+  const emailGroups = new Map()
+  rawSubs.forEach((sub) => {
+    const email = (sub.email || sub.userId || sub.id || '').toLowerCase().trim()
+    if (!email) return
+    if (!emailGroups.has(email)) emailGroups.set(email, [])
+    emailGroups.get(email).push(sub)
+  })
+
+  let deletedCount = 0
+
+  for (const [email, docs] of emailGroups.entries()) {
+    if (docs.length <= 1) continue
+
+    // Sort docs by score (best / most active / newest first)
+    docs.sort((a, b) => {
+      const expA = a.expiresAt?.toDate ? a.expiresAt.toDate() : (a.expiresAt ? new Date(a.expiresAt) : new Date(0))
+      const expB = b.expiresAt?.toDate ? b.expiresAt.toDate() : (b.expiresAt ? new Date(b.expiresAt) : new Date(0))
+      const activeA = a.status === 'active' && expA > new Date() ? 1000 : 0
+      const activeB = b.status === 'active' && expB > new Date() ? 1000 : 0
+      return (activeB + expB.getTime()) - (activeA + expA.getTime())
+    })
+
+    // Keep docs[0] as primary, delete docs[1..N]
+    const docsToDelete = docs.slice(1)
+    for (const d of docsToDelete) {
+      try {
+        const ref = doc(db, 'subscriptions', d.id)
+        await deleteDoc(ref)
+        deletedCount++
+      } catch (err) {
+        console.warn(`[subscription] Failed to delete duplicate doc ${d.id}:`, err?.message)
+      }
+    }
+  }
+
+  return { success: true, deletedCount }
+}
+
+/**
  * Admin direct manual activation or deactivation of any user account by Email or UID
+ * Updates ALL duplicate documents associated with that email in Firestore.
  * @param {string} targetInput - User email or UID
  * @param {'active'|'revoked'|'expired'} status
  * @param {'monthly'|'yearly'} plan
@@ -391,16 +495,16 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
   const cleanInput = String(targetInput || '').trim()
   if (!cleanInput) throw new Error('User Email or UID is required')
 
-  let targetUid = cleanInput
+  let matchingUids = [cleanInput]
   let targetEmail = cleanInput.includes('@') ? cleanInput.toLowerCase() : ''
 
-  // If email is passed, search in subscriptions collection to find matching UID
+  // If email is passed, search in subscriptions collection to find ALL matching UIDs
   if (cleanInput.includes('@')) {
     try {
       const q = query(collection(db, 'subscriptions'), where('email', '==', targetEmail))
       const snap = await getDocs(q)
       if (!snap.empty) {
-        targetUid = snap.docs[0].id
+        matchingUids = snap.docs.map((d) => d.id)
       }
     } catch (err) {
       console.warn('[subscription] Search by email warning:', err?.message)
@@ -422,21 +526,65 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
     expiresAt = now
   }
 
-  const subRef = doc(db, 'subscriptions', targetUid)
-  const payload = {
-    userId: targetUid,
-    email: targetEmail || targetUid,
-    status,
-    plan: status === 'active' ? plan : 'none',
-    updatedAt: nowTs,
-    expiresAt: Timestamp.fromDate(expiresAt),
-    updatedByAdmin: adminEmail || 'admin',
-    adminNote: reason || (status === 'active' ? 'Manually activated by Admin' : 'Deactivated by Admin'),
+  // Update ALL matching documents for this email/UID
+  for (const uid of matchingUids) {
+    const subRef = doc(db, 'subscriptions', uid)
+    const payload = {
+      userId: uid,
+      email: targetEmail || uid,
+      status,
+      plan: status === 'active' ? plan : 'none',
+      updatedAt: nowTs,
+      expiresAt: Timestamp.fromDate(expiresAt),
+      updatedByAdmin: adminEmail || 'admin',
+      gateway: status === 'active' ? 'admin_granted' : 'none',
+      adminActivated: status === 'active',
+      adminNote: reason || (status === 'active' ? 'Manually activated by Admin' : 'Deactivated by Admin'),
+    }
+    await setDoc(subRef, payload, { merge: true })
   }
 
-  await setDoc(subRef, payload, { merge: true })
-  return { success: true, userId: targetUid, status, expiresAt }
+  return { success: true, userId: matchingUids[0], status, expiresAt }
 }
+
+/**
+ * Categorize and count active subscriptions into regular (counted towards limit) and admin-granted (exempt from limit)
+ * Deduplicates entries by unique email first.
+ * @param {Array<object>} subscriptions
+ * @returns {{ totalActive: number, adminActivatedCount: number, regularActiveCount: number }}
+ */
+export function getSubscriberCounts(subscriptions = []) {
+  const uniqueSubs = deduplicateSubscriptions(subscriptions)
+  let totalActive = 0
+  let adminActivatedCount = 0
+
+  uniqueSubs.forEach((sub) => {
+    const expiresAt = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : (sub.expiresAt ? new Date(sub.expiresAt) : null)
+    const isActive = sub.status === 'active' && (!expiresAt || expiresAt > new Date())
+
+    if (isActive) {
+      totalActive++
+      const isAdminActivated =
+        sub.gateway === 'admin_granted' ||
+        sub.adminActivated === true ||
+        !!sub.updatedByAdmin ||
+        sub.plan === 'lifetime_admin' ||
+        isAdminEmail(sub.email)
+
+      if (isAdminActivated) {
+        adminActivatedCount++
+      }
+    }
+  })
+
+  const regularActiveCount = totalActive - adminActivatedCount
+  return {
+    totalActive,
+    adminActivatedCount,
+    regularActiveCount: Math.max(0, regularActiveCount),
+  }
+}
+
 
 /**
  * Claim the 3-day free trial for a user (can only be claimed once)

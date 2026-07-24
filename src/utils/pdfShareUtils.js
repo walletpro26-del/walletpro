@@ -90,6 +90,9 @@ export function generateSingleTxnPDF(item) {
   doc.text('This digital voucher was generated automatically via WalletVibe Personal Finance.', 14, finalY)
 
   const fileName = `WalletVibe_${personOrCategory.replace(/\s+/g, '_')}_${dateStr.replace(/\s+/g, '_')}.pdf`
+  if (returnDocObj) {
+    return { doc, fileName }
+  }
   doc.save(fileName)
   return fileName
 }
@@ -97,7 +100,7 @@ export function generateSingleTxnPDF(item) {
 /**
  * Generate a PDF document for a Person's full Lend/Borrow ledger
  */
-export function generatePersonLedgerPDF(person, data, normalizeFn) {
+export function generatePersonLedgerPDF(person, data, normalizeFn, returnDocObj = false) {
   const doc = new jsPDF()
   const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   const netAmt = Math.abs(data.net).toLocaleString('en-IN')
@@ -105,7 +108,7 @@ export function generatePersonLedgerPDF(person, data, normalizeFn) {
 
   // Header Banner
   doc.setFillColor(30, 41, 59)
-  doc.rect(0, 0, 210, 42, 'F')
+  doc.rect(0, 0, 210, 45, 'F')
   
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
@@ -115,68 +118,63 @@ export function generatePersonLedgerPDF(person, data, normalizeFn) {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(203, 213, 225)
-  doc.text(`Ledger Statement for ${person}`, 14, 32)
+  doc.text(`Account Statement & Ledger — ${person}`, 14, 30)
 
-  doc.text(`Date: ${dateStr}`, 196, 25, { align: 'right' })
+  doc.setFontSize(8)
+  doc.text(`Generated: ${dateStr}`, 196, 22, { align: 'right' })
+  doc.text('Confidential', 196, 30, { align: 'right' })
 
-  // Net Balance Summary Box
+  // Summary Card
   doc.setFillColor(248, 250, 252)
-  doc.roundedRect(14, 50, 182, 34, 4, 4, 'F')
+  doc.roundedRect(14, 52, 182, 34, 4, 4, 'F')
   doc.setDrawColor(226, 232, 240)
-  doc.roundedRect(14, 50, 182, 34, 4, 4, 'D')
+  doc.roundedRect(14, 52, 182, 34, 4, 4, 'D')
 
   doc.setFontSize(9)
   doc.setTextColor(100, 116, 139)
   doc.setFont('helvetica', 'bold')
-  doc.text('NET BALANCE STATUS', 22, 61)
+  doc.text('NET SETTLEMENT POSITION', 22, 64)
 
-  doc.setFontSize(18)
-  doc.setTextColor(data.net >= 0 ? 5 : 220, data.net >= 0 ? 150 : 38, data.net >= 0 ? 105 : 38)
-  doc.text(`Rs.${netAmt}  (${netStatus})`, 22, 74)
+  doc.setFontSize(16)
+  doc.setTextColor(data.net >= 0 ? 16 : 220, data.net >= 0 ? 185 : 38, data.net >= 0 ? 129 : 38)
+  doc.text(`Rs.${netAmt} (${netStatus})`, 22, 76)
 
-  // Transactions Table
-  const rows = (data.items || [])
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .map((item, idx) => {
-      const dStr = item.date ? new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
-      const norm = normalizeFn ? normalizeFn(item.type) : item.type
-      let typeText = item.type
-      let amtPrefix = '-'
-      if (norm === 'LEND') { typeText = 'Loan Given'; amtPrefix = '-' }
-      else if (norm === 'BORROW') { typeText = 'Borrowed'; amtPrefix = '+' }
-      else if (norm === 'THEY_RETURN') { typeText = 'Received Return'; amtPrefix = '+' }
-      else if (norm === 'I_RETURN') { typeText = 'I Returned'; amtPrefix = '-' }
-      else if (norm === 'FORGIVE') { typeText = 'Forgiven'; amtPrefix = '-' }
+  // Ledger Table
+  const recordsList = data.records || data.items || []
+  const tableRows = recordsList.map((r, index) => {
+    const isGave = r.type === 'Gave' || r.type === 'Give' || r.label === 'Gave' || r.label === 'Give'
+    const isGot = r.type === 'Got' || r.type === 'Receive' || r.label === 'Got' || r.label === 'Receive'
+    const isBorrow = r.type === 'Borrow' || r.label === 'Borrow'
+    const isReturn = r.type === 'They Return' || r.label === 'They Return'
 
-      return [
-        idx + 1,
-        dStr,
-        typeText,
-        item.remarks || '—',
-        `${amtPrefix}Rs.${Number(item.amount).toLocaleString('en-IN')}`
-      ]
-    })
+    let displayType = r.type || r.label || 'Entry'
+    if (isGave) displayType = 'Gave (You Paid)'
+    else if (isGot) displayType = 'Got (You Received)'
+    else if (isBorrow) displayType = 'Borrowed'
+    else if (isReturn) displayType = 'Returned'
+
+    const rDate = r.date ? new Date(r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+    const rAmt = `Rs.${Number(r.amount || 0).toLocaleString('en-IN')}`
+    const rDetails = r.remarks || r.details || '—'
+
+    return [index + 1, rDate, displayType, rAmt, rDetails]
+  })
 
   autoTable(doc, {
-    startY: 92,
-    head: [['#', 'Date', 'Transaction Type', 'Remarks', 'Amount']],
-    body: rows,
-    theme: 'striped',
-    headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
-    bodyStyles: { fontSize: 8, cellPadding: 2 },
+    startY: 94,
+    head: [['#', 'Date', 'Transaction Type', 'Amount', 'Remarks / Details']],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: { fillColor: [30, 41, 59], fontSize: 9, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 8.5, cellPadding: 3 },
     columnStyles: {
-      0: { cellWidth: 10 },
+      0: { cellWidth: 12, halign: 'center' },
       1: { cellWidth: 28 },
-      2: { cellWidth: 35 },
-      4: { halign: 'right', fontStyle: 'bold', cellWidth: 32 },
+      2: { cellWidth: 42, fontStyle: 'bold' },
+      3: { cellWidth: 32, fontStyle: 'bold', halign: 'right' },
+      4: { cellWidth: 'auto' },
     },
     margin: { left: 14, right: 14 },
-    didParseCell: function(cellData) {
-      if (cellData.column.index === 4 && cellData.section === 'body') {
-        const isPos = cellData.cell.raw.startsWith('+')
-        cellData.cell.styles.textColor = isPos ? [5, 150, 105] : [239, 68, 68]
-      }
-    }
   })
 
   // Footer Note
@@ -190,6 +188,9 @@ export function generatePersonLedgerPDF(person, data, normalizeFn) {
   }
 
   const fileName = `WalletVibe_Statement_${person.replace(/\s+/g, '_')}_${dateStr.replace(/\s+/g, '_')}.pdf`
+  if (returnDocObj) {
+    return { doc, fileName }
+  }
   doc.save(fileName)
   return fileName
 }
@@ -197,23 +198,53 @@ export function generatePersonLedgerPDF(person, data, normalizeFn) {
 /**
  * Execute Share via WhatsApp with PDF or Text option
  */
-export function shareViaWhatsApp({ phone, item, person, personData, normalizeFn, format = 'text' }) {
+export async function shareViaWhatsApp({ phone, item, person, personData, normalizeFn, format = 'text' }) {
   const cleanPhone = cleanPhoneNumber(phone || item?.mobileNo || item?.phone)
-  if (!cleanPhone) {
-    alert('Please enter or select a valid mobile number!')
-    return
-  }
 
   if (format === 'pdf') {
-    let fileName = ''
+    let pdfRes = null
     if (person && personData) {
-      fileName = generatePersonLedgerPDF(person, personData, normalizeFn)
+      pdfRes = generatePersonLedgerPDF(person, personData, normalizeFn, true)
     } else if (item) {
-      fileName = generateSingleTxnPDF(item)
+      pdfRes = generateSingleTxnPDF(item, true)
     }
-    const msg = `Hi ${person || item?.person || 'there'}, I have generated and downloaded our WalletVibe PDF Statement (${fileName}). Please check the attached document.`
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+
+    if (!pdfRes) return
+
+    const { doc, fileName } = pdfRes
+    const personName = person || item?.person || 'Friend'
+    const msg = `Hi ${personName}, here is the official WalletVibe PDF Statement (${fileName}).`
+
+    try {
+      const blob = doc.output('blob')
+      const pdfFile = new File([blob], fileName, { type: 'application/pdf' })
+
+      // 1. Mobile / Browser Native Direct File Share Sheet (attaches file directly into WhatsApp without manual download!)
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({
+          title: 'WalletVibe PDF Statement',
+          text: msg,
+          files: [pdfFile],
+        })
+        return
+      }
+    } catch (err) {
+      console.warn('[shareViaWhatsApp] Web Share API notice:', err?.message)
+    }
+
+    // 2. Desktop Browsers: Download PDF + Open WhatsApp Web with guidance notice
+    doc.save(fileName)
+    const encodedMsg = cleanPhone
+      ? `Hi ${personName}, I have generated and downloaded our WalletVibe PDF Statement (${fileName}). Please check the attached file.`
+      : `WalletVibe PDF Statement (${fileName})`
+
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(encodedMsg)}`
+      : `https://wa.me/?text=${encodeURIComponent(encodedMsg)}`
+
     window.open(url, '_blank', 'noopener,noreferrer')
+
+    alert(`📄 PDF Statement "${fileName}" has been downloaded to your device!\n\nWhatsApp Web is now opening. Simply click the 📎 Attach icon in your WhatsApp chat to attach the downloaded PDF file.`)
   } else {
     let msg = ''
     if (person && personData) {
@@ -221,7 +252,9 @@ export function shareViaWhatsApp({ phone, item, person, personData, normalizeFn,
     } else if (item) {
       msg = generateLendingMessage(item)
     }
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 }

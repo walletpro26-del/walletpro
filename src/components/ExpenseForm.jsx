@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import MultiSelectCombobox from './MultiSelectCombobox'
+import { normalizePersonName } from '../api/entityNormalizer'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -96,6 +97,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
     e.preventDefault()
     onSave({
       ...form,
+      forWhom: normalizePersonName(form.forWhom || 'Self'),
       formType: 'expense',
       id: editData?.id,
       existingFileName: editData?.fileName,

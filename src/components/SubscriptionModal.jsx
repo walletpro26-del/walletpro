@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   listenSubscriptionStatus,
+  listenAllSubscriptions,
+  getSubscriberCounts,
   loadRazorpaySDK,
   createRazorpayOptions,
   claimFreeTrial,
@@ -30,6 +33,26 @@ export default function SubscriptionModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [activationResult, setActivationResult] = useState(null)
+  const [allSubscriptions, setAllSubscriptions] = useState([])
+
+  // Real-time listener: watch subscriber count to enforce limit
+  useEffect(() => {
+    const unsub = listenAllSubscriptions((subs) => {
+      setAllSubscriptions(subs)
+    })
+    return unsub
+  }, [])
+
+  const [copiedEmail, setCopiedEmail] = useState(false)
+  const subscriberLimit = appConfig?.subscriberLimit ?? 10
+  const { regularActiveCount } = getSubscriberCounts(allSubscriptions)
+  const isLimitReached = !subscription?.active && regularActiveCount >= subscriberLimit
+
+  function handleCopyAdminEmail() {
+    navigator.clipboard.writeText('walletpro26@gmail.com')
+    setCopiedEmail(true)
+    setTimeout(() => setCopiedEmail(false), 3000)
+  }
 
   // Real-time listener: watch subscription status
   useEffect(() => {
@@ -103,7 +126,7 @@ export default function SubscriptionModal({
   const isAdmin = subscription?.isAdmin
   const s = (obj) => obj // style helper
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 120 }}>
       <div className="modal-backdrop" onClick={() => { if (!isBlocking) onClose?.() }} />
       <div
@@ -132,7 +155,7 @@ export default function SubscriptionModal({
           {!isBlocking || step === 'success' || step === 'pending' ? (
             <button
               className="modal-close"
-              style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
+              style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 26, height: 26, fontSize: 11, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={onClose}
               aria-label="Close"
             >
@@ -266,42 +289,92 @@ export default function SubscriptionModal({
                 </div>
               </div>
 
+              {/* Subscriber Limit Reached Warning Banner */}
+              {isLimitReached && (
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1.5px solid rgba(239, 68, 68, 0.3)',
+                  color: '#ef4444',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  marginBottom: 14,
+                  lineHeight: 1.4
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>
+                    <i className="fas fa-exclamation-triangle" />
+                    Subscriber Limit Reached ({regularActiveCount}/{subscriberLimit})
+                  </div>
+                  <div style={{ color: '#b91c1c', fontSize: 10.5, marginBottom: 10 }}>
+                    Public online subscriptions are currently full ({subscriberLimit} active regular users max). Direct activations granted by Admin do not count in this limit. Contact Admin for direct activation.
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <a
+                      href="mailto:walletpro26@gmail.com?subject=WalletVibe%20Pro%20Account%20Activation%20Request"
+                      style={{
+                        padding: '5px 10px', background: '#ef4444', color: '#fff',
+                        borderRadius: 6, fontSize: 10, fontWeight: 800, textDecoration: 'none',
+                        display: 'inline-flex', alignItems: 'center', gap: 4
+                      }}
+                    >
+                      <i className="fas fa-envelope" /> Contact Admin
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleCopyAdminEmail}
+                      style={{
+                        padding: '5px 10px', background: '#fff', color: '#dc2626',
+                        border: '1px solid #fca5a5', borderRadius: 6, fontSize: 10,
+                        fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                      }}
+                    >
+                      <i className={`fas ${copiedEmail ? 'fa-check' : 'fa-copy'}`} />
+                      {copiedEmail ? 'Copied Email!' : 'Copy Email'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* 3-Day Free Trial Action Card */}
               {!subscription?.trialClaimed && (
                 <div style={{
                   marginBottom: 16,
                   padding: 12,
                   borderRadius: 12,
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.12))',
-                  border: '1.5px dashed #10b981',
+                  background: isLimitReached
+                    ? 'var(--bg-subtle, #f8fafc)'
+                    : 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.12))',
+                  border: isLimitReached ? '1px solid var(--border-color, #cbd5e1)' : '1.5px dashed #10b981',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 12
+                  gap: 12,
+                  opacity: isLimitReached ? 0.6 : 1,
                 }}>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#047857', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: isLimitReached ? '#64748b' : '#047857', display: 'flex', alignItems: 'center', gap: 4 }}>
                       🎁 Free Trial Available!
                     </div>
-                    <div style={{ fontSize: 9, color: '#065f46', marginTop: 2 }}>
-                      Get 3 days of Pro access completely free
+                    <div style={{ fontSize: 9, color: isLimitReached ? '#94a3b8' : '#065f46', marginTop: 2 }}>
+                      {isLimitReached ? 'Trial paused (Subscriber limit reached)' : 'Get 3 days of Pro access completely free'}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleClaimTrial}
-                    disabled={submitting}
+                    disabled={submitting || isLimitReached}
                     style={{
                       padding: '6px 12px',
-                      background: '#10b981',
+                      background: isLimitReached ? '#94a3b8' : '#10b981',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 6,
                       fontSize: 10,
                       fontWeight: 800,
-                      cursor: 'pointer',
+                      cursor: isLimitReached ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap',
-                      boxShadow: '0 2px 6px rgba(16,185,129,0.2)'
+                      boxShadow: isLimitReached ? 'none' : '0 2px 6px rgba(16,185,129,0.2)'
                     }}
                   >
                     {submitting ? 'Claiming...' : 'Claim 3D Free'}
@@ -365,7 +438,9 @@ export default function SubscriptionModal({
               <div style={{ background: 'var(--bg-card, #ffffff)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)' }}>Secure Online Checkout</span>
-                  <span style={{ fontSize: 8, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '2px 8px', borderRadius: 99, fontWeight: 800, letterSpacing: '0.3px', textTransform: 'uppercase' }}>Instant Grant</span>
+                  <span style={{ fontSize: 8, background: isLimitReached ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)', color: isLimitReached ? '#ef4444' : '#6366f1', padding: '2px 8px', borderRadius: 99, fontWeight: 800, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                    {isLimitReached ? 'Limit Reached' : 'Instant Grant'}
+                  </span>
                 </div>
 
                 {/* Razorpay Gateway Button */}
@@ -373,17 +448,19 @@ export default function SubscriptionModal({
                   <button
                     type="button"
                     onClick={handleRazorpayCheckout}
-                    disabled={submitting}
+                    disabled={submitting || isLimitReached}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      width: '100%', padding: '12px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      width: '100%', padding: '12px', background: isLimitReached ? '#94a3b8' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                       color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12,
-                      cursor: 'pointer', transition: 'all 0.15s ease',
-                      boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)',
+                      cursor: isLimitReached ? 'not-allowed' : 'pointer', transition: 'all 0.15s ease',
+                      boxShadow: isLimitReached ? 'none' : '0 4px 14px rgba(99, 102, 241, 0.25)',
                     }}
                   >
                     {submitting ? (
                       <><i className="fas fa-spinner fa-spin" /> Starting Secure Checkout...</>
+                    ) : isLimitReached ? (
+                      <><i className="fas fa-ban" style={{ fontSize: 11 }} /> Limit Reached ({regularActiveCount}/{subscriberLimit})</>
                     ) : (
                       <><i className="fas fa-shield-alt" style={{ fontSize: 11 }} /> Continue to Pay ₹{amount}</>
                     )}
@@ -395,14 +472,16 @@ export default function SubscriptionModal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (isLimitReached) return
                       alert(`Cashfree Gateway (${appConfig?.cashfreeMode === 'sandbox' ? 'TEST Mode' : 'LIVE Mode'}): Initiating payment session for ${selectedPlan?.toUpperCase()} (₹${amount})...`)
                     }}
+                    disabled={isLimitReached}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      width: '100%', padding: '12px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      width: '100%', padding: '12px', background: isLimitReached ? '#94a3b8' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                       color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12,
-                      cursor: 'pointer', transition: 'all 0.15s ease',
-                      boxShadow: '0 4px 14px rgba(2, 132, 199, 0.25)', marginTop: appConfig?.razorpayEnabled !== false ? 8 : 0,
+                      cursor: isLimitReached ? 'not-allowed' : 'pointer', transition: 'all 0.15s ease',
+                      boxShadow: isLimitReached ? 'none' : '0 4px 14px rgba(2, 132, 199, 0.25)', marginTop: appConfig?.razorpayEnabled !== false ? 8 : 0,
                     }}
                   >
                     <i className="fas fa-credit-card" style={{ fontSize: 11 }} /> Pay ₹{amount} via Cashfree
@@ -431,6 +510,7 @@ export default function SubscriptionModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

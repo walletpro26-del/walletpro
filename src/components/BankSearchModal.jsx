@@ -1,16 +1,86 @@
 import { useState, useEffect } from 'react'
-import { db } from '../firebase'
-import { collection, getDocs, query, where, writeBatch, doc, Timestamp, deleteDoc } from 'firebase/firestore'
+import { createPortal } from 'react-dom'
+import { db, auth } from '../firebase'
+import { collection, getDocs, query, where, writeBatch, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot } from '../api/localCache'
 
-export default function BankSearchModal({ uid, onClose }) {
+import { parsePdfWithGemini, MAX_PDF_SIZE_BYTES } from '../api/pdfExtractor'
+import { importTaskQueue } from '../api/importTaskQueue'
+import { checkCsvRateLimit, recordCsvImportSuccess } from '../api/csvRateLimit'
+
+function getNormalizedBankName(rawBank) {
+  if (!rawBank) return 'Bank'
+  const trimmed = rawBank.trim()
+  try {
+    const aliases = JSON.parse(localStorage.getItem('wv_bank_aliases') || '{}')
+    if (aliases[trimmed]) return aliases[trimmed]
+    const lower = trimmed.toLowerCase()
+    for (const [key, val] of Object.entries(aliases)) {
+      if (key.toLowerCase() === lower) return val
+    }
+  } catch (e) {}
+  return trimmed
+}
+
+export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [allRecords, setAllRecords] = useState(null)
   const [filtered, setFiltered] = useState([])
   const [loading, setLoading] = useState(false)
+  const [aiParsing, setAiParsing] = useState(false)
+  const [aiProgress, setAiProgress] = useState({ status: '', percent: 0 })
   const [error, setError] = useState('')
   const [importSuccess, setImportSuccess] = useState('')
   const [csvPreviewData, setCsvPreviewData] = useState(null)
+
+  // Bank Merge State
+  const [showMergeModal, setShowMergeModal] = useState(false)
+  const [mergeSourceBank, setMergeSourceBank] = useState('')
+  const [mergeTargetBank, setMergeTargetBank] = useState('')
+  const [customTargetBank, setCustomTargetBank] = useState('')
+  const [autoSaveAlias, setAutoSaveAlias] = useState(true)
+  const [isMerging, setIsMerging] = useState(false)
+
+  // Subscribe to background importTaskQueue for real-time updates across modal closes
+  useEffect(() => {
+    const unsubscribe = importTaskQueue.subscribe((task) => {
+      if (task && task.mode === 'bank') {
+        if (task.type === 'commit') {
+          setLoading(!task.isComplete)
+          if (task.error) setError('CSV Import Failed: ' + task.error)
+          return
+        }
+        setAiProgress({ status: task.status, percent: task.percent })
+        setAiParsing(!task.isComplete)
+        if (task.error) {
+          setError('PDF AI Extraction Error: ' + task.error)
+        } else if (task.items && task.isComplete) {
+          try {
+            processBankExtractedItems(task.items)
+          } catch (err) {
+            setError('Extraction error: ' + (err?.message || 'Failed to process bank transactions'))
+          }
+          importTaskQueue.clearActiveTask()
+        }
+      }
+    })
+    return () => unsubscribe()
+  }, [])
+
+  // Restore saved preview draft if user previously closed modal
+  useEffect(() => {
+    const draft = importTaskQueue.getDraftPreview('bank')
+    if (draft && draft.items && draft.items.length > 0) {
+      const rehydrated = {
+        ...draft,
+        items: draft.items.map((i) => ({
+          ...i,
+          date: i.date ? new Date(i.date) : new Date(),
+        })),
+      }
+      setCsvPreviewData(rehydrated)
+    }
+  }, [])
 
   async function loadRecords() {
     if (allRecords) return allRecords
@@ -53,20 +123,14 @@ export default function BankSearchModal({ uid, onClose }) {
       setLoading(false)
       return records
     } catch (err) {
-      console.warn('Bank records fetch error, using cache:', err?.message)
       const cached2 = loadSnapshot('bank', uid)
-      if (cached2) {
-        const rehydrated = cached2.map((r) => ({
-          ...r,
-          date: r.date ? new Date(r.date) : new Date(),
-        }))
-        setAllRecords(rehydrated)
-        setLoading(false)
-        return rehydrated
-      }
-      setError('Failed to load bank records: ' + (err?.message || ''))
+      const rehydrated = (cached2 || []).map((r) => ({
+        ...r,
+        date: r.date ? new Date(r.date) : new Date(),
+      }))
+      setAllRecords(rehydrated)
       setLoading(false)
-      return []
+      return rehydrated
     }
   }
 
@@ -105,6 +169,35 @@ export default function BankSearchModal({ uid, onClose }) {
     URL.revokeObjectURL(url)
   }
 
+  function processBankExtractedItems(rawList) {
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      setError('No valid bank transactions extracted.')
+      return
+    }
+
+    const items = rawList.map((row, idx) => {
+      let d = new Date()
+      if (row.date) {
+        const parsed = new Date(row.date)
+        if (!isNaN(parsed.getTime())) d = parsed
+      }
+      return {
+        id: 'import_bank_' + idx + '_' + Date.now(),
+        date: d,
+        bank: getNormalizedBankName(row.bank),
+        description: row.description || 'Transaction',
+        debit: parseFloat(row.debit) || 0,
+        credit: parseFloat(row.credit) || 0,
+        balance: parseFloat(row.balance) || 0,
+        selected: true,
+      }
+    })
+
+    const previewObj = { items }
+    setCsvPreviewData(previewObj)
+    importTaskQueue.saveDraftPreview('bank', previewObj)
+  }
+
   async function handleCsvFileSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -112,6 +205,31 @@ export default function BankSearchModal({ uid, onClose }) {
 
     setError('')
     setImportSuccess('')
+
+    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+
+    if (isPdf) {
+      if (file.size > MAX_PDF_SIZE_BYTES) {
+        const mb = (file.size / (1024 * 1024)).toFixed(1)
+        setError(`⚠ PDF size (${mb} MB) exceeds the 10 MB limit. Please select a smaller PDF statement.`)
+        return
+      }
+
+      // Delegate to background importTaskQueue
+      importTaskQueue.startPdfParsingTask({
+        file,
+        mode: 'bank',
+        isAdmin,
+      })
+      return
+    }
+
+    // Enforce CSV import rate limit for non-admin users
+    const limitCheck = checkCsvRateLimit(isAdmin)
+    if (!limitCheck.allowed) {
+      setError(limitCheck.reason)
+      return
+    }
 
     try {
       const text = await file.text()
@@ -273,60 +391,93 @@ export default function BankSearchModal({ uid, onClose }) {
       return
     }
 
+    const limitCheck = checkCsvRateLimit(isAdmin)
+    if (!limitCheck.allowed) {
+      setError(limitCheck.reason)
+      return
+    }
+
     setLoading(true)
     setError('')
     setImportSuccess('')
 
-    try {
-      const newRecords = []
-      const firestoreItems = []
-
-      selectedItems.forEach((item, i) => {
-        firestoreItems.push({
-          userId: uid || '',
-          bank: item.bank || 'Bank',
-          date: Timestamp.fromDate(item.date),
-          description: item.description || '',
-          debit: item.debit || 0,
-          credit: item.credit || 0,
-          balance: item.balance || 0,
-        })
-
-        newRecords.push({
-          id: `imported_${Date.now()}_${i}`,
-          bank: item.bank || 'Bank',
-          date: item.date,
-          description: item.description || '',
-          debit: item.debit || 0,
-          credit: item.credit || 0,
-          balance: item.balance || 0,
-          searchStr: `${item.date.toLocaleDateString('en-IN')} ${item.description || ''} ${item.bank || ''} ${item.debit || ''} ${item.credit || ''} ${item.balance || ''}`.toLowerCase(),
-        })
-      })
-
-      // Write to Firestore in batches of 400
-      const batchSize = 400
-      for (let i = 0; i < firestoreItems.length; i += batchSize) {
-        const chunk = firestoreItems.slice(i, i + batchSize)
-        const batch = writeBatch(db)
-        chunk.forEach((docData) => {
-          const docRef = doc(collection(db, 'bankTransactions'))
-          batch.set(docRef, docData)
-        })
-        await batch.commit()
-      }
-
-      const combined = [...newRecords, ...(allRecords || [])].sort((a, b) => b.date - a.date)
-      setAllRecords(combined)
-      saveSnapshot('bank', combined)
-      setFiltered(combined.slice(0, 50))
-      setCsvPreviewData(null)
-      setImportSuccess(`✔ Successfully imported ${selectedItems.length} bank transactions!`)
-    } catch (err) {
-      setError('CSV Import Failed: ' + (err?.message || 'Error writing data'))
-    } finally {
+    const currentUid = uid || auth?.currentUser?.uid || ''
+    if (!currentUid) {
+      setError('Authentication required. Please refresh or re-login to import bank transactions.')
       setLoading(false)
+      return
     }
+
+    importTaskQueue.startBatchCommitTask({
+      mode: 'bank',
+      count: selectedItems.length,
+      commitFn: async (updateProgress) => {
+        const newRecords = []
+        const firestoreItems = []
+
+        selectedItems.forEach((item, i) => {
+          firestoreItems.push({
+            userId: currentUid,
+            bank: item.bank || 'Bank',
+            date: Timestamp.fromDate(item.date),
+            description: item.description || '',
+            debit: item.debit || 0,
+            credit: item.credit || 0,
+            balance: item.balance || 0,
+          })
+
+          newRecords.push({
+            id: `imported_${Date.now()}_${i}`,
+            bank: item.bank || 'Bank',
+            date: item.date,
+            description: item.description || '',
+            debit: item.debit || 0,
+            credit: item.credit || 0,
+            balance: item.balance || 0,
+            searchStr: `${item.date.toLocaleDateString('en-IN')} ${item.description || ''} ${item.bank || ''} ${item.debit || ''} ${item.credit || ''} ${item.balance || ''}`.toLowerCase(),
+          })
+        })
+
+        // Write to Firestore in smaller chunks of 200 with fallback for reliability
+        const batchSize = 200
+        const totalChunks = Math.ceil(firestoreItems.length / batchSize)
+        for (let i = 0; i < firestoreItems.length; i += batchSize) {
+          const chunkNum = Math.floor(i / batchSize) + 1
+          const chunk = firestoreItems.slice(i, i + batchSize)
+          const pct = Math.round((chunkNum / totalChunks) * 100)
+          updateProgress(pct, `Saving bank transactions (Batch ${chunkNum} of ${totalChunks})...`)
+
+          try {
+            const batch = writeBatch(db)
+            chunk.forEach((docData) => {
+              const docRef = doc(collection(db, 'bankTransactions'))
+              batch.set(docRef, docData)
+            })
+            await batch.commit()
+          } catch (batchErr) {
+            // Fallback to individual addDoc calls if batch commit encounters limits
+            for (const docData of chunk) {
+              try {
+                await addDoc(collection(db, 'bankTransactions'), docData)
+              } catch (singleErr) {
+                // quiet log
+              }
+            }
+          }
+        }
+
+        // Record successful CSV import timestamp
+        recordCsvImportSuccess()
+
+        const combined = [...newRecords, ...(allRecords || [])].sort((a, b) => b.date - a.date)
+        setAllRecords(combined)
+        saveSnapshot('bank', combined, currentUid)
+        setFiltered(combined.slice(0, 50))
+        setCsvPreviewData(null)
+        setImportSuccess(`✔ Successfully imported ${selectedItems.length} bank transactions!`)
+        return combined
+      },
+    })
   }
 
   async function handleDeleteRecord(id) {
@@ -346,6 +497,84 @@ export default function BankSearchModal({ uid, onClose }) {
     }
   }
 
+  async function handlePerformBankMerge() {
+    const src = mergeSourceBank.trim()
+    const target = (customTargetBank.trim() || mergeTargetBank.trim())
+
+    if (!src) {
+      setError('Please select a source bank name to merge.')
+      return
+    }
+    if (!target) {
+      setError('Please select or type a target bank name.')
+      return
+    }
+    if (src.toLowerCase() === target.toLowerCase()) {
+      setError('Source and target bank names cannot be identical.')
+      return
+    }
+
+    setIsMerging(true)
+    setError('')
+
+    const currentUid = uid || auth?.currentUser?.uid || ''
+    try {
+      const matching = (allRecords || []).filter((r) => r.bank.toLowerCase() === src.toLowerCase())
+
+      if (matching.length === 0) {
+        setError(`No records found with bank name "${src}".`)
+        setIsMerging(false)
+        return
+      }
+
+      // Perform Firestore batch updates
+      const batchSize = 200
+      for (let i = 0; i < matching.length; i += batchSize) {
+        const chunk = matching.slice(i, i + batchSize)
+        const batch = writeBatch(db)
+        chunk.forEach((rec) => {
+          if (rec.id && !rec.id.startsWith('imported_')) {
+            const docRef = doc(db, 'bankTransactions', rec.id)
+            batch.update(docRef, { bank: target })
+          }
+        })
+        await batch.commit()
+      }
+
+      // Save alias mapping if enabled
+      if (autoSaveAlias) {
+        try {
+          const aliases = JSON.parse(localStorage.getItem('wv_bank_aliases') || '{}')
+          aliases[src] = target
+          localStorage.setItem('wv_bank_aliases', JSON.stringify(aliases))
+        } catch (e) {}
+      }
+
+      // Update local state & snapshot
+      const updatedRecords = (allRecords || []).map((r) => {
+        if (r.bank.toLowerCase() === src.toLowerCase()) {
+          return {
+            ...r,
+            bank: target,
+            searchStr: `${r.date.toLocaleDateString('en-IN')} ${r.description || ''} ${target} ${r.debit || ''} ${r.credit || ''} ${r.balance || ''}`.toLowerCase(),
+          }
+        }
+        return r
+      })
+
+      setAllRecords(updatedRecords)
+      saveSnapshot('bank', updatedRecords, currentUid)
+      setFiltered(updatedRecords.slice(0, 50))
+      setShowMergeModal(false)
+      setImportSuccess(`🎉 Successfully merged ${matching.length} records from "${src}" into "${target}" across Firebase!`)
+      setTimeout(() => setImportSuccess(''), 4000)
+    } catch (err) {
+      setError('Failed to merge bank records: ' + (err?.message || 'Error updating database'))
+    } finally {
+      setIsMerging(false)
+    }
+  }
+
   function formatDate(d) {
     try { return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) }
     catch { return '' }
@@ -362,7 +591,7 @@ export default function BankSearchModal({ uid, onClose }) {
     return acc
   }, {})
 
-  return (
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 120 }}>
       <div className="modal-backdrop" onClick={onClose}></div>
       <div className="modal-container" style={{ maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
@@ -372,7 +601,7 @@ export default function BankSearchModal({ uid, onClose }) {
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
               <i className="fas fa-university" style={{ fontSize: 12 }}></i>
             </div>
-            {csvPreviewData ? 'CSV Import Preview' : 'Bank Search'}
+            {csvPreviewData ? 'CSV Import Preview' : 'Bank Transaction History'}
           </h3>
           
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -389,11 +618,12 @@ export default function BankSearchModal({ uid, onClose }) {
                 </button>
                 <label
                   className="btn-outline"
-                  style={{ padding: '5px 10px', fontSize: 11, background: 'var(--accent-gradient)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-                  title="Import CSV bank statement"
+                  style={{ padding: '5px 10px', fontSize: 11, background: 'var(--accent-gradient)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: aiParsing ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                  title="Import CSV or PDF bank statement (Max 10MB)"
                 >
-                  <i className="fas fa-file-csv" style={{ fontSize: 11, marginRight: 4 }} /> Import CSV
-                  <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvFileSelect} />
+                  <i className={`fas ${aiParsing ? 'fa-brain fa-spin' : 'fa-file-upload'}`} style={{ fontSize: 11, marginRight: 4 }} />
+                  {aiParsing ? 'Extracting File...' : 'Import File/Doc'}
+                  <input type="file" accept=".pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.heic,.mp3,.wav,.m4a,application/pdf,text/csv,text/plain,image/*,audio/*" disabled={aiParsing} style={{ display: 'none' }} onChange={handleCsvFileSelect} />
                 </label>
               </>
             )}
@@ -403,7 +633,28 @@ export default function BankSearchModal({ uid, onClose }) {
           </div>
         </div>
 
-        {/* Banners */}
+        {/* Banners & Real-Time Progress Indicator */}
+        {aiParsing && (
+          <div style={{ margin: '10px 16px 0', padding: '12px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-600)', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <i className="fas fa-brain fa-spin" /> {aiProgress.status || 'Extracting PDF Statement...'}
+            </div>
+            <div style={{ width: '90%', height: 6, background: 'var(--slate-200)', borderRadius: 99, margin: '6px auto 4px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${aiProgress.percent || 15}%`,
+                  background: 'linear-gradient(90deg, #6366f1, #10b981)',
+                  borderRadius: 99,
+                  transition: 'width 0.35s ease-in-out',
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--accent-600)' }}>
+              {aiProgress.percent || 15}% Completed
+            </div>
+          </div>
+        )}
         {error && <div className="error-banner" style={{ margin: '10px 16px 0' }}>{error}</div>}
         {importSuccess && (
           <div style={{ margin: '10px 16px 0', padding: '10px 14px', background: 'var(--emerald-50)', border: '1px solid var(--emerald-500)', color: 'var(--emerald-600)', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: 600 }}>
@@ -516,9 +767,29 @@ export default function BankSearchModal({ uid, onClose }) {
                     <i className="fas fa-university" style={{ color: 'var(--accent-500)', marginRight: 6 }} />
                     Latest Record Date by Bank
                   </span>
-                  <span style={{ fontSize: 10, textTransform: 'none', fontWeight: 500 }}>
-                    {allRecords.length} records total
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, textTransform: 'none', fontWeight: 500 }}>
+                      {allRecords.length} records total
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const banks = Object.keys(latestByBank)
+                        setMergeSourceBank(banks[0] || '')
+                        setMergeTargetBank(banks[1] || banks[0] || '')
+                        setCustomTargetBank('')
+                        setShowMergeModal(true)
+                      }}
+                      style={{
+                        padding: '2px 7px', fontSize: 10, fontWeight: 700,
+                        background: 'rgba(99, 102, 241, 0.12)', color: 'var(--accent-600)',
+                        border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 4, cursor: 'pointer'
+                      }}
+                      title="Merge similar bank names (e.g. J&K and J&K BANK) into one"
+                    >
+                      <i className="fas fa-edit" style={{ fontSize: 9, marginRight: 3 }} /> Merge Banks
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {Object.entries(latestByBank).map(([bName, dt]) => (
@@ -614,6 +885,127 @@ export default function BankSearchModal({ uid, onClose }) {
           </>
         )}
       </div>
-    </div>
+
+      {/* Bank Name Merge Dialog Overlay */}
+      {showMergeModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)', zIndex: 130, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 16
+          }}
+          onClick={() => setShowMergeModal(false)}
+        >
+          <div
+            style={{
+              width: '100%', maxWidth: 440, background: 'var(--bg-card, #ffffff)',
+              borderRadius: 16, border: '1px solid var(--border-color)', boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              padding: 20, zIndex: 131
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
+                ✏️ Merge &amp; Rename Bank Names
+              </h4>
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)' }}
+                onClick={() => setShowMergeModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 14px', fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              Merge bank records formatted under different names (e.g. <b>J&amp;K</b> and <b>J&amp;K BANK</b>) into a single unified bank name across Firebase.
+            </p>
+
+            {/* Source Bank Select */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                1. Select Source Bank to Rename (Existing)
+              </label>
+              <select
+                value={mergeSourceBank}
+                onChange={(e) => setMergeSourceBank(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 12, background: 'var(--bg-subtle)' }}
+              >
+                {Object.keys(latestByBank).map((b) => {
+                  const cnt = (allRecords || []).filter((r) => r.bank.toLowerCase() === b.toLowerCase()).length
+                  return (
+                    <option key={b} value={b}>
+                      {b} ({cnt} records)
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {/* Target Bank Select / Input */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4, color: 'var(--text-secondary)' }}>
+                2. Select or Type Target Bank Name (Destination)
+              </label>
+              <select
+                value={mergeTargetBank}
+                onChange={(e) => setMergeTargetBank(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 12, background: 'var(--bg-subtle)', marginBottom: 6 }}
+              >
+                {Object.keys(latestByBank).map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+                <option value="__custom__">+ Custom Bank Name...</option>
+              </select>
+
+              {(mergeTargetBank === '__custom__' || !Object.keys(latestByBank).includes(mergeTargetBank)) && (
+                <input
+                  type="text"
+                  placeholder="Enter target bank name (e.g. J&K BANK)"
+                  value={customTargetBank}
+                  onChange={(e) => setCustomTargetBank(e.target.value)}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 12 }}
+                />
+              )}
+            </div>
+
+            {/* Alias Checkbox */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={autoSaveAlias}
+                onChange={(e) => setAutoSaveAlias(e.target.checked)}
+              />
+              Always auto-convert future PDF statement imports from "{mergeSourceBank || 'Source'}" into "{customTargetBank || mergeTargetBank || 'Target'}"
+            </label>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setShowMergeModal(false)}
+                style={{ padding: '8px 14px', fontSize: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isMerging}
+                onClick={handlePerformBankMerge}
+                style={{
+                  padding: '8px 16px', fontSize: 12, fontWeight: 800, color: '#fff',
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', border: 'none',
+                  borderRadius: 8, cursor: isMerging ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                }}
+              >
+                {isMerging ? <><i className="fas fa-spinner fa-spin" /> Merging...</> : <><i className="fas fa-check" /> Merge &amp; Update Firebase</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>,
+    document.body
   )
 }

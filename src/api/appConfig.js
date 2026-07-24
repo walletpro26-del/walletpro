@@ -20,6 +20,7 @@ const DEFAULTS = {
   cashfreeEnabled: false,
   cashfreeMode: 'sandbox', // 'sandbox' (Test Environment) | 'production' (Live Environment)
   cashfreeAppId: '',
+  subscriberLimit: 10,
 }
 
 let _cachedConfig = null

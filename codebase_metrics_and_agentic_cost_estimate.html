@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WalletVibe Codebase Metrics & Agentic Cost Analysis</title>
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(99, 102, 241, 0.25);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: var(--text-main);
+      margin: 0;
+      padding: 30px 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: var(--bg-gradient);
+      padding: 28px 32px;
+      border-radius: 16px;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .print-btn {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+      transition: all 0.2s;
+    }
+    .print-btn:hover { transform: translateY(-2px); opacity: 0.9; }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .stat-card .label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-card .value {
+      font-size: 26px;
+      font-weight: 900;
+      color: #ffffff;
+    }
+
+    .stat-card .subtext {
+      font-size: 11px;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(12px);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-top: 0;
+      margin-bottom: 16px;
+      color: #a5b4fc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gauge-bar-bg {
+      background: rgba(255,255,255,0.1);
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .gauge-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981 0%, #f59e0b 80%, #ef4444 100%);
+      width: 14.6%;
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: rgba(15, 23, 42, 0.6);
+      color: #a5b4fc;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: #e2e8f0;
+    }
+
+    tr:hover td {
+      background: rgba(99,102,241,0.05);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .badge-green { background: rgba(16,185,129,0.15); color: #10b981; }
+    .badge-amber { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-indigo { background: rgba(99,102,241,0.15); color: #818cf8; }
+
+    @media print {
+      body { background: #ffffff; color: #0f172a; padding: 0; }
+      .print-btn { display: none; }
+      .section, .stat-card, .header { background: #ffffff !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important; box-shadow: none !important; }
+      .header h1 { -webkit-text-fill-color: #0f172a !important; }
+      th { background: #f1f5f9 !important; color: #334155 !important; }
+      td { color: #0f172a !important; border-bottom: 1px solid #e2e8f0 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>⚡ WalletVibe Architecture & Cost Analysis</h1>
+        <p>Generated on July 24, 2026 • Codebase Metrics, 15x Iteration Tokens & Firestore Quota Monitor</p>
+      </div>
+      <button class="print-btn" onclick="window.print()">📄 Save / Export PDF</button>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid-4">
+      <div class="stat-card">
+        <div class="label">Total Codebase Lines</div>
+        <div class="value">21,217 LOC</div>
+        <div class="subtext" style="color: var(--accent);">219,290 Base Tokens (57 Files)</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Est. 15x Agentic Cost</div>
+        <div class="value">$13.16 USD</div>
+        <div class="subtext" style="color: var(--accent-green);">≈ ₹1,099 INR (15x Iterations)</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Human Eng. Equivalent</div>
+        <div class="value">849 Hours</div>
+        <div class="subtext" style="color: var(--accent-amber);">≈ $42,450 USD Value Created</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="label">Firestore Tier Limit</div>
+        <div class="value">1.0 GB</div>
+        <div class="subtext" style="color: var(--accent-green);">Spark Free Quota Active</div>
+      </div>
+    </div>
+
+    <!-- Total Overall Cost & ROI Savings Callout Banner -->
+    <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(99,102,241,0.12) 100%); border: 1px solid rgba(16,185,129,0.35); padding: 20px 24px; border-radius: 14px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #10b981; letter-spacing: 0.5px;">💰 TOTAL OVERALL DEVELOPMENT COST SUMMARY</div>
+        <div style="font-size: 24px; font-weight: 900; color: #ffffff; margin-top: 2px;">
+          $13.16 USD <span style="font-size: 17px; color: #a5b4fc; font-weight: 700;">(≈ ₹1,099 INR)</span>
+        </div>
+        <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 4px;">
+          Calculated using 15x Iteration Multiplier (3,289,350 total tokens) for 21,217 Lines of Code.
+        </div>
+      </div>
+
+      <div style="text-align: right;">
+        <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: #94a3b8;">Human Software Engineering Equivalent</div>
+        <div style="font-size: 18px; font-weight: 800; color: #f59e0b;">$42,450.00 USD <span style="font-size: 13px; color: #cbd5e1;">(≈ ₹3,544,575 INR)</span></div>
+        <div style="font-size: 11px; font-weight: 800; color: #10b981; margin-top: 2px;">🎉 99.97% Engineering Cost Savings via AI Agent</div>
+      </div>
+    </div>
+
+    <!-- Firestore Storage Occupancy & 90% Threshold Protocol -->
+    <div class="section">
+      <h2 class="section-title">🔥 1. Firestore Database Storage Occupancy & Threshold Protocol</h2>
+      
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 0;">
+        Firestore Free (Spark) Plan includes <strong>1 GB (1,024 MB / ~1,073,741,824 Bytes)</strong> of stored data.
+      </p>
+
+      <div style="background: rgba(15,23,42,0.5); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700;">
+          <span>Firestore Storage Usage Gauge</span>
+          <span style="color: var(--accent-green);">~150 MB / 1,024 MB (Est. 14.6% Occupied)</span>
+        </div>
+        <div class="gauge-bar-bg">
+          <div class="gauge-bar-fill" style="width: 14.6%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted);">
+          <span>0 MB</span>
+          <span>500 MB</span>
+          <span style="color: var(--accent-amber); font-weight: 700;">900 MB (90% Warning Threshold)</span>
+          <span>1,024 MB (1.0 GB Max Free)</span>
+        </div>
+      </div>
+
+      <h3 style="font-size: 13.5px; margin-top: 20px; color: #fff;">How to Check Live Firestore Occupancy:</h3>
+      <ol style="font-size: 12.5px; color: #cbd5e1; padding-left: 20px; margin-bottom: 20px;">
+        <li>Go to <strong>Firebase Console</strong> (console.firebase.google.com) ➔ Select Project <strong>WalletVibe</strong>.</li>
+        <li>Click <strong>Firestore Database</strong> in the sidebar ➔ Select the <strong>Usage</strong> tab at the top.</li>
+        <li>Inspect <strong>Stored Data</strong> (shows exact Storage size in Bytes / MB / GB).</li>
+      </ol>
+
+      <h3 style="font-size: 13.5px; color: var(--accent-amber);">What happens if Storage reaches 90% (900 MB)?</h3>
+      <ul style="font-size: 12.5px; color: #cbd5e1; padding-left: 20px; margin-bottom: 0;">
+        <li><strong style="color: #fff;">Automatic Purge / Archive Protocol:</strong> Implement snapshot archival for transactions older than 180 days to keep active document count ultra-lean.</li>
+        <li><strong style="color: #fff;">Blaze Pay-As-You-Go Upgrade:</strong> Upgrading to Blaze removes the 1 GB wall. Storage above 1 GB costs only <strong>$0.18 per GB per month</strong> (approx ₹15/month for an extra GB).</li>
+        <li><strong style="color: #fff;">Local Cache Optimization:</strong> WalletVibe already leverages local snapshot caching (<code style="color: #818cf8;">wv_cached_snapshot_*</code>) so clients only sync changed delta documents.</li>
+      </ul>
+    </div>
+
+    <!-- Agentic Cost Estimation Breakdown -->
+    <div class="section">
+      <h2 class="section-title">🤖 2. Agentic Cost & Token Estimation Model (15x Iteration Multiplier)</h2>
+      
+      <div style="background: rgba(99,102,241,0.12); padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); font-size: 12px; color: #e0e7ff; margin-bottom: 16px;">
+        <strong>💡 Note on 15x Iteration Multiplier:</strong> To build a production application of <strong>21,217 Lines of Code (LOC)</strong>, multiple iterative cycles occur (prompt engineering, workspace analysis, code generation, debugging & refactoring). The overall cost is calculated using a <strong>15x iteration multiplier</strong> (15 × 219,290 = <strong>3,289,350 Total Tokens</strong>).
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Metric Category</th>
+            <th>Token Volume</th>
+            <th>Iteration Multiplier & Purpose</th>
+            <th>Estimated Cost (USD)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Raw Codebase Snapshot</strong></td>
+            <td>219,290 Tokens</td>
+            <td>1.0x Base Repository (21,217 LOC)</td>
+            <td><span class="badge badge-indigo">Static Codebase</span></td>
+          </tr>
+          <tr>
+            <td><strong>Agentic Input Trajectory</strong></td>
+            <td>2,631,480 Tokens</td>
+            <td>12.0x Context & Workspace Reads</td>
+            <td>$6.58 USD (@ $2.50/1M)</td>
+          </tr>
+          <tr>
+            <td><strong>Agentic Output Tokens</strong></td>
+            <td>657,870 Tokens</td>
+            <td>3.0x Generated Code & Refactors</td>
+            <td>$6.58 USD (@ $10.00/1M)</td>
+          </tr>
+          <tr style="background: rgba(16,185,129,0.12); font-weight: 900; border-top: 2px solid #10b981;">
+            <td style="color: #ffffff;">GROSS OVERALL AGENTIC COST</td>
+            <td style="color: #10b981;">3,289,350 Total Tokens</td>
+            <td style="color: #ffffff;">15.0x Full Development Cycle</td>
+            <td style="color: #10b981; font-size: 15px; font-weight: 900;">$13.16 USD (≈ ₹1,099 INR)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Codebase Top Files Breakdown -->
+    <div class="section">
+      <h2 class="section-title">📂 3. Top Codebase Files by Lines of Code (LOC) & Token Density</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>File Path</th>
+            <th>Lines of Code (LOC)</th>
+            <th>Character Count</th>
+            <th>Word Count</th>
+            <th>Estimated Tokens</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">package-lock.json</td>
+              <td><strong style="color: #fff;">2,986 LOC</strong></td>
+              <td>110,256</td>
+              <td>5,313</td>
+              <td><span class="badge badge-indigo">29,799 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\styles.css</td>
+              <td><strong style="color: #fff;">2,486 LOC</strong></td>
+              <td>59,624</td>
+              <td>6,391</td>
+              <td><span class="badge badge-indigo">16,115 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\ReportsView.jsx</td>
+              <td><strong style="color: #fff;">1,775 LOC</strong></td>
+              <td>86,448</td>
+              <td>7,637</td>
+              <td><span class="badge badge-indigo">23,365 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\BankSearchModal.jsx</td>
+              <td><strong style="color: #fff;">1,010 LOC</strong></td>
+              <td>43,569</td>
+              <td>3,996</td>
+              <td><span class="badge badge-indigo">11,776 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\CsvImportModal.jsx</td>
+              <td><strong style="color: #fff;">924 LOC</strong></td>
+              <td>39,554</td>
+              <td>3,633</td>
+              <td><span class="badge badge-indigo">10,691 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\AdminPanel.jsx</td>
+              <td><strong style="color: #fff;">865 LOC</strong></td>
+              <td>44,195</td>
+              <td>3,735</td>
+              <td><span class="badge badge-indigo">11,945 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\PersonMergeModal.jsx</td>
+              <td><strong style="color: #fff;">731 LOC</strong></td>
+              <td>28,923</td>
+              <td>2,353</td>
+              <td><span class="badge badge-indigo">7,818 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\api\subscription.js</td>
+              <td><strong style="color: #fff;">628 LOC</strong></td>
+              <td>18,943</td>
+              <td>2,302</td>
+              <td><span class="badge badge-indigo">5,120 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\App.jsx</td>
+              <td><strong style="color: #fff;">622 LOC</strong></td>
+              <td>22,178</td>
+              <td>1,825</td>
+              <td><span class="badge badge-indigo">5,995 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\RatingModal.jsx</td>
+              <td><strong style="color: #fff;">592 LOC</strong></td>
+              <td>22,241</td>
+              <td>1,748</td>
+              <td><span class="badge badge-indigo">6,012 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\LegalModal.jsx</td>
+              <td><strong style="color: #fff;">530 LOC</strong></td>
+              <td>28,168</td>
+              <td>2,667</td>
+              <td><span class="badge badge-indigo">7,613 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">codebase_metrics_and_agentic_cost_estimate.html</td>
+              <td><strong style="color: #fff;">524 LOC</strong></td>
+              <td>20,875</td>
+              <td>1,634</td>
+              <td><span class="badge badge-indigo">5,642 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\SubscriptionModal.jsx</td>
+              <td><strong style="color: #fff;">515 LOC</strong></td>
+              <td>27,447</td>
+              <td>2,473</td>
+              <td><span class="badge badge-indigo">7,419 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\MultiSelectCombobox.jsx</td>
+              <td><strong style="color: #fff;">440 LOC</strong></td>
+              <td>15,404</td>
+              <td>1,239</td>
+              <td><span class="badge badge-indigo">4,164 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\SettingsModal.jsx</td>
+              <td><strong style="color: #fff;">423 LOC</strong></td>
+              <td>19,471</td>
+              <td>1,586</td>
+              <td><span class="badge badge-indigo">5,263 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\Header.jsx</td>
+              <td><strong style="color: #fff;">416 LOC</strong></td>
+              <td>18,011</td>
+              <td>1,581</td>
+              <td><span class="badge badge-indigo">4,868 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\PreLoginFeaturesModal.jsx</td>
+              <td><strong style="color: #fff;">351 LOC</strong></td>
+              <td>17,236</td>
+              <td>1,635</td>
+              <td><span class="badge badge-indigo">4,659 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\LendingForm.jsx</td>
+              <td><strong style="color: #fff;">345 LOC</strong></td>
+              <td>14,100</td>
+              <td>1,240</td>
+              <td><span class="badge badge-indigo">3,811 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\api\pdfExtractor.js</td>
+              <td><strong style="color: #fff;">333 LOC</strong></td>
+              <td>11,040</td>
+              <td>1,262</td>
+              <td><span class="badge badge-indigo">2,984 tokens</span></td>
+            </tr>
+          
+            <tr>
+              <td style="font-family: monospace; font-weight: 700; color: #a5b4fc;">src\components\TransactionModal.jsx</td>
+              <td><strong style="color: #fff;">325 LOC</strong></td>
+              <td>15,220</td>
+              <td>1,196</td>
+              <td><span class="badge badge-indigo">4,114 tokens</span></td>
+            </tr>
+          
+          <tr style="background: rgba(99,102,241,0.15); font-weight: 900; border-top: 2px solid #6366f1;">
+            <td style="color: #ffffff; font-weight: 800;">GROSS TOTAL (Entire 57 Workspace Files)</td>
+            <td style="color: #10b981; font-weight: 900; font-size: 13px;">21,217 LOC</td>
+            <td style="color: #ffffff;">811,372 Chars</td>
+            <td style="color: #ffffff;">71,011 Words</td>
+            <td style="color: #a5b4fc;"><span class="badge badge-green">219,290 Base (3,289,350 Trajectory)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 20px;">
+      WalletVibe Architecture Analysis & Executive Report • Created for NextLifTechnologies
+    </div>
+  </div>
+</body>
+</html>

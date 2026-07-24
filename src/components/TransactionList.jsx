@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { normalizeLendingType } from '../api/lending'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
+import { findMatchingBankProof } from '../api/bankProofMatcher'
+import { loadSnapshot } from '../api/localCache'
 
 export default function TransactionList({ items = [], title, onSelect }) {
   const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '', item: null })
+
+  const cachedBankRecords = useMemo(() => loadSnapshot('bank') || [], [])
 
   if (!items.length) {
     return (
@@ -73,6 +77,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
             : `${item.forWhom || ''} — ${item.details || ''}`
 
           const amtInfo = getAmountDetails(item)
+          const bankMatch = cachedBankRecords.length > 0 ? findMatchingBankProof(item, cachedBankRecords)[0] : null
 
           return (
             <li key={item.id || i} className="txn-item" onClick={() => onSelect?.(item)}>
@@ -81,7 +86,25 @@ export default function TransactionList({ items = [], title, onSelect }) {
               </div>
 
               <div className="txn-info">
-                <div className="txn-title">{title}</div>
+                <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>{title}</span>
+                  {bankMatch && (
+                    <span
+                      title={`Verified Bank Statement Proof (${bankMatch.bankTransaction.bank || 'Bank'})`}
+                      style={{
+                        fontSize: 9,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        background: 'rgba(99,102,241,0.12)',
+                        color: '#6366f1',
+                        fontWeight: 800,
+                        border: '1px solid rgba(99,102,241,0.2)',
+                      }}
+                    >
+                      🏦 Bank Proof
+                    </span>
+                  )}
+                </div>
                 <div className="txn-sub">{formatDate(item.date)} · {sub}</div>
               </div>
 

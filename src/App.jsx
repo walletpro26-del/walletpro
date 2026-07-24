@@ -25,10 +25,12 @@ import TransactionList from './components/TransactionList'
 import TransactionModal from './components/TransactionModal'
 import ReportsView from './components/ReportsView'
 import SettingsModal from './components/SettingsModal'
+import CsvImportModal from './components/CsvImportModal'
 import BankSearchModal from './components/BankSearchModal'
 import MigrationTool from './components/MigrationTool'
 import WalletVibeLogo from './components/WalletVibeLogo'
 import LegalModal from './components/LegalModal'
+import RatingModal from './components/RatingModal'
 
 // Record when the app opened (for update banner age check)
 window.__wv_open_time = Date.now()
@@ -39,9 +41,17 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
 
   // Navigation
+  const savedLastTab = localStorage.getItem('wv_last_active_tab')
   const startScreen = localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense'
-  const [activeTab, setActiveTab] = useState(startScreen)
+  const [activeTab, setActiveTabState] = useState(savedLastTab || startScreen)
   const [tabTransition, setTabTransition] = useState(false)
+
+  function setActiveTab(tab) {
+    setActiveTabState(tab)
+    try {
+      localStorage.setItem('wv_last_active_tab', tab)
+    } catch (e) {}
+  }
 
   // Data
   const [stats, setStats] = useState({ expense: { today: 0, month: 0, total: 0 }, lending: { receivable: 0, payable: 0, net: 0 } })
@@ -68,10 +78,12 @@ export default function App() {
   // Modals
   const [selectedTxn, setSelectedTxn] = useState(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [csvImportModalType, setCsvImportModalType] = useState(null) // 'expense' | 'lending' | null
   const [showBankSearch, setShowBankSearch] = useState(false)
   const [showMigration, setShowMigration] = useState(false)
   const [migrationUrl, setMigrationUrl] = useState('')
   const [legalModalTab, setLegalModalTab] = useState(null)
+  const [showRatingModal, setShowRatingModal] = useState(false)
 
   function closeLegalModal() {
     setLegalModalTab(null)
@@ -347,6 +359,8 @@ export default function App() {
         onSearchSelect={(item) => setSelectedTxn(item)}
         onManageSubscription={() => setShowSubscriptionModal(true)}
         onAdminPanel={() => setShowAdminPanel(true)}
+        onOpenCsvImport={(mode) => setCsvImportModalType(mode)}
+        onOpenRatingModal={() => setShowRatingModal(true)}
       />
 
       {/* Tab Bar */}
@@ -494,6 +508,7 @@ export default function App() {
           <ReportsView
             allExpenses={allExpenses}
             allLending={allLending}
+            uid={authState.uid}
             onSelectTxn={setSelectedTxn}
           />
         )}
@@ -528,12 +543,28 @@ export default function App() {
           subscription={subscriptionState}
           onClose={() => setShowSettings(false)}
           onSave={() => {}}
+          onOpenCsvImport={(type) => setCsvImportModalType(type)}
+          onOpenRatingModal={() => setShowRatingModal(true)}
           onMigrate={(url) => {
             setMigrationUrl(url)
             setShowSettings(false)
             setShowMigration(true)
           }}
           onManageSubscription={() => setShowSubscriptionModal(true)}
+        />
+      )}
+      {showRatingModal && (
+        <RatingModal
+          user={authState}
+          onClose={() => setShowRatingModal(false)}
+        />
+      )}
+      {csvImportModalType && (
+        <CsvImportModal
+          type={csvImportModalType}
+          isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
+          onClose={() => setCsvImportModalType(null)}
+          onImportComplete={loadDashboard}
         />
       )}
       {showSubscriptionModal && (
@@ -558,7 +589,11 @@ export default function App() {
         />
       )}
       {showBankSearch && (
-        <BankSearchModal uid={authState.uid} onClose={() => setShowBankSearch(false)} />
+        <BankSearchModal
+          uid={authState.uid}
+          isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
+          onClose={() => setShowBankSearch(false)}
+        />
       )}
       {showMigration && (
         <MigrationTool

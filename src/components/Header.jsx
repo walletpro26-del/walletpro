@@ -2,17 +2,26 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import WalletVibeLogo from './WalletVibeLogo'
 import { isAdminEmail } from '../api/subscription'
+import { importTaskQueue } from '../api/importTaskQueue'
 
 export default function Header({
   auth, stats, activeTab, searchIndex, subscription,
   onLogout, onRefresh, onSettings, onBankSearch,
-  onSearchSelect, onManageSubscription, onAdminPanel,
+  onSearchSelect, onManageSubscription, onAdminPanel, onOpenCsvImport, onOpenRatingModal,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [bgTask, setBgTask] = useState(null)
   const searchRef = useRef(null)
+
+  useEffect(() => {
+    const unsubscribe = importTaskQueue.subscribe((task) => {
+      setBgTask(task ? { ...task } : null)
+    })
+    return () => unsubscribe()
+  }, [])
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -118,7 +127,34 @@ export default function Header({
   }, [])
 
   return (
-    <header className="app-header">
+    <>
+      {bgTask && !bgTask.isComplete && (
+        <div style={{ background: 'linear-gradient(90deg, #4f46e5, #059669)', color: '#fff', padding: '8px 16px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', zIndex: 100 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <i className="fas fa-brain fa-spin" style={{ fontSize: 13 }} />
+            <span>⚡ Background AI PDF Processing ({bgTask.filename}): {bgTask.status}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: 99, fontSize: 10 }}>
+              {bgTask.percent}%
+            </span>
+            <button
+              onClick={() => {
+                if (bgTask.mode === 'bank') {
+                  onBankSearch?.()
+                } else {
+                  onOpenCsvImport?.(bgTask.mode)
+                }
+              }}
+              style={{ background: '#fff', color: '#4f46e5', border: 'none', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 800 }}
+            >
+              Open Progress Modal
+            </button>
+          </div>
+        </div>
+      )}
+
+      <header className="app-header">
       <div className="header-bg"></div>
       <div className="header-top">
         <div className="header-brand">
@@ -249,36 +285,18 @@ export default function Header({
                     </button>
                   )}
 
-                  {/* Subscription & Plan item */}
+                  {/* Import Data item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onManageSubscription?.() }}
+                    onClick={() => { setShowMenu(false); onOpenCsvImport?.('expense') }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8', borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginBottom: 4,
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 14 }} />
-                    Subscription & Plan
-                  </button>
-
-                  {/* Bank Search item */}
-                  <button
-                    type="button"
-                    onClick={() => { setShowMenu(false); onBankSearch?.() }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <i className="fas fa-university" style={{ color: '#60a5fa', width: 14 }} />
-                    Bank IFSC Search
+                    <i className="fas fa-file-import" style={{ color: '#818cf8', width: 14 }} />
+                    Import Data (CSV / PDF)
                   </button>
 
                   {/* App Settings item */}
@@ -295,6 +313,20 @@ export default function Header({
                   >
                     <i className="fas fa-cog" style={{ color: '#fbbf24', width: 14 }} />
                     App Settings
+                  </button>
+
+                  {/* Rate & Review App item */}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onOpenRatingModal?.() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#fbbf24', borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginTop: 2,
+                    }}
+                  >
+                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 14 }} />
+                    Rate &amp; Review App
                   </button>
 
                   {/* Refresh Data item */}
@@ -378,5 +410,6 @@ export default function Header({
         </div>
       </div>
     </header>
+    </>
   )
 }

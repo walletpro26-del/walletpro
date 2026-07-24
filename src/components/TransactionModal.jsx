@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { getAttachment } from '../api/attachments'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
+import { findMatchingBankProof } from '../api/bankProofMatcher'
 
 export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare }) {
   const [attachmentData, setAttachmentData] = useState(null)
@@ -10,21 +12,24 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const [fullscreen, setFullscreen] = useState(false)
   const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '' })
+  const [showAllBankMatches, setShowAllBankMatches] = useState(false)
 
-  if (!item) return null
+  const bankMatches = useMemo(() => {
+    if (!item) return []
+    return findMatchingBankProof(item)
+  }, [item])
 
-  const isLending = item.isLend || item.sheet === 'lending'
+  const displayBankMatches = useMemo(() => {
+    if (!bankMatches || bankMatches.length === 0) return []
+    if (showAllBankMatches) return bankMatches
+    const highQuality = bankMatches.filter((m) => m.confidence >= 50)
+    return highQuality.length > 0 ? highQuality.slice(0, 3) : bankMatches.slice(0, 3)
+  }, [bankMatches, showAllBankMatches])
 
-  function formatDate(iso) {
-    try {
-      return new Date(iso).toLocaleDateString('en-IN', {
-        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    } catch { return '' }
-  }
+  const isLending = Boolean(item?.isLend || item?.sheet === 'lending')
 
   useEffect(() => {
+    if (!item) return
     if (item.hasAttachment && !item.fileData) {
       setLoadingAttachment(true)
       setAttachmentError('')
@@ -47,7 +52,19 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
       setAttachmentData(item.fileData)
       setAttachmentSuccess('✔ Attachment fetched successfully')
     }
-  }, [item.id])
+  }, [item?.id, item?.hasAttachment, item?.fileData, isLending])
+
+  if (!item) return null
+
+  function formatDate(iso) {
+    try {
+      if (!iso) return ''
+      return new Date(iso).toLocaleDateString('en-IN', {
+        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    } catch { return '' }
+  }
 
   const iconCls = isLending ? 'lend' : 'expense'
   const iconName = isLending ? 'fa-exchange-alt' : 'fa-receipt'
@@ -67,7 +84,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
     window.open(url, '_blank')
   }
 
-  return (
+  return createPortal(
     <>
       <div className="modal-overlay" style={{ zIndex: 100 }}>
         <div className="modal-backdrop" onClick={onClose}></div>
@@ -201,6 +218,118 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                 )}
               </div>
             )}
+
+            {/* Bank Proof Match Section */}
+            {bankMatches.length > 0 ? (
+              <div style={{ marginTop: 14, borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <i className="fas fa-university" style={{ color: '#6366f1' }} /> Bank Proofs ({bankMatches.length})
+                  </span>
+                  <span style={{ fontSize: 8.5, color: 'var(--text-muted)' }}>Sorted by Match %</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }} className="custom-scrollbar">
+                  {displayBankMatches.map((m, idx) => {
+                    const b = m.bankTransaction
+                    const amt = (b.debit || b.credit || 0).toLocaleString('en-IN')
+                    const isDebit = b.debit > 0
+                    const conf = m.confidence
+                    const badgeBg = conf >= 80 ? 'rgba(16,185,129,0.12)' : conf >= 60 ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)'
+                    const badgeColor = conf >= 80 ? '#10b981' : conf >= 60 ? '#6366f1' : '#d97706'
+                    const badgeBorder = conf >= 80 ? 'rgba(16,185,129,0.3)' : conf >= 60 ? 'rgba(99,102,241,0.3)' : 'rgba(245,158,11,0.3)'
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          background: 'var(--bg-subtle, #f8fafc)',
+                          border: '1px solid var(--border-color, #e2e8f0)',
+                          fontSize: 10.5,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 10.5 }}>
+                            🏦 {b.bank || 'Bank Statement'}
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 800, color: badgeColor, background: badgeBg, padding: '1px 7px', borderRadius: 99, border: `1px solid ${badgeBorder}` }}>
+                            {conf >= 80 ? '🟢' : conf >= 60 ? '🔵' : '🟡'} {conf}% Match
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: 9.5, color: 'var(--text-secondary)', marginBottom: 3, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.description || b.narration}>
+                          {b.description || b.narration || 'Bank Entry'}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, color: 'var(--text-muted)' }}>
+                          <span>📅 {new Date(b.dateObj || b.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          <span style={{ fontWeight: 800, color: isDebit ? '#ef4444' : '#10b981' }}>
+                            {isDebit ? `-₹${amt}` : `+₹${amt}`} {b.balance ? `(Bal ₹${b.balance.toLocaleString('en-IN')})` : ''}
+                          </span>
+                        </div>
+
+                        {/* Match Reasons Chips */}
+                        {m.reasons && m.reasons.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                            {m.reasons.map((r, rIdx) => (
+                              <span
+                                key={rIdx}
+                                style={{
+                                  fontSize: 8,
+                                  fontWeight: 700,
+                                  padding: '1px 5px',
+                                  borderRadius: 4,
+                                  background: 'rgba(99,102,241,0.08)',
+                                  color: '#6366f1',
+                                  border: '1px solid rgba(99,102,241,0.2)',
+                                }}
+                              >
+                                ✓ {r}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Show All Matches Toggle */}
+                {bankMatches.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllBankMatches(!showAllBankMatches)}
+                    style={{
+                      width: '100%',
+                      padding: '5px',
+                      marginTop: 6,
+                      borderRadius: 6,
+                      border: '1px solid rgba(99,102,241,0.2)',
+                      background: 'rgba(99,102,241,0.06)',
+                      color: '#6366f1',
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {showAllBankMatches
+                      ? '▲ Show Top 3 Matches Only'
+                      : `▼ Show All ${bankMatches.length} Matches (Including lower confidence)`}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ marginTop: 14, fontSize: 10.5, color: '#94a3b8', background: 'var(--bg-subtle)', padding: '8px 12px', borderRadius: 8, border: '1px dashed var(--border-color)' }}>
+                ℹ️ No matching bank statement proof auto-detected for this record.
+              </div>
+            )}
           </div>
 
           <div className="modal-footer" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -265,6 +394,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   )
 }

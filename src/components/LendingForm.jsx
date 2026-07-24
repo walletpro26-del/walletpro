@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import { getPersonContactMap } from '../utils/commUtils'
 import MultiSelectCombobox from './MultiSelectCombobox'
+import { normalizePersonName } from '../api/entityNormalizer'
 
 export default function LendingForm({ suggestions, allLending = [], onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -114,6 +115,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
     e.preventDefault()
     onSave({
       ...form,
+      person: normalizePersonName(form.person),
       formType: 'lending',
       type: getFinalType(),
       lendType: getFinalType(),
