@@ -623,21 +623,21 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
                   <button
                     type="button"
                     onClick={downloadCsvTemplate}
-                    title="Download CSV Template"
+                    title="Download Standard CSV Template"
                     style={{
-                      height: 30, padding: '0 10px', fontSize: 10, fontWeight: 700,
-                      background: 'rgba(255,255,255,0.12)', color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                      backdropFilter: 'blur(8px)',
+                      height: 32, padding: '0 12px', fontSize: 11, fontWeight: 800,
+                      background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff',
+                      border: 'none', borderRadius: 8,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                      boxShadow: '0 2px 8px rgba(16,185,129,0.4)',
                     }}
                   >
-                    <i className="fas fa-download" style={{ fontSize: 9 }} /> Template
+                    <i className="fas fa-file-csv" style={{ fontSize: 12 }} /> Download CSV Template
                   </button>
                   <label
-                    title="Import CSV or PDF bank statement"
+                    title={isAdmin || allowNonCsvImport ? 'Import CSV or PDF bank statement' : 'Import CSV bank statement'}
                     style={{
-                      height: 30, padding: '0 11px', fontSize: 10, fontWeight: 800,
+                      height: 32, padding: '0 12px', fontSize: 11, fontWeight: 800,
                       background: aiParsing ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.95)',
                       color: aiParsing ? '#fff' : '#4f46e5',
                       border: 'none', borderRadius: 8,
@@ -646,9 +646,15 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
                       boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                     }}
                   >
-                    <i className={`fas ${aiParsing ? 'fa-brain fa-spin' : 'fa-file-upload'}`} style={{ fontSize: 10 }} />
-                    {aiParsing ? 'Processing…' : 'Import'}
-                    <input type="file" accept=".pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.heic,.mp3,.wav,.m4a,application/pdf,text/csv,text/plain,image/*,audio/*" disabled={aiParsing} style={{ display: 'none' }} onChange={handleCsvFileSelect} />
+                    <i className={`fas ${aiParsing ? 'fa-brain fa-spin' : 'fa-file-upload'}`} style={{ fontSize: 11 }} />
+                    {aiParsing ? 'Processing…' : (isAdmin || allowNonCsvImport ? 'Import' : 'Import CSV')}
+                    <input
+                      type="file"
+                      accept={isAdmin || allowNonCsvImport ? '.pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,application/pdf,text/csv,text/plain,image/*' : '.csv,text/csv'}
+                      disabled={aiParsing}
+                      style={{ display: 'none' }}
+                      onChange={handleCsvFileSelect}
+                    />
                   </label>
                 </>
               )}
@@ -882,8 +888,8 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
                   <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent-200)' }}>
                     <i className="fas fa-search-dollar" style={{ fontSize: 22 }}></i>
                   </div>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>No transactions yet</p>
-                  <p style={{ fontSize: 11, fontWeight: 500, margin: 0 }}>Import a PDF or CSV bank statement to get started.</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>No transactions yet</p>
+                  <p style={{ fontSize: 11, fontWeight: 500, margin: 0 }}>Import a CSV bank statement to get started.</p>
                 </div>
               )}
               {filtered.map((r, i) => {

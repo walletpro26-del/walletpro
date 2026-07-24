@@ -20,6 +20,13 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
   const [activeRange, setActiveRange] = useState('allTime')
   const [bankRecords, setBankRecords] = useState([])
   const [showMergeModal, setShowMergeModal] = useState(false)
+  const [expenseBreakdownTab, setExpenseBreakdownTab] = useState('category') // 'category' | 'person'
+  const [expenseSearchTerm, setExpenseSearchTerm] = useState('')
+  const [bankVisibleCount, setBankVisibleCount] = useState(40)
+
+  useEffect(() => {
+    setBankVisibleCount(40)
+  }, [reportType, startDate, endDate, isAllTime])
   const [pdfSettings, setPdfSettings] = useState({
     showStats: true,
     showBreakdown: true,
@@ -715,16 +722,16 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
             <i className="fas fa-chart-pie"></i> Report Generator
           </h3>
           <div className="report-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
-            {/* Person Name Merge Tool */}
+            {/* Person & Category Merge Tool */}
             <button
               type="button"
               onClick={() => setShowMergeModal(true)}
               className="export-menu-btn"
-              title="Unify duplicate name variations across Expenses & Lending (e.g. Father, father_, My father → Father)"
+              title="Unify duplicate name and category variations across Expenses & Lending (e.g. food_, dining → Food & Dining)"
               style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' }}
             >
               <i className="fas fa-random" style={{ fontSize: 10 }}></i>
-              Merge Names
+              Merge Names, Categories &amp; Banks
             </button>
 
             {/* Unified Export / Download Menu */}
@@ -1050,75 +1057,176 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
             </div>
           </div>
 
-          {/* By Category */}
-          <div className="section-title">By Category</div>
-          {Object.entries(expenseReport.byCat).sort((a, b) => b[1] - a[1]).map(([cat, total]) => (
-            <div key={cat} className="breakdown-group">
-              <div className="breakdown-header" onClick={() => toggleGroup('cat-' + cat)}>
-                <span className="group-name">{cat}</span>
-                <span className="group-total">₹{total.toLocaleString('en-IN')}</span>
-              </div>
-              {expandedGroups['cat-' + cat] && (
-                <div style={{ padding: '8px 12px' }}>
-                  {expenseReport.items.filter((e) => (e.category || 'Uncategorized') === cat).map((e, i) => (
-                    <div 
-                      key={i} 
-                      onClick={() => onSelectTxn?.(e)}
-                      className="report-txn-row"
-                      style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        padding: '6px 8px', 
-                        fontSize: 12, 
-                        borderBottom: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        transition: 'background 0.2s'
-                      }}
-                    >
-                      <span>{formatDate(e.date)} — {e.details}</span>
-                      <span style={{ fontWeight: 700 }}>₹{e.amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Expenses Breakdown Tabbed Bar */}
+          <div style={{
+            marginTop: 18,
+            marginBottom: 12,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '8px 10px',
+            background: 'var(--bg-subtle, #f8fafc)',
+            borderRadius: 12,
+            border: '1px solid var(--border-color, #e2e8f0)'
+          }}>
+            {/* Tab Pill Buttons */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setExpenseBreakdownTab('category')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  border: 'none',
+                  background: expenseBreakdownTab === 'category' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'transparent',
+                  color: expenseBreakdownTab === 'category' ? '#ffffff' : 'var(--text-secondary, #64748b)',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: expenseBreakdownTab === 'category' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                🏷️ By Category ({Object.keys(expenseReport.byCat).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseBreakdownTab('person')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 20,
+                  border: 'none',
+                  background: expenseBreakdownTab === 'person' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'transparent',
+                  color: expenseBreakdownTab === 'person' ? '#ffffff' : 'var(--text-secondary, #64748b)',
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: expenseBreakdownTab === 'person' ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                👤 By Person ({Object.keys(expenseReport.byWhom).length})
+              </button>
             </div>
-          ))}
 
-          {/* By ForWhom */}
-          <div className="section-title" style={{ marginTop: 20 }}>By Person</div>
-          {Object.entries(expenseReport.byWhom).sort((a, b) => b[1] - a[1]).map(([whom, total]) => (
-            <div key={whom} className="breakdown-group">
-              <div className="breakdown-header" onClick={() => toggleGroup('whom-' + whom)}>
-                <span className="group-name">{whom}</span>
-                <span className="group-total">₹{total.toLocaleString('en-IN')}</span>
-              </div>
-              {expandedGroups['whom-' + whom] && (
-                <div style={{ padding: '8px 12px' }}>
-                  {expenseReport.items.filter((e) => (e.forWhom || 'Self') === whom).map((e, i) => (
-                    <div 
-                      key={i} 
-                      onClick={() => onSelectTxn?.(e)}
-                      className="report-txn-row"
-                      style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        padding: '6px 8px', 
-                        fontSize: 12, 
-                        borderBottom: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        transition: 'background 0.2s'
-                      }}
-                    >
-                      <span>{formatDate(e.date)} — {e.category} — {e.details}</span>
-                      <span style={{ fontWeight: 700 }}>₹{e.amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* Search Filter Input */}
+            <div style={{ position: 'relative', minWidth: 180, flex: '0 1 220px' }}>
+              <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted, #94a3b8)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                placeholder={expenseBreakdownTab === 'category' ? "Search category..." : "Search person..."}
+                value={expenseSearchTerm}
+                onChange={(e) => setExpenseSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 26px 6px 28px',
+                  fontSize: 11,
+                  border: '1px solid var(--border-color, #cbd5e1)',
+                  borderRadius: 16,
+                  background: 'var(--bg-card, #ffffff)',
+                  color: 'var(--text-primary, #0f172a)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {expenseSearchTerm && (
+                <button
+                  onClick={() => setExpenseSearchTerm('')}
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+                >✕</button>
               )}
             </div>
-          ))}
+          </div>
+
+          {/* Tab Content 1: By Category */}
+          {expenseBreakdownTab === 'category' && (
+            <div>
+              {Object.entries(expenseReport.byCat)
+                .sort((a, b) => b[1] - a[1])
+                .filter(([cat]) => !expenseSearchTerm || cat.toLowerCase().includes(expenseSearchTerm.toLowerCase()))
+                .map(([cat, total]) => (
+                  <div key={cat} className="breakdown-group">
+                    <div className="breakdown-header" onClick={() => toggleGroup('cat-' + cat)}>
+                      <span className="group-name">{cat}</span>
+                      <span className="group-total">₹{total.toLocaleString('en-IN')}</span>
+                    </div>
+                    {expandedGroups['cat-' + cat] && (
+                      <div style={{ padding: '8px 12px' }}>
+                        {expenseReport.items.filter((e) => (e.category || 'Uncategorized') === cat).map((e, i) => (
+                          <div 
+                            key={i} 
+                            onClick={() => onSelectTxn?.(e)}
+                            className="report-txn-row"
+                            style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              padding: '6px 8px', 
+                              fontSize: 12, 
+                              borderBottom: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-sm)',
+                              cursor: 'pointer',
+                              transition: 'background 0.2s'
+                            }}
+                          >
+                            <span>{formatDate(e.date)} — {e.details}</span>
+                            <span style={{ fontWeight: 700 }}>₹{e.amount.toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* Tab Content 2: By Person */}
+          {expenseBreakdownTab === 'person' && (
+            <div>
+              {Object.entries(expenseReport.byWhom)
+                .sort((a, b) => b[1] - a[1])
+                .filter(([whom]) => !expenseSearchTerm || whom.toLowerCase().includes(expenseSearchTerm.toLowerCase()))
+                .map(([whom, total]) => (
+                  <div key={whom} className="breakdown-group">
+                    <div className="breakdown-header" onClick={() => toggleGroup('whom-' + whom)}>
+                      <span className="group-name">{whom}</span>
+                      <span className="group-total">₹{total.toLocaleString('en-IN')}</span>
+                    </div>
+                    {expandedGroups['whom-' + whom] && (
+                      <div style={{ padding: '8px 12px' }}>
+                        {expenseReport.items.filter((e) => (e.forWhom || 'Self') === whom).map((e, i) => (
+                          <div 
+                            key={i} 
+                            onClick={() => onSelectTxn?.(e)}
+                            className="report-txn-row"
+                            style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              padding: '6px 8px', 
+                              fontSize: 12, 
+                              borderBottom: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-sm)',
+                              cursor: 'pointer',
+                              transition: 'background 0.2s'
+                            }}
+                          >
+                            <span>{formatDate(e.date)} — {e.category} — {e.details}</span>
+                            <span style={{ fontWeight: 700 }}>₹{e.amount.toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       ) : reportType === 'lending' ? (
         <div>
@@ -1285,7 +1393,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredBankTxns.map((b, idx) => (
+                    {filteredBankTxns.slice(0, bankVisibleCount).map((b, idx) => (
                       <tr key={b.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                         <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 11 }}>
                           {b.dateObj ? b.dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}
@@ -1308,6 +1416,46 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
                   </tbody>
                 </table>
               </div>
+
+              {/* Progressive Batch Load Controls */}
+              {bankVisibleCount < filteredBankTxns.length && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setBankVisibleCount((prev) => prev + 50)}
+                    style={{
+                      flex: 1,
+                      padding: '9px 14px',
+                      borderRadius: 10,
+                      border: '1px solid var(--border-color, #cbd5e1)',
+                      background: 'var(--bg-subtle, #f8fafc)',
+                      color: '#6366f1',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    ▼ Load More (+50) — Showing {Math.min(bankVisibleCount, filteredBankTxns.length)} of {filteredBankTxns.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBankVisibleCount(filteredBankTxns.length)}
+                    style={{
+                      padding: '9px 14px',
+                      borderRadius: 10,
+                      border: '1px solid var(--border-color, #cbd5e1)',
+                      background: 'var(--bg-card, #fff)',
+                      color: 'var(--text-secondary, #64748b)',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Show All ({filteredBankTxns.length})
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

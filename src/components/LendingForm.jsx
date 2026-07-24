@@ -294,7 +294,10 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           label="Person Name"
           value={form.person}
           onChange={(val) => set('person', val)}
-          suggestions={suggestions?.persons || []}
+          suggestions={Array.from(new Set([
+            'Father', 'Mother', 'Brother', 'Sister', 'Friend', 'Colleague', 'Spouse', 'Relative',
+            ...(suggestions?.persons || [])
+          ]))}
         />
 
         {/* Mobile No & Email */}

@@ -2,39 +2,39 @@ import { useState, useEffect, useMemo } from 'react'
 import { auth } from '../firebase'
 import { loadSnapshot } from '../api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
+import { downloadBankCsvTemplate } from '../utils/csvTemplate'
 
 /**
  * BankHistoryView — Inline bank transaction list with live search,
  * bank filter chips, deletion capabilities, and instant mobile-first performance.
  */
-export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, onOpenImport }) {
-  const [allRecords, setAllRecords] = useState([])
-  const [loading, setLoading] = useState(true)
+export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, onOpenImport, onOpenMerge }) {
+  const currentUid = uid || auth?.currentUser?.uid || ''
+
+  // Instant cache state initialization (zero loading flash on tab switch)
+  const [allRecords, setAllRecords] = useState(() => {
+    const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
+    if (cached && cached.length > 0) {
+      return cached.map((r) => ({
+        ...r,
+        date: parseSafeDate(r.dateObj || r.date),
+      }))
+    }
+    return []
+  })
+  const [loading, setLoading] = useState(() => allRecords.length === 0)
   const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedBankFilter, setSelectedBankFilter] = useState('ALL')
   const [deletingId, setDeletingId] = useState(null)
   const [error, setError] = useState('')
-
-  const currentUid = uid || auth?.currentUser?.uid || ''
+  const [showLlmGuideModal, setShowLlmGuideModal] = useState(false)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
 
   // Load records from local cache first, then Firestore
   async function loadData(forceRefresh = false) {
     if (forceRefresh) setRefreshing(true)
-    else {
-      // Instant cache display
-      const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
-      if (cached && cached.length > 0) {
-        const rehydrated = cached.map((r) => ({
-          ...r,
-          date: parseSafeDate(r.dateObj || r.date),
-        }))
-        setAllRecords(rehydrated)
-        setLoading(false)
-      } else {
-        setLoading(true)
-      }
-    }
+    else if (allRecords.length === 0) setLoading(true)
 
     setError('')
     try {
@@ -71,6 +71,8 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
     return Array.from(set).sort()
   }, [allRecords])
 
+  const [visibleCount, setVisibleCount] = useState(30)
+
   // Filter records by search term & bank name
   const filtered = useMemo(() => {
     return allRecords.filter((r) => {
@@ -96,6 +98,15 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
       return true
     })
   }, [allRecords, searchTerm, selectedBankFilter])
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [searchTerm, selectedBankFilter])
+
+  const visibleRecords = useMemo(() => {
+    return filtered.slice(0, visibleCount)
+  }, [filtered, visibleCount])
 
   // Summary metrics for current filtered view
   const metrics = useMemo(() => {
@@ -250,6 +261,27 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
                 </button>
               )
             })}
+
+            {onOpenMerge && (
+              <button
+                type="button"
+                onClick={() => onOpenMerge('bank')}
+                title="Merge duplicate bank names"
+                style={{
+                  padding: '3px 10px',
+                  borderRadius: 12,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                  border: '1px solid rgba(2, 132, 199, 0.4)',
+                  background: 'rgba(2, 132, 199, 0.1)',
+                  color: '#0284c7',
+                  cursor: 'pointer',
+                }}
+              >
+                🔀 Merge Bank Names
+              </button>
+            )}
           </div>
         )}
 
@@ -283,23 +315,54 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
         )}
       </div>
 
-      {/* Import Action Banner */}
-      <button
-        onClick={onOpenImport}
-        style={{
-          width: '100%', marginBottom: 12, padding: '10px 14px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
-          border: '1.5px dashed var(--accent-300)',
-          borderRadius: 12, color: 'var(--accent-600)',
-          fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        }}
-      >
-        <i className="fas fa-file-import" style={{ fontSize: 13 }} />
-        {allowNonCsvImport ? 'Import Bank Statement (PDF / CSV)' : 'Import Bank Statement (CSV Only)'}
-      </button>
+      {/* Import Action & Template Bar */}
+      <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          onClick={onOpenImport}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
+            border: '1.5px dashed var(--accent-300)',
+            borderRadius: 12, color: 'var(--accent-600)',
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}
+        >
+          <i className="fas fa-file-import" style={{ fontSize: 13 }} />
+          {allowNonCsvImport ? 'Import Statement (PDF/CSV)' : 'Import Statement (CSV Only)'}
+        </button>
+
+        <button
+          type="button"
+          onClick={downloadBankCsvTemplate}
+          style={{
+            height: 38,
+            padding: '0 11px',
+            borderRadius: 10,
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            background: 'rgba(16, 185, 129, 0.1)',
+            color: '#059669',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 5,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+            transition: 'all 0.2s ease',
+          }}
+          title="Download Standard CSV Template"
+        >
+          <i className="fas fa-download" style={{ fontSize: 10, color: '#059669' }} />
+          Template CSV
+        </button>
+      </div>
 
       {/* Error Alert */}
       {error && (
@@ -326,22 +389,28 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4, maxWidth: 280, margin: '6px auto 14px' }}>
             Import your PDF or CSV bank statement to search across bank history and auto-verify payment proofs.
           </div>
-          <button
-            onClick={onOpenImport}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 20,
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 700,
-              fontSize: 12,
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
-            }}
-          >
-            Import PDF / CSV Statement
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <button
+              onClick={onOpenImport}
+              style={{
+                padding: '9px 20px',
+                borderRadius: 20,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <i className="fas fa-file-import" style={{ fontSize: 13 }} />
+              {allowNonCsvImport ? 'Import PDF / CSV Statement' : 'Import CSV Statement'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -361,84 +430,110 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
 
       {/* Transaction List */}
       {filtered.length > 0 && (
-        <ul className="txn-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {filtered.map((r) => {
-            const isCredit = (r.credit || 0) > 0 && !(r.debit || 0 > 0)
-            const amount = isCredit ? r.credit : r.debit
-            const amtCls = isCredit ? 'positive' : 'negative'
-            const amtSign = isCredit ? '+' : '-'
-            const amtStr = `${amtSign}₹${Number(amount || 0).toLocaleString('en-IN')}`
+        <>
+          <ul className="txn-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {visibleRecords.map((r) => {
+              const isCredit = (r.credit || 0) > 0 && !(r.debit || 0 > 0)
+              const amount = isCredit ? r.credit : r.debit
+              const amtCls = isCredit ? 'positive' : 'negative'
+              const amtSign = isCredit ? '+' : '-'
+              const amtStr = `${amtSign}₹${Number(amount || 0).toLocaleString('en-IN')}`
 
-            return (
-              <li key={r.id} className="txn-item" style={{ position: 'relative', cursor: 'default', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
-                {/* Icon */}
-                <div
-                  className={`txn-icon ${isCredit ? 'positive' : 'expense'}`}
-                  style={{
-                    flexShrink: 0,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: isCredit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
-                    color: isCredit ? '#10b981' : '#ef4444',
-                    fontSize: 12,
-                  }}
-                >
-                  <i className={`fas ${isCredit ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
-                </div>
-
-                {/* Main Info */}
-                <div className="txn-info" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>
-                      {r.description || '—'}
-                    </span>
-                    {r.bank && (
-                      <span style={{ fontSize: 8.5, padding: '1px 5px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 700, border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0 }}>
-                        {r.bank}
-                      </span>
-                    )}
-                  </div>
-                  <div className="txn-sub" style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {formatDate(r.date)}
-                    {r.balance ? ` · Bal: ₹${Number(r.balance).toLocaleString('en-IN')}` : ''}
-                  </div>
-                </div>
-
-                {/* Amount & Delete */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <div className={`txn-amount ${amtCls}`} style={{ textAlign: 'right', fontWeight: 800, fontSize: 12.5 }}>
-                    {amtStr}
-                  </div>
-
-                  <button
-                    onClick={() => handleDelete(r)}
-                    disabled={deletingId === r.id}
-                    title="Delete Bank Entry"
+              return (
+                <li key={r.id} className="txn-item" style={{ position: 'relative', cursor: 'default', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                  {/* Icon */}
+                  <div
+                    className={`txn-icon ${isCredit ? 'positive' : 'expense'}`}
                     style={{
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-muted)',
-                      padding: 4,
-                      cursor: 'pointer',
-                      fontSize: 11,
-                      borderRadius: 4,
-                      opacity: 0.6,
-                      transition: 'all 0.2s',
+                      flexShrink: 0,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: isCredit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
+                      color: isCredit ? '#10b981' : '#ef4444',
+                      fontSize: 12,
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--text-muted)' }}
                   >
-                    {deletingId === r.id ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-trash-alt" />}
-                  </button>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+                    <i className={`fas ${isCredit ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
+                  </div>
+
+                  {/* Main Info */}
+                  <div className="txn-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>
+                        {r.description || '—'}
+                      </span>
+                      {r.bank && (
+                        <span style={{ fontSize: 8.5, padding: '1px 5px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 700, border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0 }}>
+                          {r.bank}
+                        </span>
+                      )}
+                    </div>
+                    <div className="txn-sub" style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {formatDate(r.date)}
+                      {r.balance ? ` · Bal: ₹${Number(r.balance).toLocaleString('en-IN')}` : ''}
+                    </div>
+                  </div>
+
+                  {/* Amount & Delete */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <div className={`txn-amount ${amtCls}`} style={{ textAlign: 'right', fontWeight: 800, fontSize: 12.5 }}>
+                      {amtStr}
+                    </div>
+
+                    <button
+                      onClick={() => handleDelete(r)}
+                      disabled={deletingId === r.id}
+                      title="Delete Bank Entry"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--text-muted)',
+                        padding: 4,
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        borderRadius: 4,
+                        opacity: 0.6,
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--text-muted)' }}
+                    >
+                      {deletingId === r.id ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-trash-alt" />}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+
+          {/* Load More Button */}
+          {visibleCount < filtered.length && (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => prev + 50)}
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: '10px 14px',
+                borderRadius: 12,
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-card)',
+                color: 'var(--accent-600)',
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                textAlign: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+              }}
+            >
+              ▼ Load More Transactions (Showing {visibleCount} of {filtered.length})
+            </button>
+          )}
+        </>
       )}
     </div>
   )

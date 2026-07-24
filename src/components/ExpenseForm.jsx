@@ -258,7 +258,11 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               label="Category"
               value={form.category}
               onChange={(val) => set('category', val)}
-              suggestions={suggestions?.categories || []}
+              suggestions={Array.from(new Set([
+                'Food & Dining', 'Health & Medical', 'Education', 'Electricity & Utilities', 
+                'Groceries', 'Shopping', 'Travel & Fuel', 'Rent & Housing', 'Entertainment',
+                ...(suggestions?.categories || [])
+              ]))}
             />
           </div>
           <div className="float-group" style={{ flex: 1 }}>

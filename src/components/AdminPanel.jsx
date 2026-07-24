@@ -997,6 +997,16 @@ export default function AdminPanel({ auth, onClose }) {
                 </div>
               </div>
 
+              {/* Privacy Guard Notice Banner */}
+              <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-user-shield" /> 🔒 User Privacy & Data Protection Active
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary, #475569)', marginTop: 4, lineHeight: 1.4 }}>
+                  All user transactions (Expenses, Lending, Bank Statements) are stored in isolated documents scoped by User ID. Personal transaction descriptions, remarks, narration text, and proof attachments are strictly private and never rendered or exposed in admin tools.
+                </div>
+              </div>
+
               {/* GCP Metrics Sync Box */}
               <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 10, borderRadius: 10, border: '1px solid var(--border-color, #e2e8f0)' }}>
                 <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)', marginBottom: 4 }}>

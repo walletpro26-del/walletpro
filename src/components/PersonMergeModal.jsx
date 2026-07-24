@@ -8,16 +8,30 @@ import {
   savePersonAlias,
   removePersonAlias,
   findDuplicatePersonCandidates,
+  normalizeCategoryName,
+  getCategoryAliases,
+  saveCategoryAlias,
+  removeCategoryAlias,
+  findDuplicateCategoryCandidates,
+  normalizeBankName,
+  getBankAliases,
+  saveBankAlias,
+  removeBankAlias,
+  findDuplicateBankCandidates,
 } from '../api/entityNormalizer'
 import { loadSnapshot, saveSnapshot } from '../api/localCache'
 
 export default function PersonMergeModal({
   allExpenses = [],
   allLending = [],
+  allBankRecords: propBankRecords,
   uid,
   onClose,
   onMergeComplete,
+  initialEntityType = 'person', // 'person' | 'category' | 'bank'
 }) {
+  const currentUid = uid || auth?.currentUser?.uid || ''
+  const [entityType, setEntityType] = useState(initialEntityType) // 'person' | 'category' | 'bank'
   const [activeTab, setActiveTab] = useState('suggestions') // 'suggestions' | 'manual' | 'rules'
   const [srcName, setSrcName] = useState('')
   const [targetName, setTargetName] = useState('')
@@ -26,12 +40,64 @@ export default function PersonMergeModal({
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
+  const allBankRecords = useMemo(() => {
+    if (propBankRecords && propBankRecords.length > 0) return propBankRecords
+    return loadSnapshot('bank', currentUid) || loadSnapshot('bank') || []
+  }, [propBankRecords, currentUid])
+
+  // Reset form inputs when entityType changes
+  useEffect(() => {
+    setSrcName('')
+    setTargetName('')
+    setError('')
+    setSuccessMsg('')
+  }, [entityType])
+
   // Live Before & After Transformation Stats
   const mergePreviewStats = useMemo(() => {
     if (!srcName || !targetName || srcName.trim().toLowerCase() === targetName.trim().toLowerCase()) return null
 
     const src = srcName.trim()
     const tgt = targetName.trim()
+
+    if (entityType === 'bank') {
+      const srcBank = allBankRecords.filter((b) => b.bank?.trim() === src)
+      const tgtBank = allBankRecords.filter((b) => b.bank?.trim() === tgt)
+      return {
+        srcName: src,
+        targetName: tgt,
+        srcExpensesCount: srcBank.length,
+        srcLendingCount: 0,
+        srcTotalCount: srcBank.length,
+        srcSum: 0,
+        tgtExpensesCount: tgtBank.length,
+        tgtLendingCount: 0,
+        tgtTotalCount: tgtBank.length,
+        finalExpensesCount: tgtBank.length + srcBank.length,
+        finalLendingCount: 0,
+        finalTotalCount: tgtBank.length + srcBank.length,
+      }
+    }
+
+    if (entityType === 'category') {
+      const srcExpenses = allExpenses.filter((e) => e.category?.trim() === src)
+      const tgtExpenses = allExpenses.filter((e) => e.category?.trim() === tgt)
+      const srcSum = srcExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+      return {
+        srcName: src,
+        targetName: tgt,
+        srcExpensesCount: srcExpenses.length,
+        srcLendingCount: 0,
+        srcTotalCount: srcExpenses.length,
+        srcSum,
+        tgtExpensesCount: tgtExpenses.length,
+        tgtLendingCount: 0,
+        tgtTotalCount: tgtExpenses.length,
+        finalExpensesCount: tgtExpenses.length + srcExpenses.length,
+        finalLendingCount: 0,
+        finalTotalCount: tgtExpenses.length + srcExpenses.length,
+      }
+    }
 
     const srcExpenses = allExpenses.filter((e) => e.forWhom?.trim() === src)
     const srcLending = allLending.filter((l) => l.person?.trim() === src)
@@ -60,46 +126,68 @@ export default function PersonMergeModal({
       finalLendingCount,
       finalTotalCount,
     }
-  }, [srcName, targetName, allExpenses, allLending])
+  }, [srcName, targetName, allExpenses, allLending, allBankRecords, entityType])
 
   // Alias Rules List
-  const [aliasRules, setAliasRules] = useState(() => getPersonAliases())
+  const [aliasRules, setAliasRules] = useState(() =>
+    entityType === 'bank' ? getBankAliases() : entityType === 'category' ? getCategoryAliases() : getPersonAliases()
+  )
+
+  useEffect(() => {
+    refreshAliasRules()
+  }, [entityType])
 
   function refreshAliasRules() {
-    setAliasRules(getPersonAliases())
+    setAliasRules(entityType === 'bank' ? getBankAliases() : entityType === 'category' ? getCategoryAliases() : getPersonAliases())
   }
 
-  // Get all unique person/forWhom names in current dataset
+  // Get all unique names/categories/banks in current dataset
   const allUniqueNames = useMemo(() => {
     const set = new Set()
-    allExpenses.forEach((e) => {
-      if (e.forWhom?.trim()) set.add(e.forWhom.trim())
-    })
-    allLending.forEach((l) => {
-      if (l.person?.trim()) set.add(l.person.trim())
-    })
+    if (entityType === 'bank') {
+      allBankRecords.forEach((b) => {
+        if (b.bank?.trim()) set.add(b.bank.trim())
+      })
+    } else if (entityType === 'category') {
+      allExpenses.forEach((e) => {
+        if (e.category?.trim()) set.add(e.category.trim())
+      })
+    } else {
+      allExpenses.forEach((e) => {
+        if (e.forWhom?.trim()) set.add(e.forWhom.trim())
+      })
+      allLending.forEach((l) => {
+        if (l.person?.trim()) set.add(l.person.trim())
+      })
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b))
-  }, [allExpenses, allLending])
+  }, [allExpenses, allLending, allBankRecords, entityType])
 
   // Detect duplicate candidates
   const suggestedClusters = useMemo(() => {
+    if (entityType === 'bank') {
+      return findDuplicateBankCandidates(allBankRecords)
+    }
+    if (entityType === 'category') {
+      return findDuplicateCategoryCandidates(allExpenses)
+    }
     return findDuplicatePersonCandidates(allExpenses, allLending)
-  }, [allExpenses, allLending])
+  }, [allExpenses, allLending, allBankRecords, entityType])
 
   async function executeMerge(source, target) {
     const src = (source || '').trim()
     const tgt = (target || '').trim()
 
     if (!src) {
-      setError('Please select or type a source name to merge.')
+      setError(`Please select or type a source ${entityType === 'category' ? 'category' : 'name'} to merge.`)
       return
     }
     if (!tgt) {
-      setError('Please select or type a target canonical name.')
+      setError(`Please select or type a target canonical ${entityType === 'category' ? 'category' : 'name'}.`)
       return
     }
     if (src.toLowerCase() === tgt.toLowerCase()) {
-      setError('Source and target names cannot be identical.')
+      setError(`Source and target ${entityType === 'category' ? 'categories' : 'names'} cannot be identical.`)
       return
     }
 
@@ -113,106 +201,232 @@ export default function PersonMergeModal({
       let updatedExpensesCount = 0
       let updatedLendingCount = 0
 
-      // 1. Update Firestore Expenses
-      if (currentUid) {
-        const expQ = query(
-          collection(db, 'expenses'),
-          where('userId', '==', currentUid),
-          where('forWhom', '==', src)
-        )
-        const expSnap = await getDocs(expQ)
-        if (!expSnap.empty) {
-          const batchSize = 400
-          for (let i = 0; i < expSnap.docs.length; i += batchSize) {
-            const batch = writeBatch(db)
-            const chunk = expSnap.docs.slice(i, i + batchSize)
-            chunk.forEach((d) => batch.update(d.ref, { forWhom: tgt }))
-            await batch.commit()
+      let updatedBankCount = 0
+
+      if (entityType === 'bank') {
+        if (currentUid) {
+          // Query by 'userId' field in bankTransactions
+          const bankQ = query(
+            collection(db, 'bankTransactions'),
+            where('userId', '==', currentUid),
+            where('bank', '==', src)
+          )
+          const bankSnap = await getDocs(bankQ)
+          if (!bankSnap.empty) {
+            const batchSize = 400
+            for (let i = 0; i < bankSnap.docs.length; i += batchSize) {
+              const batch = writeBatch(db)
+              const chunk = bankSnap.docs.slice(i, i + batchSize)
+              chunk.forEach((d) => batch.update(d.ref, { bank: tgt }))
+              await batch.commit()
+            }
+            updatedBankCount = bankSnap.size
           }
-          updatedExpensesCount = expSnap.size
+
+          // Query by 'uid' field (legacy documents) in bankTransactions
+          const bankQ_uid = query(
+            collection(db, 'bankTransactions'),
+            where('uid', '==', currentUid),
+            where('bank', '==', src)
+          )
+          const bankSnap_uid = await getDocs(bankQ_uid)
+          if (!bankSnap_uid.empty) {
+            const batchSize = 400
+            for (let i = 0; i < bankSnap_uid.docs.length; i += batchSize) {
+              const batch = writeBatch(db)
+              const chunk = bankSnap_uid.docs.slice(i, i + batchSize)
+              chunk.forEach((d) => batch.update(d.ref, { bank: tgt }))
+              await batch.commit()
+            }
+            updatedBankCount += bankSnap_uid.size
+          }
+
+          if (src.toLowerCase() !== src) {
+            const bankQ2 = query(
+              collection(db, 'bankTransactions'),
+              where('userId', '==', currentUid),
+              where('bank', '==', src.toLowerCase())
+            )
+            const bankSnap2 = await getDocs(bankQ2)
+            if (!bankSnap2.empty) {
+              const batchSize = 400
+              for (let i = 0; i < bankSnap2.docs.length; i += batchSize) {
+                const batch = writeBatch(db)
+                const chunk = bankSnap2.docs.slice(i, i + batchSize)
+                chunk.forEach((d) => batch.update(d.ref, { bank: tgt }))
+                await batch.commit()
+              }
+              updatedBankCount += bankSnap2.size
+            }
+          }
         }
 
-        // Case-insensitive query fallback if different casing exists
-        if (src.toLowerCase() !== src) {
-          const expQ2 = query(
+        if (autoSaveAlias) {
+          saveBankAlias(src, tgt)
+          refreshAliasRules()
+        }
+
+        const newBank = allBankRecords.map((b) =>
+          b.bank?.toLowerCase() === src.toLowerCase() ? { ...b, bank: tgt } : b
+        )
+        saveSnapshot('bank', newBank, currentUid)
+
+        setSuccessMsg(
+          `🎉 Successfully merged Bank Name "${src}" → "${tgt}" (${updatedBankCount} bank transaction records updated in database)!`
+        )
+      } else if (entityType === 'category') {
+        // Update Category in Firestore Expenses
+        if (currentUid) {
+          const expQ = query(
             collection(db, 'expenses'),
             where('userId', '==', currentUid),
-            where('forWhom', '==', src.toLowerCase())
+            where('category', '==', src)
           )
-          const expSnap2 = await getDocs(expQ2)
-          if (!expSnap2.empty) {
+          const expSnap = await getDocs(expQ)
+          if (!expSnap.empty) {
             const batchSize = 400
-            for (let i = 0; i < expSnap2.docs.length; i += batchSize) {
+            for (let i = 0; i < expSnap.docs.length; i += batchSize) {
               const batch = writeBatch(db)
-              const chunk = expSnap2.docs.slice(i, i + batchSize)
+              const chunk = expSnap.docs.slice(i, i + batchSize)
+              chunk.forEach((d) => batch.update(d.ref, { category: tgt }))
+              await batch.commit()
+            }
+            updatedExpensesCount = expSnap.size
+          }
+
+          if (src.toLowerCase() !== src) {
+            const expQ2 = query(
+              collection(db, 'expenses'),
+              where('userId', '==', currentUid),
+              where('category', '==', src.toLowerCase())
+            )
+            const expSnap2 = await getDocs(expQ2)
+            if (!expSnap2.empty) {
+              const batchSize = 400
+              for (let i = 0; i < expSnap2.docs.length; i += batchSize) {
+                const batch = writeBatch(db)
+                const chunk = expSnap2.docs.slice(i, i + batchSize)
+                chunk.forEach((d) => batch.update(d.ref, { category: tgt }))
+                await batch.commit()
+              }
+              updatedExpensesCount += expSnap2.size
+            }
+          }
+        }
+
+        if (autoSaveAlias) {
+          saveCategoryAlias(src, tgt)
+          refreshAliasRules()
+        }
+
+        const newExpenses = allExpenses.map((e) =>
+          e.category?.toLowerCase() === src.toLowerCase() ? { ...e, category: tgt } : e
+        )
+        saveSnapshot('expenses', newExpenses, currentUid)
+
+        setSuccessMsg(
+          `🎉 Successfully merged Category "${src}" → "${tgt}" (${updatedExpensesCount} expense records updated in database)!`
+        )
+      } else {
+        // 1. Update Firestore Expenses
+        if (currentUid) {
+          const expQ = query(
+            collection(db, 'expenses'),
+            where('userId', '==', currentUid),
+            where('forWhom', '==', src)
+          )
+          const expSnap = await getDocs(expQ)
+          if (!expSnap.empty) {
+            const batchSize = 400
+            for (let i = 0; i < expSnap.docs.length; i += batchSize) {
+              const batch = writeBatch(db)
+              const chunk = expSnap.docs.slice(i, i + batchSize)
               chunk.forEach((d) => batch.update(d.ref, { forWhom: tgt }))
               await batch.commit()
             }
-            updatedExpensesCount += expSnap2.size
+            updatedExpensesCount = expSnap.size
+          }
+
+          if (src.toLowerCase() !== src) {
+            const expQ2 = query(
+              collection(db, 'expenses'),
+              where('userId', '==', currentUid),
+              where('forWhom', '==', src.toLowerCase())
+            )
+            const expSnap2 = await getDocs(expQ2)
+            if (!expSnap2.empty) {
+              const batchSize = 400
+              for (let i = 0; i < expSnap2.docs.length; i += batchSize) {
+                const batch = writeBatch(db)
+                const chunk = expSnap2.docs.slice(i, i + batchSize)
+                chunk.forEach((d) => batch.update(d.ref, { forWhom: tgt }))
+                await batch.commit()
+              }
+              updatedExpensesCount += expSnap2.size
+            }
           }
         }
-      }
 
-      // 2. Update Firestore Lending
-      if (currentUid) {
-        const lendQ = query(
-          collection(db, 'lending'),
-          where('userId', '==', currentUid),
-          where('person', '==', src)
-        )
-        const lendSnap = await getDocs(lendQ)
-        if (!lendSnap.empty) {
-          const batchSize = 400
-          for (let i = 0; i < lendSnap.docs.length; i += batchSize) {
-            const batch = writeBatch(db)
-            const chunk = lendSnap.docs.slice(i, i + batchSize)
-            chunk.forEach((d) => batch.update(d.ref, { person: tgt }))
-            await batch.commit()
-          }
-          updatedLendingCount = lendSnap.size
-        }
-
-        if (src.toLowerCase() !== src) {
-          const lendQ2 = query(
+        // 2. Update Firestore Lending
+        if (currentUid) {
+          const lendQ = query(
             collection(db, 'lending'),
             where('userId', '==', currentUid),
-            where('person', '==', src.toLowerCase())
+            where('person', '==', src)
           )
-          const lendSnap2 = await getDocs(lendQ2)
-          if (!lendSnap2.empty) {
+          const lendSnap = await getDocs(lendQ)
+          if (!lendSnap.empty) {
             const batchSize = 400
-            for (let i = 0; i < lendSnap2.docs.length; i += batchSize) {
+            for (let i = 0; i < lendSnap.docs.length; i += batchSize) {
               const batch = writeBatch(db)
-              const chunk = lendSnap2.docs.slice(i, i + batchSize)
+              const chunk = lendSnap.docs.slice(i, i + batchSize)
               chunk.forEach((d) => batch.update(d.ref, { person: tgt }))
               await batch.commit()
             }
-            updatedLendingCount += lendSnap2.size
+            updatedLendingCount = lendSnap.size
+          }
+
+          if (src.toLowerCase() !== src) {
+            const lendQ2 = query(
+              collection(db, 'lending'),
+              where('userId', '==', currentUid),
+              where('person', '==', src.toLowerCase())
+            )
+            const lendSnap2 = await getDocs(lendQ2)
+            if (!lendSnap2.empty) {
+              const batchSize = 400
+              for (let i = 0; i < lendSnap2.docs.length; i += batchSize) {
+                const batch = writeBatch(db)
+                const chunk = lendSnap2.docs.slice(i, i + batchSize)
+                chunk.forEach((d) => batch.update(d.ref, { person: tgt }))
+                await batch.commit()
+              }
+              updatedLendingCount += lendSnap2.size
+            }
           }
         }
+
+        if (autoSaveAlias) {
+          savePersonAlias(src, tgt)
+          refreshAliasRules()
+        }
+
+        const newExpenses = allExpenses.map((e) =>
+          e.forWhom?.toLowerCase() === src.toLowerCase() ? { ...e, forWhom: tgt } : e
+        )
+        const newLending = allLending.map((l) =>
+          l.person?.toLowerCase() === src.toLowerCase() ? { ...l, person: tgt } : l
+        )
+
+        saveSnapshot('expenses', newExpenses, currentUid)
+        saveSnapshot('lending', newLending, currentUid)
+
+        const totalUpdated = updatedExpensesCount + updatedLendingCount
+        setSuccessMsg(
+          `🎉 Successfully merged Person "${src}" → "${tgt}" (${totalUpdated} records updated in database)!`
+        )
       }
 
-      // 3. Save Alias Mapping Rule
-      if (autoSaveAlias) {
-        savePersonAlias(src, tgt)
-        refreshAliasRules()
-      }
-
-      // 4. Update local snapshots
-      const newExpenses = allExpenses.map((e) =>
-        e.forWhom?.toLowerCase() === src.toLowerCase() ? { ...e, forWhom: tgt } : e
-      )
-      const newLending = allLending.map((l) =>
-        l.person?.toLowerCase() === src.toLowerCase() ? { ...l, person: tgt } : l
-      )
-
-      saveSnapshot('expenses', newExpenses, currentUid)
-      saveSnapshot('lending', newLending, currentUid)
-
-      const totalUpdated = updatedExpensesCount + updatedLendingCount
-      setSuccessMsg(
-        `🎉 Successfully merged "${src}" → "${tgt}" (${totalUpdated} records updated in database)!`
-      )
       setSrcName('')
       setTargetName('')
       onMergeComplete?.()
@@ -236,11 +450,11 @@ export default function PersonMergeModal({
 
     try {
       for (const src of sourcesToMerge) {
-        savePersonAlias(src, target)
+        if (entityType === 'category') saveCategoryAlias(src, target)
+        else savePersonAlias(src, target)
       }
       refreshAliasRules()
 
-      // Execute merge for each source name in cluster
       for (const src of sourcesToMerge) {
         await executeMerge(src, target)
       }
@@ -252,7 +466,8 @@ export default function PersonMergeModal({
   }
 
   function handleRemoveAlias(key) {
-    removePersonAlias(key)
+    if (entityType === 'category') removeCategoryAlias(key)
+    else removePersonAlias(key)
     refreshAliasRules()
     setSuccessMsg(`✔ Removed rule for "${key}".`)
     setTimeout(() => setSuccessMsg(''), 3000)
@@ -308,27 +523,71 @@ export default function PersonMergeModal({
           >
             <i className="fas fa-times" />
           </button>
+          {/* Entity Type Selector Bar */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button
+              type="button"
+              onClick={() => setEntityType('person')}
+              style={{
+                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
+                background: entityType === 'person' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'rgba(255,255,255,0.12)',
+                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                boxShadow: entityType === 'person' ? '0 2px 8px rgba(99,102,241,0.4)' : 'none', transition: 'all 0.2s'
+              }}
+            >
+              👤 Person Names
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntityType('category')}
+              style={{
+                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
+                background: entityType === 'category' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.12)',
+                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                boxShadow: entityType === 'category' ? '0 2px 8px rgba(16,185,129,0.4)' : 'none', transition: 'all 0.2s'
+              }}
+            >
+              🏷️ Categories
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntityType('bank')}
+              style={{
+                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
+                background: entityType === 'bank' ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'rgba(255,255,255,0.12)',
+                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                boxShadow: entityType === 'bank' ? '0 2px 8px rgba(2,132,199,0.4)' : 'none', transition: 'all 0.2s'
+              }}
+            >
+              🏦 Bank Names
+            </button>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
                 width: 38,
                 height: 38,
                 borderRadius: 10,
-                background: 'rgba(99,102,241,0.2)',
+                background: entityType === 'bank' ? 'rgba(2,132,199,0.2)' : entityType === 'category' ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 20,
               }}
             >
-              🔀
+              {entityType === 'bank' ? '🏦' : entityType === 'category' ? '🏷️' : '🔀'}
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900 }}>
-                Person Name Normalization &amp; Merge
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900 }}>
+                {entityType === 'bank' ? 'Bank Name Normalization & Merge' : entityType === 'category' ? 'Category Normalization & Merge' : 'Person Name Normalization & Merge'}
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#a5b4fc' }}>
-                Unify duplicate name variations (e.g. Father, father_, My father → Father)
+              <p style={{ margin: '2px 0 0', fontSize: 10.5, color: '#a5b4fc' }}>
+                {entityType === 'bank'
+                  ? 'Unify duplicate bank variations (e.g. SBI, STATE BANK OF INDIA → SBI)'
+                  : entityType === 'category'
+                  ? 'Unify duplicate category variations (e.g. food, food_, dining → Food & Dining)'
+                  : 'Unify duplicate name variations (e.g. Father, father_, My father → Father)'}
               </p>
             </div>
           </div>
@@ -523,7 +782,7 @@ export default function PersonMergeModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 800, marginBottom: 4, color: 'var(--text-primary, #1e293b)' }}>
-                  1. Source Name to Replace (e.g. "father_" or "my father"):
+                  1. Source {entityType === 'category' ? 'Category' : 'Name'} to Replace (e.g. {entityType === 'category' ? '"food_" or "dining"' : '"father_" or "my father"'}):
                 </label>
                 <select
                   value={srcName}
@@ -538,7 +797,7 @@ export default function PersonMergeModal({
                     color: 'var(--text-primary, #1e293b)',
                   }}
                 >
-                  <option value="">-- Select Source Name from Database --</option>
+                  <option value="">-- Select Source {entityType === 'category' ? 'Category' : 'Name'} from Database --</option>
                   {allUniqueNames.map((n) => (
                     <option key={n} value={n}>
                       {n}
@@ -549,11 +808,11 @@ export default function PersonMergeModal({
 
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 800, marginBottom: 4, color: 'var(--text-primary, #1e293b)' }}>
-                  2. Target Canonical Name (e.g. "Father"):
+                  2. Target Canonical {entityType === 'category' ? 'Category' : 'Name'} (e.g. {entityType === 'category' ? '"Food & Dining"' : '"Father"'}):
                 </label>
                 <input
                   type="text"
-                  placeholder="Type target name or select below..."
+                  placeholder={`Type target ${entityType === 'category' ? 'category' : 'name'} or select below...`}
                   value={targetName}
                   onChange={(e) => setTargetName(e.target.value)}
                   style={{
@@ -580,7 +839,7 @@ export default function PersonMergeModal({
                     color: 'var(--text-primary, #1e293b)',
                   }}
                 >
-                  <option value="">-- Or Pick Existing Name --</option>
+                  <option value="">-- Or Pick Existing {entityType === 'category' ? 'Category' : 'Name'} --</option>
                   {allUniqueNames.map((n) => (
                     <option key={n} value={n}>
                       {n}

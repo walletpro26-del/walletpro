@@ -11,6 +11,8 @@ import {
 
 import { getSubscriptionStatus, isAdminEmail } from './api/subscription'
 import { getAppConfig, listenAppConfig } from './api/appConfig'
+import { loadSnapshot } from './api/localCache'
+import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from './api/bankTransactions'
 import SubscriptionModal from './components/SubscriptionModal'
 import AdminPanel from './components/AdminPanel'
 
@@ -21,6 +23,7 @@ import OfflineSyncBanner from './components/OfflineSyncBanner'
 import Header from './components/Header'
 import ExpenseForm from './components/ExpenseForm'
 import LendingForm from './components/LendingForm'
+import PersonMergeModal from './components/PersonMergeModal'
 import TransactionList from './components/TransactionList'
 import TransactionModal from './components/TransactionModal'
 import ReportsView from './components/ReportsView'
@@ -32,6 +35,7 @@ import MigrationTool from './components/MigrationTool'
 import WalletVibeLogo from './components/WalletVibeLogo'
 import LegalModal from './components/LegalModal'
 import RatingModal from './components/RatingModal'
+import AboutModal from './components/AboutModal'
 
 // Record when the app opened (for update banner age check)
 window.__wv_open_time = Date.now()
@@ -60,16 +64,39 @@ export default function App() {
   const [recentLending, setRecentLending] = useState([])
   const [allExpenses, setAllExpenses] = useState([])
   const [allLending, setAllLending] = useState([])
+  const [bankRecords, setBankRecords] = useState(() => {
+    const cachedBank = loadSnapshot('bank', authState?.uid) || loadSnapshot('bank') || []
+    return cachedBank.map((b) => ({
+      ...b,
+      sheet: 'bank',
+      isLend: false,
+      amount: parseFloat(b.debit || b.credit || 0),
+      category: b.bank || 'Bank',
+      details: b.description || b.narration || '',
+      dateObj: parseSafeDate(b.dateObj || b.date),
+    }))
+  })
 
   // Memoized derived calculations
   const suggestions = useMemo(() => computeSuggestions(allExpenses), [allExpenses])
 
   const searchIndex = useMemo(() => {
-    return [
-      ...allExpenses.map((e) => ({ ...e, sheet: 'expense', isLend: false })),
-      ...allLending.map((l) => ({ ...l, sheet: 'lending', isLend: true })),
-    ].sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [allExpenses, allLending])
+    const expenseItems = allExpenses.map((e) => ({
+      ...e,
+      sheet: 'expense',
+      isLend: false,
+      dateObj: parseSafeDate(e.dateObj || e.date),
+    }))
+
+    const lendingItems = allLending.map((l) => ({
+      ...l,
+      sheet: 'lending',
+      isLend: true,
+      dateObj: parseSafeDate(l.dateObj || l.date),
+    }))
+
+    return [...expenseItems, ...lendingItems, ...bankRecords].sort((a, b) => b.dateObj - a.dateObj)
+  }, [allExpenses, allLending, bankRecords])
 
   // UI State
   const [loading, setLoading] = useState(false)
@@ -81,10 +108,12 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [csvImportModalType, setCsvImportModalType] = useState(null) // 'expense' | 'lending' | null
   const [showBankSearch, setShowBankSearch] = useState(false)
+  const [showBankMergeModal, setShowBankMergeModal] = useState(false)
   const [showMigration, setShowMigration] = useState(false)
   const [migrationUrl, setMigrationUrl] = useState('')
   const [legalModalTab, setLegalModalTab] = useState(null)
   const [showRatingModal, setShowRatingModal] = useState(false)
+  const [showAboutModal, setShowAboutModal] = useState(false)
 
   function closeLegalModal() {
     setLegalModalTab(null)
@@ -187,9 +216,10 @@ export default function App() {
     setLoading(true)
     setError('')
     try {
-      const [allExp, allL] = await Promise.all([
+      const [allExp, allL, bankRaw] = await Promise.all([
         getAllExpenses(),
         getAllLending(),
+        fetchBankTransactionsFromFirestore(authState.uid, subscriptionState?.isAdmin || isAdminEmail(authState?.email)).catch(() => []),
       ])
       const expStats = computeExpenseStatsLocally(allExp)
       const lendStats = computeLendingStatsLocally(allL)
@@ -201,6 +231,20 @@ export default function App() {
       setRecentLending(recentL)
       setAllExpenses(allExp)
       setAllLending(allL)
+
+      if (Array.isArray(bankRaw) && bankRaw.length > 0) {
+        setBankRecords(
+          bankRaw.map((b) => ({
+            ...b,
+            sheet: 'bank',
+            isLend: false,
+            amount: parseFloat(b.debit || b.credit || 0),
+            category: b.bank || 'Bank',
+            details: b.description || b.narration || '',
+            dateObj: parseSafeDate(b.dateObj || b.date),
+          }))
+        )
+      }
     } catch (err) {
       setError(err?.message || 'Failed to load data')
     } finally {
@@ -268,12 +312,14 @@ export default function App() {
   // Edit from modal
   function handleEdit(item) {
     setSelectedTxn(null)
-    if (item.sheet === 'lending' || item.isLend) {
+    if (item.sheet === 'bank' || item.bank) {
+      switchTab('bank')
+    } else if (item.sheet === 'lending' || item.isLend) {
       setEditLending(item)
-      setActiveTab('lending')
+      switchTab('lending')
     } else {
       setEditExpense(item)
-      setActiveTab('expense')
+      switchTab('expense')
     }
   }
 
@@ -282,7 +328,9 @@ export default function App() {
     setSelectedTxn(null)
     setLoading(true)
     try {
-      if (item.sheet === 'lending' || item.isLend) {
+      if (item.sheet === 'bank' || item.bank) {
+        await deleteBankTransaction(item.id)
+      } else if (item.sheet === 'lending' || item.isLend) {
         await deleteLending(item.id)
       } else {
         await deleteExpense(item.id)
@@ -349,6 +397,7 @@ export default function App() {
         activeTab={activeTab}
         searchIndex={searchIndex}
         subscription={subscriptionState}
+        allowNonCsvImport={(subscriptionState?.isAdmin || isAdminEmail(authState?.email)) || (appConfig?.allowNonCsvImport !== false)}
         onLogout={handleLogout}
         onRefresh={loadDashboard}
         onSettings={() => setShowSettings(true)}
@@ -514,6 +563,7 @@ export default function App() {
             isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
             allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
             onOpenImport={() => setShowBankSearch(true)}
+            onOpenMerge={() => setShowBankMergeModal(true)}
           />
         )}
 
@@ -529,7 +579,12 @@ export default function App() {
 
         <div className="app-footer">
           <p>© {new Date().getFullYear()} <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer">NextLifTechnologies</a> (<a href="mailto:walletpro26@gmail.com">walletpro26@gmail.com</a>)</p>
-          <div className="footer-legal-links">
+          <div style={{ marginBottom: 6 }}>
+            <a href="#about" onClick={(e) => { e.preventDefault(); setShowAboutModal(true) }} style={{ fontWeight: 700, color: 'var(--accent-600, #4f46e5)', fontSize: 11.5 }}>
+              ℹ️ About App &amp; Features (How to Use Guide)
+            </a>
+          </div>
+          <div className="footer-legal-links" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, alignItems: 'center' }}>
             <a href="#privacy" onClick={(e) => { e.preventDefault(); setLegalModalTab('privacy') }}>Privacy Policy</a>
             <span className="footer-divider">•</span>
             <a href="#terms" onClick={(e) => { e.preventDefault(); setLegalModalTab('terms') }}>Terms &amp; Conditions</a>
@@ -542,6 +597,9 @@ export default function App() {
       </div>
 
       {/* Modals */}
+      {showAboutModal && (
+        <AboutModal onClose={() => setShowAboutModal(false)} />
+      )}
       {selectedTxn && (
         <TransactionModal
           item={selectedTxn}
@@ -609,6 +667,16 @@ export default function App() {
           isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
           allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
           onClose={() => setShowBankSearch(false)}
+        />
+      )}
+      {showBankMergeModal && (
+        <PersonMergeModal
+          allExpenses={allExpenses}
+          allLending={allLending}
+          uid={authState.uid}
+          initialEntityType="bank"
+          onClose={() => setShowBankMergeModal(false)}
+          onMergeComplete={loadDashboard}
         />
       )}
       {showMigration && (

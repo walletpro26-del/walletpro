@@ -26,10 +26,11 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
     return highQuality.length > 0 ? highQuality.slice(0, 3) : bankMatches.slice(0, 3)
   }, [bankMatches, showAllBankMatches])
 
-  const isLending = Boolean(item?.isLend || item?.sheet === 'lending')
+  const isBank = Boolean(item?.sheet === 'bank' || item?.bank !== undefined)
+  const isLending = Boolean(!isBank && (item?.isLend || item?.sheet === 'lending'))
 
   useEffect(() => {
-    if (!item) return
+    if (!item || isBank) return
     if (item.hasAttachment && !item.fileData) {
       setLoadingAttachment(true)
       setAttachmentError('')
@@ -52,7 +53,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
       setAttachmentData(item.fileData)
       setAttachmentSuccess('✔ Attachment fetched successfully')
     }
-  }, [item?.id, item?.hasAttachment, item?.fileData, isLending])
+  }, [item?.id, item?.hasAttachment, item?.fileData, isLending, isBank])
 
   if (!item) return null
 
@@ -66,17 +67,17 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
     } catch { return '' }
   }
 
-  const iconCls = isLending ? 'lend' : 'expense'
-  const iconName = isLending ? 'fa-exchange-alt' : 'fa-receipt'
-  const typeLabel = isLending ? (item.label || item.type) : (item.category || 'Expense')
+  const iconCls = isBank ? 'bank' : isLending ? 'lend' : 'expense'
+  const iconName = isBank ? 'fa-university' : isLending ? 'fa-exchange-alt' : 'fa-receipt'
+  const typeLabel = isBank ? `${item.bank || 'Bank'} Entry` : isLending ? (item.label || item.type) : (item.category || 'Expense')
 
   function handleShare() {
     const lines = [
       `💰 *${typeLabel}*`,
-      `Amount: ₹${item.amount}`,
-      isLending ? `Person: ${item.person}` : `For: ${item.forWhom || 'Self'}`,
-      `Date: ${formatDate(item.date)}`,
-      item.details ? `Details: ${item.details}` : '',
+      `Amount: ₹${item.amount || item.debit || item.credit || 0}`,
+      isBank ? `Bank: ${item.bank || '—'}` : isLending ? `Person: ${item.person}` : `For: ${item.forWhom || 'Self'}`,
+      `Date: ${formatDate(item.dateObj || item.date)}`,
+      item.description || item.details ? `Details: ${item.description || item.details}` : '',
       item.remarks ? `Remarks: ${item.remarks}` : '',
     ].filter(Boolean).join('\n')
 
@@ -96,7 +97,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
               </div>
               <div>
                 <h3>{typeLabel}</h3>
-                <div className="modal-date">{formatDate(item.date)}</div>
+                <div className="modal-date">{formatDate(item.dateObj || item.date)}</div>
               </div>
             </div>
             <button className="modal-close" onClick={onClose}>
@@ -106,12 +107,37 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
 
           <div className="modal-body custom-scrollbar">
             <div className="amount-display">
-              <div className="amount-value">₹{(item.amount || 0).toLocaleString('en-IN')}</div>
+              <div className="amount-value" style={{ color: isBank ? (item.debit ? '#ef4444' : '#10b981') : undefined }}>
+                {isBank ? (item.debit ? `-₹${parseFloat(item.debit).toLocaleString('en-IN')}` : `+₹${parseFloat(item.credit || 0).toLocaleString('en-IN')}`) : `₹${(item.amount || 0).toLocaleString('en-IN')}`}
+              </div>
               <div className="amount-type">{typeLabel}</div>
             </div>
 
             <div className="detail-grid">
-              {isLending ? (
+              {isBank ? (
+                <>
+                  <div className="detail-item">
+                    <label>Bank Name</label>
+                    <span style={{ fontWeight: 700 }}>{item.bank || '—'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Transaction Type</label>
+                    <span style={{ fontWeight: 700, color: item.debit ? '#ef4444' : '#10b981' }}>
+                      {item.debit ? 'Debit (Withdrawal)' : 'Credit (Deposit)'}
+                    </span>
+                  </div>
+                  <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+                    <label>Description / Narration</label>
+                    <span>{item.description || item.details || '—'}</span>
+                  </div>
+                  {item.balance && (
+                    <div className="detail-item">
+                      <label>Balance After Txn</label>
+                      <span>₹{parseFloat(item.balance).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                </>
+              ) : isLending ? (
                 <>
                   <div className="detail-item">
                     <label>Person</label>

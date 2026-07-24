@@ -5,7 +5,7 @@ import { isAdminEmail } from '../api/subscription'
 import { importTaskQueue } from '../api/importTaskQueue'
 
 export default function Header({
-  auth, stats, activeTab, searchIndex, subscription,
+  auth, stats, activeTab, searchIndex, subscription, allowNonCsvImport = true,
   onLogout, onRefresh, onSettings, onBankSearch,
   onSearchSelect, onManageSubscription, onAdminPanel, onOpenCsvImport, onOpenRatingModal,
 }) {
@@ -50,6 +50,12 @@ export default function Header({
     s3 = { label: 'Net', value: `₹${(stats?.lending?.net || 0).toLocaleString('en-IN')}` }
   }
 
+  function formatSearchItemDate(item) {
+    const d = item.dateObj || (item.date ? new Date(item.date) : null)
+    if (!d || isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
   function handleSearch(term) {
     setSearchTerm(term)
     if (!term.trim() || !searchIndex?.length) {
@@ -61,7 +67,8 @@ export default function Header({
     const terms = lc.split(/\s+/)
     
     const scoredResults = searchIndex.map(t => {
-      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.amount || ''}`.toLowerCase()
+      const formattedDateStr = formatSearchItemDate(t)
+      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.description || ''} ${t.bank || ''} ${t.amount || ''} ${formattedDateStr}`.toLowerCase()
       
       let match = true
       let score = 0
@@ -92,11 +99,33 @@ export default function Header({
         score += 3
       }
       
+      // Bonus points if exact match on primary entity fields (category, person, forWhom, bank)
+      const primaryFields = [t.category, t.person, t.forWhom, t.bank].filter(Boolean).map(f => String(f).toLowerCase())
+      if (primaryFields.some(f => f === lc)) {
+        score += 10
+      } else if (primaryFields.some(f => f.includes(lc))) {
+        score += 4
+      }
+
       return { item: t, score }
     }).filter(Boolean)
     
-    scoredResults.sort((a, b) => b.score - a.score)
-    const results = scoredResults.slice(0, 15).map(r => r.item)
+    // Sort primarily by match score (highest score first).
+    // If match scores are equal, tie-break by newest date down to oldest date (timeB - timeA).
+    scoredResults.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score
+      }
+      const getTime = (it) => {
+        const d = it.dateObj || (it.date ? new Date(it.date) : null)
+        return d && !isNaN(d.getTime()) ? d.getTime() : 0
+      }
+      const timeA = getTime(a.item)
+      const timeB = getTime(b.item)
+      return timeB - timeA
+    })
+
+    const results = scoredResults.slice(0, 50).map(r => r.item)
     
     setSearchResults(results)
     setShowDropdown(results.length > 0)
@@ -240,28 +269,29 @@ export default function Header({
                 <div
                   style={{ position: 'fixed', inset: 0, zIndex: 999998 }}
                   onClick={() => setShowMenu(false)}
+                  onMouseDown={() => setShowMenu(false)}
                 />
                 <div
                   ref={portalMenuRef}
                   style={{
                     position: 'fixed',
-                    top: menuPos.top,
-                    right: menuPos.right,
+                    top: menuPos.top + 2,
+                    right: Math.max(12, menuPos.right),
                     width: 220,
                     background: '#0f172a',
                     border: '1px solid rgba(255, 255, 255, 0.2)',
                     borderRadius: 12,
-                    padding: '6px',
+                    padding: '8px 6px',
                     boxShadow: '0 16px 40px rgba(0, 0, 0, 0.8)',
                     zIndex: 999999,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 2,
+                    gap: 3,
                   }}
                 >
                   {/* User email info */}
                   {auth?.email && (
-                    <div style={{ padding: '8px 10px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: 2 }}>
+                    <div style={{ padding: '6px 10px 8px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: 2 }}>
                       <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Signed in as</div>
                       <div style={{ color: '#f8fafc', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
                         {auth.email}
@@ -273,7 +303,8 @@ export default function Header({
                   {isAdminEmail(auth?.email) && (
                     <button
                       type="button"
-                      onClick={() => { setShowMenu(false); onAdminPanel?.() }}
+                      onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
+                      onClick={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                         background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)',
@@ -288,21 +319,23 @@ export default function Header({
                   {/* Import Data item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onOpenCsvImport?.('expense') }}
+                    onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                       background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginBottom: 4,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginBottom: 2,
                     }}
                   >
                     <i className="fas fa-file-import" style={{ color: '#818cf8', width: 14 }} />
-                    Import Data (CSV / PDF)
+                    Import Data ({allowNonCsvImport ? 'CSV / PDF' : 'CSV Only'})
                   </button>
 
                   {/* App Settings item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onSettings?.() }}
+                    onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                       background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
@@ -318,7 +351,8 @@ export default function Header({
                   {/* Rate & Review App item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onOpenRatingModal?.() }}
+                    onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                       background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#fbbf24', borderRadius: 8,
@@ -332,7 +366,8 @@ export default function Header({
                   {/* Refresh Data item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onRefresh?.() }}
+                    onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                       background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
@@ -348,7 +383,8 @@ export default function Header({
                   {/* Logout item */}
                   <button
                     type="button"
-                    onClick={() => { setShowMenu(false); onLogout?.() }}
+                    onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
                       background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5',
@@ -378,19 +414,59 @@ export default function Header({
         />
         {showDropdown && (
           <div className="search-dropdown custom-scrollbar">
-            {searchResults.map((item, i) => (
-              <div key={i} className="search-dropdown-item" onMouseDown={() => handleResultClick(item)}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>
-                    {item.category || item.label || item.type || ''}
+            {searchResults.map((item, i) => {
+              const amtVal = item.amount || item.debit || item.credit || 0
+              const isCreditBank = item.sheet === 'bank' && (item.credit || 0) > 0 && !(item.debit || 0 > 0)
+              const formattedDateStr = formatSearchItemDate(item)
+
+              return (
+                <div
+                  key={i}
+                  className="search-dropdown-item"
+                  onMouseDown={() => handleResultClick(item)}
+                  style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: 'pointer' }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                      {/* Module Badge */}
+                      <span style={{
+                        fontSize: 8.5, fontWeight: 800, padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase', flexShrink: 0,
+                        background: item.sheet === 'bank' ? 'rgba(139,92,246,0.12)' : item.sheet === 'lending' ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
+                        color: item.sheet === 'bank' ? '#8b5cf6' : item.sheet === 'lending' ? '#10b981' : '#6366f1',
+                        border: `1px solid ${item.sheet === 'bank' ? 'rgba(139,92,246,0.2)' : item.sheet === 'lending' ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.2)'}`,
+                      }}>
+                        {item.sheet === 'bank' ? (item.bank || 'Bank') : item.sheet === 'lending' ? (item.type || 'Lend') : 'Expense'}
+                      </span>
+
+                      {/* Category or Title */}
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.category || item.person || item.bank || item.label || item.type || 'Transaction'}
+                      </span>
+
+                      {/* Date Badge */}
+                      {formattedDateStr && (
+                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>
+                          📅 {formattedDateStr}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Subline Details */}
+                    <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.details || item.description || item.remarks || item.forWhom || ''}
+                      {item.forWhom && item.details ? ` (${item.forWhom})` : ''}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    {item.details || item.person || item.forWhom || item.remarks || ''}
+
+                  {/* Amount */}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <span style={{ fontWeight: 800, fontSize: 12.5, color: isCreditBank || (item.sheet === 'lending' && item.type === 'They Return') ? '#10b981' : 'var(--text-primary)' }}>
+                      ₹{Number(amtVal).toLocaleString('en-IN')}
+                    </span>
                   </div>
                 </div>
-                <span style={{ fontWeight: 800, fontSize: 13 }}>₹{item.amount}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
