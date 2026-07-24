@@ -59,6 +59,7 @@ export default function AdminPanel({ auth, onClose }) {
   const [cashfreeEnabled, setCashfreeEnabled] = useState(false)
   const [cashfreeMode, setCashfreeMode] = useState('sandbox')
   const [cashfreeAppId, setCashfreeAppId] = useState('')
+  const [allowNonCsvImport, setAllowNonCsvImport] = useState(true)
 
   useEffect(() => {
     loadConfig()
@@ -92,6 +93,7 @@ export default function AdminPanel({ auth, onClose }) {
       setCashfreeEnabled(cfg.cashfreeEnabled || false)
       setCashfreeMode(cfg.cashfreeMode || 'sandbox')
       setCashfreeAppId(cfg.cashfreeAppId || '')
+      setAllowNonCsvImport(cfg.allowNonCsvImport !== false)
     } catch (err) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
@@ -250,6 +252,7 @@ export default function AdminPanel({ auth, onClose }) {
         cashfreeEnabled,
         cashfreeMode,
         cashfreeAppId,
+        allowNonCsvImport,
       })
 
       showToast('✅ Configuration saved successfully!')
@@ -899,6 +902,19 @@ export default function AdminPanel({ auth, onClose }) {
 
               {/* Maintenance & Controls */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, cursor: 'pointer' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>📄 Allow Non-CSV Imports (PDF Statements & AI Extraction)</div>
+                    <div style={{ fontSize: 9, color: '#64748b' }}>Toggle whether users can upload PDF bank statements or non-CSV files using AI document extraction</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={allowNonCsvImport}
+                    onChange={(e) => setAllowNonCsvImport(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                  />
+                </label>
+
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, cursor: 'pointer' }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>Maintenance Mode</div>

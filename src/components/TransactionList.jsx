@@ -9,7 +9,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
   const [shareModal, setShareModal] = useState({ open: false, channel: 'whatsapp', contact: '', item: null })
   const [searchTerm, setSearchTerm] = useState('')
 
-  const cachedBankRecords = useMemo(() => loadSnapshot('bank') || [], [])
+  const cachedBankRecords = useMemo(() => loadSnapshot('bank') || [], [items])
 
   // Filter items based on search term
   const filteredItems = useMemo(() => {

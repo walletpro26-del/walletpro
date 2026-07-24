@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { db, auth } from '../firebase'
 import { collection, getDocs, query, where, writeBatch, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot } from '../api/localCache'
+import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
 
 import { parsePdfWithGemini, MAX_PDF_SIZE_BYTES } from '../api/pdfExtractor'
 import { importTaskQueue } from '../api/importTaskQueue'
@@ -22,7 +23,7 @@ function getNormalizedBankName(rawBank) {
   return trimmed
 }
 
-export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
+export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImport = true, onClose }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [allRecords, setAllRecords] = useState(null)
   const [filtered, setFiltered] = useState([])
@@ -75,7 +76,7 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
         ...draft,
         items: draft.items.map((i) => ({
           ...i,
-          date: i.date ? new Date(i.date) : new Date(),
+          date: parseSafeDate(i.date),
         })),
       }
       setCsvPreviewData(rehydrated)
@@ -90,14 +91,11 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
     // Check local cache first for instant display
     const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
     if (cached && cached.length > 0) {
-      const rehydrated = cached.map((r) => {
-        let dObj = r.dateObj ? new Date(r.dateObj) : new Date(r.date)
-        if (isNaN(dObj.getTime())) dObj = new Date()
-        return {
-          ...r,
-          date: dObj,
-        }
-      })
+      const rehydrated = cached.map((r) => ({
+        ...r,
+        date: parseSafeDate(r.dateObj || r.date),
+        searchStr: `${parseSafeDate(r.dateObj || r.date).toLocaleDateString('en-IN')} ${r.description || ''} ${r.bank || ''} ${r.debit || ''} ${r.credit || ''} ${r.balance || ''}`.toLowerCase(),
+      }))
       setAllRecords(rehydrated)
     } else {
       setLoading(true)
@@ -105,59 +103,18 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
 
     setError('')
     try {
-      let snapScoped
-      if (currentUid) {
-        const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', currentUid))
-        snapScoped = await getDocs(qScoped)
-      }
-
-      // If user-scoped query is empty or no UID, fallback to general collection query
-      if (!snapScoped || snapScoped.empty) {
-        const qGeneral = query(collection(db, 'bankTransactions'))
-        snapScoped = await getDocs(qGeneral)
-      }
-
-      let records = snapScoped.docs.map((d) => {
-        const data = d.data()
-        let dateObj = new Date()
-        if (data.date) {
-          if (typeof data.date.toDate === 'function') {
-            dateObj = data.date.toDate()
-          } else if (typeof data.date === 'string') {
-            dateObj = new Date(data.date.replace(' ', 'T'))
-          } else {
-            dateObj = new Date(data.date)
-          }
-          if (isNaN(dateObj.getTime())) dateObj = new Date()
-        }
-
-        return {
-          id: d.id,
-          bank: data.bank || '',
-          date: dateObj,
-          description: data.description || '',
-          debit: data.debit || 0,
-          credit: data.credit || 0,
-          balance: data.balance || 0,
-          searchStr: `${dateObj.toLocaleDateString('en-IN')} ${data.description || ''} ${data.bank || ''} ${data.debit || ''} ${data.credit || ''} ${data.balance || ''}`.toLowerCase(),
-        }
-      })
-
-      records.sort((a, b) => b.date - a.date)
+      const records = await fetchBankTransactionsFromFirestore(currentUid, isAdmin)
       setAllRecords(records)
-      saveSnapshot('bank', records, currentUid)
       setLoading(false)
       return records
     } catch (err) {
+      console.warn('[BankSearchModal] loadRecords fallback error:', err?.message)
       const cached2 = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
-      const rehydrated = (cached2 || []).map((r) => {
-        let dObj = r.dateObj ? new Date(r.dateObj) : new Date(r.date)
-        if (isNaN(dObj.getTime())) dObj = new Date()
-        return {
-          ...r,
-          date: dObj,
-        }
-      })
+      const rehydrated = (cached2 || []).map((r) => ({
+        ...r,
+        date: parseSafeDate(r.dateObj || r.date),
+        searchStr: `${parseSafeDate(r.dateObj || r.date).toLocaleDateString('en-IN')} ${r.description || ''} ${r.bank || ''} ${r.debit || ''} ${r.credit || ''} ${r.balance || ''}`.toLowerCase(),
+      }))
       setAllRecords(rehydrated)
       setLoading(false)
       return rehydrated
@@ -239,6 +196,11 @@ export default function BankSearchModal({ uid, isAdmin = false, onClose }) {
     const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
 
     if (isPdf) {
+      if (!allowNonCsvImport) {
+        setError('⚠️ PDF / Non-CSV import feature is disabled by Admin. Only CSV file imports are currently permitted.')
+        return
+      }
+
       if (file.size > MAX_PDF_SIZE_BYTES) {
         const mb = (file.size / (1024 * 1024)).toFixed(1)
         setError(`⚠ PDF size (${mb} MB) exceeds the 10 MB limit. Please select a smaller PDF statement.`)

@@ -1,187 +1,367 @@
 import { useState, useEffect, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { db, auth } from '../firebase'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { saveSnapshot, loadSnapshot } from '../api/localCache'
+import { auth } from '../firebase'
+import { loadSnapshot } from '../api/localCache'
+import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
 
 /**
- * BankHistoryView — Inline bank transaction list with live search.
- * Mirrors the Lend/Borrow "BY PERSON + Search" UX style, shown directly
- * inside the main content area without opening a separate modal.
+ * BankHistoryView — Inline bank transaction list with live search,
+ * bank filter chips, deletion capabilities, and instant mobile-first performance.
  */
-export default function BankHistoryView({ uid, onOpenImport }) {
+export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, onOpenImport }) {
   const [allRecords, setAllRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedBankFilter, setSelectedBankFilter] = useState('ALL')
+  const [deletingId, setDeletingId] = useState(null)
+  const [error, setError] = useState('')
 
   const currentUid = uid || auth?.currentUser?.uid || ''
 
-  // Load from cache first, then Firestore
-  useEffect(() => {
-    async function load() {
+  // Load records from local cache first, then Firestore
+  async function loadData(forceRefresh = false) {
+    if (forceRefresh) setRefreshing(true)
+    else {
       // Instant cache display
       const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
       if (cached && cached.length > 0) {
-        const rehydrated = cached.map((r) => {
-          let dObj = r.dateObj ? new Date(r.dateObj) : new Date(r.date)
-          if (isNaN(dObj.getTime())) dObj = new Date()
-          return { ...r, date: dObj }
-        })
+        const rehydrated = cached.map((r) => ({
+          ...r,
+          date: parseSafeDate(r.dateObj || r.date),
+        }))
         setAllRecords(rehydrated)
         setLoading(false)
-      }
-
-      // Fetch from Firestore
-      try {
-        let snap
-        if (currentUid) {
-          const q = query(collection(db, 'bankTransactions'), where('userId', '==', currentUid))
-          snap = await getDocs(q)
-        }
-        if (!snap || snap.empty) {
-          const qAll = query(collection(db, 'bankTransactions'))
-          snap = await getDocs(qAll)
-        }
-
-        const records = snap.docs.map((d) => {
-          const data = d.data()
-          let dateObj = new Date()
-          if (data.date) {
-            if (typeof data.date.toDate === 'function') dateObj = data.date.toDate()
-            else if (typeof data.date === 'string') dateObj = new Date(data.date.replace(' ', 'T'))
-            else dateObj = new Date(data.date)
-            if (isNaN(dateObj.getTime())) dateObj = new Date()
-          }
-          return {
-            id: d.id,
-            bank: data.bank || '',
-            date: dateObj,
-            description: data.description || '',
-            debit: data.debit || 0,
-            credit: data.credit || 0,
-            balance: data.balance || 0,
-          }
-        }).sort((a, b) => b.date - a.date)
-
-        setAllRecords(records)
-        saveSnapshot('bank', records, currentUid)
-      } catch (err) {
-        // Already shown cached above
-      } finally {
-        setLoading(false)
+      } else {
+        setLoading(true)
       }
     }
-    load()
-  }, [currentUid])
 
-  // Filter records by search
-  const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return allRecords
-    const terms = searchTerm.toLowerCase().split(/\s+/).filter(Boolean)
-    return allRecords.filter((r) => {
-      const str = [
-        r.bank, r.description,
-        r.debit ? String(r.debit) : '',
-        r.credit ? String(r.credit) : '',
-        r.date instanceof Date ? r.date.toLocaleDateString('en-IN') : '',
-      ].join(' ').toLowerCase()
-      return terms.every((t) => str.includes(t))
+    setError('')
+    try {
+      const records = await fetchBankTransactionsFromFirestore(currentUid, isAdmin)
+      if (records && records.length > 0) {
+        setAllRecords(records)
+      } else {
+        const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
+        if (cached && cached.length > 0) {
+          setAllRecords(cached.map((r) => ({ ...r, date: parseSafeDate(r.dateObj || r.date) })))
+        }
+      }
+    } catch (err) {
+      console.warn('[BankHistoryView] Load error:', err?.message)
+      if (allRecords.length === 0) {
+        setError('Could not sync bank transactions. Showing cached data if available.')
+      }
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [currentUid, isAdmin])
+
+  // Extract unique bank names for filter pill bar
+  const uniqueBanks = useMemo(() => {
+    const set = new Set()
+    allRecords.forEach((r) => {
+      if (r.bank) set.add(r.bank)
     })
-  }, [allRecords, searchTerm])
+    return Array.from(set).sort()
+  }, [allRecords])
+
+  // Filter records by search term & bank name
+  const filtered = useMemo(() => {
+    return allRecords.filter((r) => {
+      // Bank filter
+      if (selectedBankFilter !== 'ALL' && r.bank !== selectedBankFilter) {
+        return false
+      }
+
+      // Search term
+      if (searchTerm.trim()) {
+        const terms = searchTerm.toLowerCase().split(/\s+/).filter(Boolean)
+        const str = [
+          r.bank,
+          r.description,
+          r.debit ? String(r.debit) : '',
+          r.credit ? String(r.credit) : '',
+          r.date instanceof Date ? r.date.toLocaleDateString('en-IN') : '',
+        ].join(' ').toLowerCase()
+
+        return terms.every((t) => str.includes(t))
+      }
+
+      return true
+    })
+  }, [allRecords, searchTerm, selectedBankFilter])
+
+  // Summary metrics for current filtered view
+  const metrics = useMemo(() => {
+    let totalDebit = 0
+    let totalCredit = 0
+    filtered.forEach((r) => {
+      totalDebit += parseFloat(r.debit || 0)
+      totalCredit += parseFloat(r.credit || 0)
+    })
+    return {
+      totalDebit,
+      totalCredit,
+      net: totalCredit - totalDebit,
+    }
+  }, [filtered])
+
+  async function handleDelete(r) {
+    if (!r || !r.id) return
+    if (!window.confirm(`Delete bank entry "${r.description || 'Transaction'}"?`)) return
+
+    setDeletingId(r.id)
+    try {
+      await deleteBankTransaction(r.id)
+      const updated = allRecords.filter((item) => item.id !== r.id)
+      setAllRecords(updated)
+    } catch (err) {
+      alert('Failed to delete transaction: ' + (err?.message || 'Unknown error'))
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   function formatDate(d) {
-    if (!d) return '—'
-    const dt = d instanceof Date ? d : new Date(d)
-    if (isNaN(dt.getTime())) return '—'
+    const dt = parseSafeDate(d)
     return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   return (
-    <div style={{ paddingBottom: 12 }}>
-      {/* Header Row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-        <div className="section-title" style={{ margin: 0 }}>
-          🏦 Bank History
-          {allRecords.length > 0 && (
-            <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, background: 'var(--accent-50)', color: 'var(--accent-600)', padding: '1px 6px', borderRadius: 10, border: '1px solid var(--accent-200)' }}>
-              {allRecords.length} txns
-            </span>
-          )}
+    <div style={{ paddingBottom: 24 }}>
+      {/* Header & Controls Bar */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🏦 Bank History</span>
+            {allRecords.length > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent-50)', color: 'var(--accent-600)', padding: '2px 8px', borderRadius: 12, border: '1px solid var(--accent-200)' }}>
+                {allRecords.length}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Sync / Refresh Button */}
+            <button
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              title="Refresh Bank Transactions"
+              style={{
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 20,
+                padding: '5px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ fontSize: 10 }} />
+              <span className="hidden-xs">{refreshing ? 'Syncing...' : 'Sync'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Search */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <i className="fas fa-search" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search bank..."
-            style={{
-              paddingLeft: 26, paddingRight: searchTerm ? 26 : 10,
-              paddingTop: 5, paddingBottom: 5,
-              fontSize: 11, fontWeight: 500,
-              border: '1px solid var(--border-color)',
-              borderRadius: 20,
-              background: 'var(--bg-subtle)',
-              color: 'var(--text-primary)',
-              outline: 'none',
-              width: 135,
-              transition: 'all 0.2s ease',
-            }}
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, fontSize: 10 }}
-            >✕</button>
-          )}
+        {/* Search & Actions Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by amount, bank, remarks..."
+              style={{
+                width: '100%',
+                paddingLeft: 28,
+                paddingRight: searchTerm ? 28 : 10,
+                paddingTop: 7,
+                paddingBottom: 7,
+                fontSize: 12,
+                fontWeight: 500,
+                border: '1px solid var(--border-color)',
+                borderRadius: 20,
+                background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, fontSize: 11 }}
+              >✕</button>
+            )}
+          </div>
         </div>
+
+        {/* Unique Banks Filter Bar */}
+        {uniqueBanks.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+            <button
+              onClick={() => setSelectedBankFilter('ALL')}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 12,
+                fontSize: 10.5,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                border: selectedBankFilter === 'ALL' ? '1px solid var(--accent-500)' : '1px solid var(--border-color)',
+                background: selectedBankFilter === 'ALL' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--bg-subtle)',
+                color: selectedBankFilter === 'ALL' ? '#fff' : 'var(--text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              All Banks ({allRecords.length})
+            </button>
+
+            {uniqueBanks.map((bName) => {
+              const count = allRecords.filter((r) => r.bank === bName).length
+              const isActive = selectedBankFilter === bName
+              return (
+                <button
+                  key={bName}
+                  onClick={() => setSelectedBankFilter(bName)}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 12,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    border: isActive ? '1px solid var(--accent-500)' : '1px solid var(--border-color)',
+                    background: isActive ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--bg-subtle)',
+                    color: isActive ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🏦 {bName} ({count})
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Summary Card Banner */}
+        {filtered.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: 8,
+            padding: '8px 12px',
+            borderRadius: 10,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            fontSize: 11,
+          }}>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Spent (Debits)</div>
+              <div style={{ color: '#ef4444', fontWeight: 800 }}>-₹{metrics.totalDebit.toLocaleString('en-IN')}</div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Credits</div>
+              <div style={{ color: '#10b981', fontWeight: 800 }}>+₹{metrics.totalCredit.toLocaleString('en-IN')}</div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Net Cash Flow</div>
+              <div style={{ color: metrics.net >= 0 ? '#10b981' : '#ef4444', fontWeight: 800 }}>
+                {metrics.net >= 0 ? '+' : ''}₹{metrics.net.toLocaleString('en-IN')}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Import button */}
+      {/* Import Action Banner */}
       <button
         onClick={onOpenImport}
         style={{
-          width: '100%', marginBottom: 10, padding: '8px 14px',
+          width: '100%', marginBottom: 12, padding: '10px 14px',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
           border: '1.5px dashed var(--accent-300)',
-          borderRadius: 10, color: 'var(--accent-600)',
+          borderRadius: 12, color: 'var(--accent-600)',
           fontSize: 12, fontWeight: 700, cursor: 'pointer',
           transition: 'all 0.2s ease',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
         }}
       >
-        <i className="fas fa-file-import" style={{ fontSize: 12 }} />
-        Import Bank Statement (PDF / CSV)
+        <i className="fas fa-file-import" style={{ fontSize: 13 }} />
+        {allowNonCsvImport ? 'Import Bank Statement (PDF / CSV)' : 'Import Bank Statement (CSV Only)'}
       </button>
 
-      {/* Loading */}
-      {loading && allRecords.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)', fontSize: 12 }}>
-          <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} /> Loading bank transactions…
+      {/* Error Alert */}
+      {error && (
+        <div style={{ margin: '8px 0', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
+          ⚠️ {error}
         </div>
       )}
 
-      {/* Empty */}
+      {/* Loading Skeleton */}
+      {loading && allRecords.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)', fontSize: 12 }}>
+          <i className="fas fa-spinner fa-spin" style={{ marginRight: 6, fontSize: 16, color: '#6366f1' }} />
+          Loading bank transactions...
+        </div>
+      )}
+
+      {/* Empty State */}
       {!loading && allRecords.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '32px 16px', background: 'var(--slate-50)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
-          <i className="fas fa-university" style={{ fontSize: 28, color: 'var(--accent-300)', marginBottom: 10, display: 'block' }} />
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>No Bank Transactions Yet</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Import a PDF or CSV bank statement to get started.</div>
+        <div style={{ textAlign: 'center', padding: '36px 16px', background: 'var(--bg-card)', borderRadius: 16, border: '1px dashed var(--border-color)', margin: '10px 0' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+            <i className="fas fa-university" style={{ fontSize: 22, color: '#6366f1' }} />
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>No Bank Statements Imported Yet</div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4, maxWidth: 280, margin: '6px auto 14px' }}>
+            Import your PDF or CSV bank statement to search across bank history and auto-verify payment proofs.
+          </div>
+          <button
+            onClick={onOpenImport}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 20,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color: '#fff',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+            }}
+          >
+            Import PDF / CSV Statement
+          </button>
         </div>
       )}
 
       {/* No search results */}
-      {!loading && allRecords.length > 0 && filtered.length === 0 && searchTerm && (
-        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
-          No results for "<strong>{searchTerm}</strong>"
+      {!loading && allRecords.length > 0 && filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
+          No bank transactions match filter criteria.
+          {searchTerm && <div>Searching for "<strong>{searchTerm}</strong>"</div>}
+          <button
+            onClick={() => { setSearchTerm(''); setSelectedBankFilter('ALL') }}
+            style={{ marginTop: 8, background: 'none', border: 'none', color: '#6366f1', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Clear Filters
+          </button>
         </div>
       )}
 
-      {/* Transaction list */}
+      {/* Transaction List */}
       {filtered.length > 0 && (
-        <ul className="txn-list">
+        <ul className="txn-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {filtered.map((r) => {
             const isCredit = (r.credit || 0) > 0 && !(r.debit || 0 > 0)
             const amount = isCredit ? r.credit : r.debit
@@ -190,30 +370,70 @@ export default function BankHistoryView({ uid, onOpenImport }) {
             const amtStr = `${amtSign}₹${Number(amount || 0).toLocaleString('en-IN')}`
 
             return (
-              <li key={r.id} className="txn-item" style={{ cursor: 'default' }}>
-                <div className={`txn-icon ${isCredit ? 'positive' : 'expense'}`} style={{ background: isCredit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)', color: isCredit ? '#10b981' : '#ef4444' }}>
+              <li key={r.id} className="txn-item" style={{ position: 'relative', cursor: 'default', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                {/* Icon */}
+                <div
+                  className={`txn-icon ${isCredit ? 'positive' : 'expense'}`}
+                  style={{
+                    flexShrink: 0,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: isCredit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
+                    color: isCredit ? '#10b981' : '#ef4444',
+                    fontSize: 12,
+                  }}
+                >
                   <i className={`fas ${isCredit ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
                 </div>
 
-                <div className="txn-info">
-                  <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                {/* Main Info */}
+                <div className="txn-info" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>
                       {r.description || '—'}
                     </span>
                     {r.bank && (
-                      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 700, border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0 }}>
+                      <span style={{ fontSize: 8.5, padding: '1px 5px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 700, border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0 }}>
                         {r.bank}
                       </span>
                     )}
                   </div>
-                  <div className="txn-sub">
+                  <div className="txn-sub" style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
                     {formatDate(r.date)}
                     {r.balance ? ` · Bal: ₹${Number(r.balance).toLocaleString('en-IN')}` : ''}
                   </div>
                 </div>
 
-                <div className={`txn-amount ${amtCls}`} style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {amtStr}
+                {/* Amount & Delete */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <div className={`txn-amount ${amtCls}`} style={{ textAlign: 'right', fontWeight: 800, fontSize: 12.5 }}>
+                    {amtStr}
+                  </div>
+
+                  <button
+                    onClick={() => handleDelete(r)}
+                    disabled={deletingId === r.id}
+                    title="Delete Bank Entry"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-muted)',
+                      padding: 4,
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      borderRadius: 4,
+                      opacity: 0.6,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--text-muted)' }}
+                  >
+                    {deletingId === r.id ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-trash-alt" />}
+                  </button>
                 </div>
               </li>
             )

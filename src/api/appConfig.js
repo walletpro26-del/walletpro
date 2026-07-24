@@ -1,5 +1,5 @@
 import { db } from '../firebase'
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, Timestamp, onSnapshot } from 'firebase/firestore'
 import { isAdminEmail } from './subscription'
 
 const CONFIG_DOC = 'appConfig/settings'
@@ -21,6 +21,7 @@ const DEFAULTS = {
   cashfreeMode: 'sandbox', // 'sandbox' (Test Environment) | 'production' (Live Environment)
   cashfreeAppId: '',
   subscriberLimit: 10,
+  allowNonCsvImport: true,
 }
 
 let _cachedConfig = null
@@ -93,4 +94,31 @@ export async function updateAppConfig(email, updates) {
 export function invalidateConfigCache() {
   _cachedConfig = null
   _cacheTime = 0
+}
+
+/**
+ * Real-time listener for app configuration updates
+ * @param {function} callback 
+ * @returns {function} unsubscribe listener
+ */
+export function listenAppConfig(callback) {
+  try {
+    const ref = doc(db, 'appConfig', 'settings')
+    return onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        _cachedConfig = { ...DEFAULTS, ...snap.data() }
+      } else {
+        _cachedConfig = { ...DEFAULTS }
+      }
+      _cacheTime = Date.now()
+      callback(_cachedConfig)
+    }, (err) => {
+      console.warn('[appConfig] Real-time listener warning:', err?.message)
+      callback(_cachedConfig || { ...DEFAULTS })
+    })
+  } catch (err) {
+    console.warn('[appConfig] listenAppConfig error:', err?.message)
+    callback(_cachedConfig || { ...DEFAULTS })
+    return () => {}
+  }
 }

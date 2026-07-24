@@ -4,6 +4,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllExpenses } from '../api/expenses'
 import { getAllLending, normalizeLendingType } from '../api/lending'
 import { loadSnapshot, saveSnapshot } from '../api/localCache'
+import { fetchBankTransactionsFromFirestore, parseSafeDate } from '../api/bankTransactions'
 import { openWhatsApp, openEmail, getPersonContactMap, openWhatsAppPerson, openEmailPerson } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
 import PersonMergeModal from './PersonMergeModal'
@@ -11,7 +12,7 @@ import { normalizePersonName } from '../api/entityNormalizer'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid }) {
+export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid, isAdmin = false }) {
   const [reportType, setReportType] = useState('expense') // 'expense' | 'lending' | 'bank'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -23,7 +24,11 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid 
     showStats: true,
     showBreakdown: true,
     showLedger: true,
-    showRemarks: true,
+    category: true,
+    forWhom: true,
+    paymentMode: true,
+    remarks: true,
+    amount: true,
   })
 
   const [pdfColumns, setPdfColumns] = useState({
@@ -42,40 +47,24 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid 
     if (cached && cached.length > 0) {
       setBankRecords(cached.map((r) => ({
         ...r,
-        dateObj: r.date ? new Date(r.date) : new Date(),
+        dateObj: parseSafeDate(r.dateObj || r.date),
+        date: parseSafeDate(r.dateObj || r.date),
       })))
     }
 
     async function loadBankFromFirestore() {
       try {
-        const qScoped = query(collection(db, 'bankTransactions'), where('userId', '==', currentUid || ''))
-        const snapScoped = await getDocs(qScoped)
-        let records = snapScoped.docs.map((d) => {
-          const data = d.data()
-          const dateObj = data.date?.toDate?.() || new Date(data.date)
-          return {
-            id: d.id,
-            bank: data.bank || '',
-            date: dateObj,
-            dateObj,
-            description: data.description || '',
-            debit: data.debit || 0,
-            credit: data.credit || 0,
-            balance: data.balance || 0,
-          }
-        })
-        records.sort((a, b) => b.dateObj - a.dateObj)
-        setBankRecords(records)
-        saveSnapshot('bank', records, currentUid)
+        const records = await fetchBankTransactionsFromFirestore(currentUid, isAdmin)
+        if (records && records.length > 0) {
+          setBankRecords(records)
+        }
       } catch (err) {
-        // Fallback to cache quietly
+        console.warn('[ReportsView] loadBankFromFirestore warning:', err?.message)
       }
     }
 
-    if (currentUid) {
-      loadBankFromFirestore()
-    }
-  }, [uid])
+    loadBankFromFirestore()
+  }, [uid, isAdmin])
 
   function toYYYYMMDD(date) {
     const y = date.getFullYear()

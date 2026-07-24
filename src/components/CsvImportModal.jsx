@@ -8,7 +8,7 @@ import { MAX_PDF_SIZE_BYTES } from '../api/pdfExtractor'
 import { checkCsvRateLimit, recordCsvImportSuccess, getCsvImportStats } from '../api/csvRateLimit'
 import { normalizePersonName } from '../api/entityNormalizer'
 
-export default function CsvImportModal({ type = 'expense', isAdmin = false, onClose, onImportComplete }) {
+export default function CsvImportModal({ type = 'expense', isAdmin = false, allowNonCsvImport = true, onClose, onImportComplete }) {
   const [mode, setMode] = useState(type) // 'expense' | 'lending'
   const [csvPreviewData, setCsvPreviewData] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -135,6 +135,11 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, onCl
     const isPureCsv = (name.endsWith('.csv') || file.type === 'text/csv') && !name.endsWith('.xlsx') && !name.endsWith('.xls')
 
     if (!isPureCsv) {
+      if (!allowNonCsvImport) {
+        setError('⚠️ Non-CSV (PDF/Excel/Image) import feature is disabled by Admin. Only CSV file imports are currently permitted.')
+        return
+      }
+
       if (file.size > MAX_PDF_SIZE_BYTES) {
         const mb = (file.size / (1024 * 1024)).toFixed(1)
         setError(`⚠ File size (${mb} MB) exceeds the 10 MB limit. Please select a smaller file.`)

@@ -10,7 +10,7 @@ import {
 } from './api/lending'
 
 import { getSubscriptionStatus, isAdminEmail } from './api/subscription'
-import { getAppConfig } from './api/appConfig'
+import { getAppConfig, listenAppConfig } from './api/appConfig'
 import SubscriptionModal from './components/SubscriptionModal'
 import AdminPanel from './components/AdminPanel'
 
@@ -156,23 +156,19 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
-  // Load data, subscription, and config when logged in
+  // Load data & subscription when logged in, and subscribe to real-time appConfig changes
   useEffect(() => {
+    const unsubConfig = listenAppConfig((cfg) => {
+      setAppConfig(cfg)
+    })
+
     if (authState.loggedIn) {
       checkSubscription(authState)
       loadDashboard()
-      loadAppConfig()
     }
-  }, [authState.loggedIn, authState.uid])
 
-  const loadAppConfig = useCallback(async () => {
-    try {
-      const cfg = await getAppConfig()
-      setAppConfig(cfg)
-    } catch (err) {
-      console.warn('[App] Failed to load config:', err?.message)
-    }
-  }, [])
+    return () => unsubConfig?.()
+  }, [authState.loggedIn, authState.uid])
 
   const checkSubscription = useCallback(async (user) => {
     try {
@@ -515,6 +511,8 @@ export default function App() {
         {activeTab === 'bank' && (
           <BankHistoryView
             uid={authState.uid}
+            isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
+            allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
             onOpenImport={() => setShowBankSearch(true)}
           />
         )}
@@ -524,6 +522,7 @@ export default function App() {
             allExpenses={allExpenses}
             allLending={allLending}
             uid={authState.uid}
+            isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
             onSelectTxn={setSelectedTxn}
           />
         )}
@@ -578,6 +577,7 @@ export default function App() {
         <CsvImportModal
           type={csvImportModalType}
           isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
+          allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
           onClose={() => setCsvImportModalType(null)}
           onImportComplete={loadDashboard}
         />
@@ -600,13 +600,14 @@ export default function App() {
       {showAdminPanel && (
         <AdminPanel
           auth={authState}
-          onClose={() => { setShowAdminPanel(false); loadAppConfig() }}
+          onClose={() => setShowAdminPanel(false)}
         />
       )}
       {showBankSearch && (
         <BankSearchModal
           uid={authState.uid}
           isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
+          allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
           onClose={() => setShowBankSearch(false)}
         />
       )}

@@ -27,6 +27,12 @@ const PENDING_KEYS = {
  */
 export function saveSnapshot(type, data, uid = '') {
   try {
+    if (!Array.isArray(data)) return
+    // Do not overwrite non-empty cache with empty array
+    if (data.length === 0) {
+      const existing = localStorage.getItem(getKey(type, uid))
+      if (existing && existing !== '[]' && existing.length > 2) return
+    }
     const key = getKey(type, uid)
     // Store only essential fields to keep size manageable and prevent QuotaExceededError
     const slim = data.map((item) => {
@@ -48,22 +54,28 @@ export function saveSnapshot(type, data, uid = '') {
  */
 export function loadSnapshot(type, uid = '') {
   try {
+    const isValidArray = (str) => {
+      if (!str || typeof str !== 'string') return false
+      const trimmed = str.trim()
+      return trimmed.startsWith('[') && trimmed !== '[]' && trimmed.length > 2
+    }
+
     let key = getKey(type, uid)
     let raw = localStorage.getItem(key)
 
     // Fallback 1: Try without uid prefix
-    if (!raw && uid) {
+    if (!isValidArray(raw) && uid) {
       key = getKey(type, '')
       raw = localStorage.getItem(key)
     }
 
     // Fallback 2: Dynamic localStorage key scanner
-    if (!raw) {
+    if (!isValidArray(raw)) {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
-        if (k && (k.endsWith(`_${type}`) || k.includes(`_${type}_`))) {
+        if (k && (k.endsWith(`_${type}`) || k.includes(`_${type}_`) || k.includes(type))) {
           const val = localStorage.getItem(k)
-          if (val && val.startsWith('[')) {
+          if (isValidArray(val)) {
             raw = val
             break
           }
@@ -71,16 +83,21 @@ export function loadSnapshot(type, uid = '') {
       }
     }
 
-    if (!raw) return null
+    if (!isValidArray(raw)) return null
     const items = JSON.parse(raw)
     // Rehydrate date objects safely for mobile browsers
     return items.map((item) => {
       let dateObj = new Date()
-      if (item.date) {
-        if (typeof item.date === 'string') {
-          dateObj = new Date(item.date.replace(' ', 'T'))
+      if (item.dateObj || item.date) {
+        const val = item.dateObj || item.date
+        if (typeof val === 'string') {
+          dateObj = new Date(val.replace(' ', 'T'))
+        } else if (typeof val === 'object' && val?.seconds) {
+          dateObj = new Date(val.seconds * 1000)
+        } else if (typeof val === 'number') {
+          dateObj = new Date(val)
         } else {
-          dateObj = new Date(item.date)
+          dateObj = new Date(val)
         }
         if (isNaN(dateObj.getTime())) dateObj = new Date()
       }

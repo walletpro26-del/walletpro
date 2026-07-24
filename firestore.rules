@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper: Check if user is admin ──
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'walletpro26@gmail.com';
+    }
+
+    // ── Helper: Check if user owns the document ──
+    function isOwner() {
+      return request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.uid == request.auth.uid
+      );
+    }
+
+    // ── Expenses ──
+    match /expenses/{docId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
+    // ── Lending ──
+    match /lending/{docId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
+    // ── Bank Transactions ──
+    match /bankTransactions/{docId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.uid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
+    // ── Subscriptions ──
+    match /subscriptions/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
+    }
+
+    // ── UPI Payments ──
+    match /upi_payments/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── App Config (readable by all authenticated, writable by admin) ──
+    match /appConfig/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ── User Profiles (admin reads all, users read/write own) ──
+    match /userProfiles/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
+    }
+
+    // ── Scheduled Reminders (admin full access, users own) ──
+    match /scheduledReminders/{docId} {
+      allow read: if request.auth != null && (isOwner() || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
+    // ── Reviews ──
+    match /reviews/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
+    // ── Activity Logs (admin only) ──
+    match /activityLogs/{docId} {
+      allow read: if isAdmin();
+      allow write: if request.auth != null;
+    }
+  }
+}
