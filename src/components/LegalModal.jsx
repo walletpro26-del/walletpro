@@ -9,7 +9,7 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
   }, [initialTab])
 
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 200 }}>
+    <div className="modal-overlay" style={{ zIndex: 100000 }}>
       <div className="modal-backdrop" onClick={onClose} />
       <div
         className="modal-container custom-scrollbar"

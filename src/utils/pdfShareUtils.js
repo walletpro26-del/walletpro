@@ -82,12 +82,19 @@ export function generateSingleTxnPDF(item) {
     margin: { left: 14, right: 14 },
   })
 
-  // Footer Note
-  const finalY = doc.lastAutoTable.finalY + 15
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'italic')
-  doc.setTextColor(148, 163, 184)
-  doc.text('This digital voucher was generated automatically via WalletVibe Personal Finance.', 14, finalY)
+  // Footer Note on all pages
+  const pageCount = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    doc.line(14, 282, 196, 282)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(100, 116, 139)
+    doc.text('WalletVibe Personal Finance — Open/Install App: https://walletvibe.netlify.app', 14, 287)
+    doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
+  }
 
   const fileName = `WalletVibe_${personOrCategory.replace(/\s+/g, '_')}_${dateStr.replace(/\s+/g, '_')}.pdf`
   if (returnDocObj) {
@@ -177,14 +184,18 @@ export function generatePersonLedgerPDF(person, data, normalizeFn, returnDocObj 
     margin: { left: 14, right: 14 },
   })
 
-  // Footer Note
+  // Footer Note on all pages
   const pageCount = doc.internal.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i)
-    doc.setFont('helvetica', 'italic')
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    doc.line(14, 282, 196, 282)
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
-    doc.setTextColor(148, 163, 184)
-    doc.text(`WalletVibe Statement — Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
+    doc.setTextColor(100, 116, 139)
+    doc.text('WalletVibe Personal Finance — Open/Install App: https://walletvibe.netlify.app', 14, 287)
+    doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
   }
 
   const fileName = `WalletVibe_Statement_${person.replace(/\s+/g, '_')}_${dateStr.replace(/\s+/g, '_')}.pdf`

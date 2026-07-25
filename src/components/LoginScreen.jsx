@@ -73,19 +73,19 @@ export default function LoginScreen() {
         {/* Interactive Feature pills */}
         <div className="login-features">
           <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-receipt" />
+            <i className="fas fa-receipt" style={{ color: '#34d399' }} />
             <span>Expenses</span>
           </div>
           <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-handshake" />
+            <i className="fas fa-handshake" style={{ color: '#fbbf24' }} />
             <span>Lending</span>
           </div>
           <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-chart-bar" />
+            <i className="fas fa-chart-bar" style={{ color: '#38bdf8' }} />
             <span>Reports</span>
           </div>
           <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-university" />
+            <i className="fas fa-university" style={{ color: '#c084fc' }} />
             <span>Bank &amp; AI</span>
           </div>
         </div>
@@ -95,22 +95,23 @@ export default function LoginScreen() {
           type="button"
           onClick={() => setShowFeaturesModal(true)}
           style={{
-            margin: '0 0 20px',
-            padding: '7px 14px',
+            margin: '0 0 24px',
+            padding: '8px 16px',
             borderRadius: 99,
-            border: '1px solid rgba(99,102,241,0.4)',
-            background: 'rgba(99,102,241,0.15)',
-            color: '#a5b4fc',
-            fontSize: 11.5,
+            border: '1px solid rgba(165, 180, 252, 0.4)',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)',
+            color: '#ffffff',
+            fontSize: 12,
             fontWeight: 800,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
+            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
             transition: 'all 0.2s ease',
           }}
         >
-          ✨ Explore All App Features &amp; Capabilities
+          <i className="fas fa-layer-group" style={{ fontSize: 11 }} /> Explore App Features
         </button>
 
         {/* Error */}
@@ -153,18 +154,18 @@ export default function LoginScreen() {
       </div>
 
       {/* Footer */}
-      <div className="login-footer" style={{ textAlign: 'center', width: '100%', padding: '16px 16px 0', position: 'relative', marginTop: 16, fontSize: 10.5 }}>
+      <footer className="login-footer">
         <div>© {new Date().getFullYear()} <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>NextLifTechnologies</a></div>
-        <div className="login-footer-links" style={{ marginTop: 4 }}>
-          <a href="#privacy" onClick={(e) => { e.preventDefault(); setLegalModalTab('privacy') }}>Privacy Policy</a>
-          <span style={{ opacity: 0.4, margin: '0 5px' }}>•</span>
-          <a href="#terms" onClick={(e) => { e.preventDefault(); setLegalModalTab('terms') }}>Terms &amp; Conditions</a>
-          <span style={{ opacity: 0.4, margin: '0 5px' }}>•</span>
-          <a href="#refund" onClick={(e) => { e.preventDefault(); setLegalModalTab('refund') }}>Refund Policy</a>
-          <span style={{ opacity: 0.4, margin: '0 5px' }}>•</span>
-          <a href="#contact" onClick={(e) => { e.preventDefault(); setLegalModalTab('contact') }}>Contact Us</a>
+        <div className="login-footer-links">
+          <button type="button" onClick={() => setLegalModalTab('privacy')} style={{ background: 'none', border: 'none', color: 'rgba(226, 232, 240, 0.9)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11, padding: '4px 6px' }}>Privacy Policy</button>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <button type="button" onClick={() => setLegalModalTab('terms')} style={{ background: 'none', border: 'none', color: 'rgba(226, 232, 240, 0.9)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11, padding: '4px 6px' }}>Terms &amp; Conditions</button>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <button type="button" onClick={() => setLegalModalTab('refund')} style={{ background: 'none', border: 'none', color: 'rgba(226, 232, 240, 0.9)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11, padding: '4px 6px' }}>Refund Policy</button>
+          <span style={{ opacity: 0.4 }}>•</span>
+          <button type="button" onClick={() => setLegalModalTab('contact')} style={{ background: 'none', border: 'none', color: 'rgba(226, 232, 240, 0.9)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11, padding: '4px 6px' }}>Contact Us</button>
         </div>
-      </div>
+      </footer>
 
       {/* Legal Modal */}
       {legalModalTab && (

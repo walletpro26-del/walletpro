@@ -23,7 +23,18 @@ export default function SubscriptionModal({
 
   const monthlyPrice = appConfig?.monthlyPrice || 20
   const yearlyPrice = appConfig?.yearlyPrice || 150
-  const amount = selectedPlan === 'yearly' ? yearlyPrice : monthlyPrice
+  const ultraMonthlyPrice = appConfig?.ultraMonthlyPrice || 49
+  const ultraYearlyPrice = appConfig?.ultraYearlyPrice || 399
+  const ultraEnabled = appConfig?.ultraEnabled || false
+  const ultraComingSoon = appConfig?.ultraComingSoon !== false
+
+  let amount = monthlyPrice
+  if (selectedPlan === 'yearly') amount = yearlyPrice
+  else if (selectedPlan === 'ultra_monthly') amount = ultraMonthlyPrice
+  else if (selectedPlan === 'ultra_yearly') amount = ultraYearlyPrice
+
+  const isUltraSelected = selectedPlan.startsWith('ultra')
+  const isUltraDisabled = isUltraSelected && (!ultraEnabled || ultraComingSoon)
 
   const [orderId, setOrderId] = useState('')
   useEffect(() => {
@@ -384,51 +395,111 @@ export default function SubscriptionModal({
 
               {/* STEP 1: Plan Selection */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)', marginBottom: 8 }}>
-                  Select a subscription plan
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Select a Tier & Plan</span>
+                  <span style={{ fontSize: 8.5, color: '#6366f1', fontWeight: 700 }}>Pro vs Ultra</span>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  {/* Monthly Card */}
+
+                {/* Pro Tier Grid */}
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>⚡ Pro Tier</span> <span style={{ fontSize: 8.5, color: '#64748b', fontWeight: 500 }}>(Manual CSV/PDF Import)</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  {/* Pro Monthly */}
                   <div
                     onClick={() => setSelectedPlan('monthly')}
                     style={{
                       flex: 1,
                       border: `1.5px solid ${selectedPlan === 'monthly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
                       background: selectedPlan === 'monthly' ? 'var(--bg-card-active, rgba(99,102,241,0.04))' : 'var(--bg-card, #ffffff)',
-                      borderRadius: 12,
-                      padding: '12px 14px',
+                      borderRadius: 10,
+                      padding: '10px 12px',
                       cursor: 'pointer',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: selectedPlan === 'monthly' ? '0 4px 12px rgba(99,102,241,0.06)' : 'none',
+                      transition: 'all 0.2s ease',
+                      boxShadow: selectedPlan === 'monthly' ? '0 4px 12px rgba(99,102,241,0.1)' : 'none',
                     }}
                   >
-                    <div style={{ fontSize: 9, fontWeight: 800, color: selectedPlan === 'monthly' ? '#6366f1' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Monthly Pass</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 4 }}>
-                      ₹{monthlyPrice}<span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/mo</span>
+                    <div style={{ fontSize: 8.5, fontWeight: 800, color: selectedPlan === 'monthly' ? '#6366f1' : '#64748b', textTransform: 'uppercase' }}>Pro Monthly</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{monthlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/mo</span>
                     </div>
                   </div>
 
-                  {/* Yearly Card */}
+                  {/* Pro Yearly */}
                   <div
                     onClick={() => setSelectedPlan('yearly')}
                     style={{
                       flex: 1,
                       border: `1.5px solid ${selectedPlan === 'yearly' ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`,
                       background: selectedPlan === 'yearly' ? 'var(--bg-card-active, rgba(99,102,241,0.04))' : 'var(--bg-card, #ffffff)',
-                      borderRadius: 12,
-                      padding: '12px 14px',
+                      borderRadius: 10,
+                      padding: '10px 12px',
                       cursor: 'pointer',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      transition: 'all 0.2s ease',
                       position: 'relative',
-                      boxShadow: selectedPlan === 'yearly' ? '0 4px 12px rgba(99,102,241,0.06)' : 'none',
+                      boxShadow: selectedPlan === 'yearly' ? '0 4px 12px rgba(99,102,241,0.1)' : 'none',
                     }}
                   >
-                    <div style={{ position: 'absolute', top: -7, right: 8, background: '#10b981', color: '#fff', fontSize: 7, fontWeight: 900, padding: '2px 6px', borderRadius: 99, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                    <div style={{ position: 'absolute', top: -6, right: 6, background: '#10b981', color: '#fff', fontSize: 7, fontWeight: 900, padding: '1px 5px', borderRadius: 99, textTransform: 'uppercase' }}>
                       Save {Math.round((1 - (yearlyPrice / (monthlyPrice * 12))) * 100)}%
                     </div>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: selectedPlan === 'yearly' ? '#6366f1' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Yearly Saver</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 4 }}>
-                      ₹{yearlyPrice}<span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>/yr</span>
+                    <div style={{ fontSize: 8.5, fontWeight: 800, color: selectedPlan === 'yearly' ? '#6366f1' : '#64748b', textTransform: 'uppercase' }}>Pro Yearly</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{yearlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/yr</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ultra Tier Grid */}
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: '#8b5cf6', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>👑 Ultra Tier (Auto Bank Sync)</span>
+                  {ultraComingSoon && (
+                    <span style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', fontSize: 7.5, fontWeight: 900, padding: '2px 6px', borderRadius: 99, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                      Coming Soon
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Ultra Monthly */}
+                  <div
+                    onClick={() => setSelectedPlan('ultra_monthly')}
+                    style={{
+                      flex: 1,
+                      border: `1.5px solid ${selectedPlan === 'ultra_monthly' ? '#8b5cf6' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'ultra_monthly' ? 'rgba(139, 92, 246, 0.06)' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ fontSize: 8.5, fontWeight: 800, color: selectedPlan === 'ultra_monthly' ? '#8b5cf6' : '#64748b', textTransform: 'uppercase' }}>Ultra Monthly</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{ultraMonthlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/mo</span>
+                    </div>
+                  </div>
+
+                  {/* Ultra Yearly */}
+                  <div
+                    onClick={() => setSelectedPlan('ultra_yearly')}
+                    style={{
+                      flex: 1,
+                      border: `1.5px solid ${selectedPlan === 'ultra_yearly' ? '#8b5cf6' : 'var(--border-color, #e2e8f0)'}`,
+                      background: selectedPlan === 'ultra_yearly' ? 'rgba(139, 92, 246, 0.06)' : 'var(--bg-card, #ffffff)',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: -6, right: 6, background: '#8b5cf6', color: '#fff', fontSize: 7, fontWeight: 900, padding: '1px 5px', borderRadius: 99, textTransform: 'uppercase' }}>
+                      Auto Sync
+                    </div>
+                    <div style={{ fontSize: 8.5, fontWeight: 800, color: selectedPlan === 'ultra_yearly' ? '#8b5cf6' : '#64748b', textTransform: 'uppercase' }}>Ultra Yearly</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginTop: 2 }}>
+                      ₹{ultraYearlyPrice}<span style={{ fontSize: 9, fontWeight: 500, color: '#64748b' }}>/yr</span>
                     </div>
                   </div>
                 </div>
@@ -439,28 +510,38 @@ export default function SubscriptionModal({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)' }}>Secure Online Checkout</span>
                   <span style={{ fontSize: 8, background: isLimitReached ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)', color: isLimitReached ? '#ef4444' : '#6366f1', padding: '2px 8px', borderRadius: 99, fontWeight: 800, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                    {isLimitReached ? 'Limit Reached' : 'Instant Grant'}
+                    {isLimitReached ? 'Limit Reached' : isUltraDisabled ? 'Coming Soon' : 'Instant Grant'}
                   </span>
                 </div>
+
+                {/* Ultra Disabled Warning Banner */}
+                {isUltraDisabled && (
+                  <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', color: '#7c3aed', fontSize: 10.5, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-magic" />
+                    Ultra Tier (Auto Bank Sync via Setu) is currently in setup mode and coming soon! Switch to Pro tier to subscribe now.
+                  </div>
+                )}
 
                 {/* Razorpay Gateway Button */}
                 {appConfig?.razorpayEnabled !== false && (
                   <button
                     type="button"
                     onClick={handleRazorpayCheckout}
-                    disabled={submitting || isLimitReached}
+                    disabled={submitting || isLimitReached || isUltraDisabled}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      width: '100%', padding: '12px', background: isLimitReached ? '#94a3b8' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      width: '100%', padding: '12px', background: (isLimitReached || isUltraDisabled) ? '#94a3b8' : isUltraSelected ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                       color: '#ffffff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 12,
-                      cursor: isLimitReached ? 'not-allowed' : 'pointer', transition: 'all 0.15s ease',
-                      boxShadow: isLimitReached ? 'none' : '0 4px 14px rgba(99, 102, 241, 0.25)',
+                      cursor: (isLimitReached || isUltraDisabled) ? 'not-allowed' : 'pointer', transition: 'all 0.15s ease',
+                      boxShadow: (isLimitReached || isUltraDisabled) ? 'none' : '0 4px 14px rgba(99, 102, 241, 0.25)',
                     }}
                   >
                     {submitting ? (
                       <><i className="fas fa-spinner fa-spin" /> Starting Secure Checkout...</>
                     ) : isLimitReached ? (
                       <><i className="fas fa-ban" style={{ fontSize: 11 }} /> Limit Reached ({regularActiveCount}/{subscriberLimit})</>
+                    ) : isUltraDisabled ? (
+                      <><i className="fas fa-clock" style={{ fontSize: 11 }} /> Ultra Tier Coming Soon</>
                     ) : (
                       <><i className="fas fa-shield-alt" style={{ fontSize: 11 }} /> Continue to Pay ₹{amount}</>
                     )}

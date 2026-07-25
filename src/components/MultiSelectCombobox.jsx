@@ -45,10 +45,19 @@ export default function MultiSelectCombobox({
     setOpen(true)
     setSearch('')
     setIsDirty(false)
-    // Auto-scroll active input field into clear view so suggestions are immediately visible
-    setTimeout(() => {
-      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
-    }, 50)
+
+    // Smoothly scroll focused input field to the upper portion of viewport so soft keyboard does not obscure suggestions
+    const scrollToTop = () => {
+      if (!containerRef.current) return
+      try {
+        containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' })
+      } catch (e) {}
+    }
+
+    // Trigger multiple times to handle mobile keyboard opening animation (~250ms)
+    scrollToTop()
+    setTimeout(scrollToTop, 100)
+    setTimeout(scrollToTop, 280)
   }
 
   // Close when clicking or tapping outside
@@ -220,12 +229,16 @@ export default function MultiSelectCombobox({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            maxHeight: 'min(190px, 30vh)',
+            maxHeight: 'min(230px, 40vh)',
+            minHeight: (filteredSuggestions.length > 0 || showAddOption) ? '135px' : 'auto',
             overflow: 'hidden',
             top: '100%',
             zIndex: 9999,
             marginTop: 4,
             background: 'var(--bg-card)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.25), 0 2px 8px rgba(99,102,241,0.15)',
+            borderRadius: 'var(--radius-md)',
+            border: '1.5px solid var(--accent-400, #818cf8)',
             animation: 'dropdown-spring 0.2s cubic-bezier(0.34,1.56,0.64,1)',
           }}
         >

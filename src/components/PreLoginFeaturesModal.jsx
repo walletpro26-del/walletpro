@@ -218,14 +218,20 @@ export default function PreLoginFeaturesModal({ onClose }) {
                   🏦
                 </div>
                 <div>
-                  <h4 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>Bank Statements & AI Document Parsing</h4>
+                  <h4 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Bank Statements & Auto Sync
+                    <span style={{ fontSize: 8, background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', padding: '2px 6px', borderRadius: 99, fontWeight: 800 }}>ULTRA</span>
+                  </h4>
                   <p style={{ margin: 0, fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
-                    Import Bank Statements, Receipts, PDFs, Excel sheets, Voice notes, and CSVs effortlessly.
+                    Import Bank Statements manually via AI PDF/CSV, or link your bank directly for automated transaction sync.
                   </p>
                 </div>
               </div>
 
               <div style={{ background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10, padding: 12, border: '1px solid var(--border-color, #e2e8f0)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#8b5cf6' }}>✨</span> Automatic Bank Sync via Account Aggregator Framework (Ultra)
+                </div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ color: '#10b981' }}>✓</span> Gemini AI Extraction for PDFs, Audio, Images & Excel
                 </div>

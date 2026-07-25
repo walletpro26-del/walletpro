@@ -11,7 +11,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
     category: editData?.category || '',
     details: editData?.details || '',
     amount: editData?.amount || '',
-    paymentMode: editData?.paymentMode || 'Cash',
+    paymentMode: editData?.paymentMode || 'Online/UPI',
     remarks: editData?.remarks || '',
     fileData: null,
     fileName: '',
@@ -269,12 +269,12 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           </div>
           <div className="float-group" style={{ flex: 1 }} title="Select method used to pay for this expense">
             <select className="float-input" value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)}>
-              <option value="Cash">Cash</option>
               <option value="Online/UPI">Online/UPI</option>
+              <option value="Cash">Cash</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Card">Card</option>
             </select>
-            <label className="float-label active">Payment Mode ℹ️</label>
+            <label className="float-label active">Payment Mode</label>
             <i className="select-chevron fas fa-chevron-down"></i>
           </div>
         </div>

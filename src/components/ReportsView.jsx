@@ -637,14 +637,18 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
         })
       }
 
-      // Add Page Numbers in footer of every page
+      // Add Page Numbers & App Install Link in footer of every page
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFont('helvetica', 'italic')
-        doc.setFontSize(8)
-        doc.setTextColor(148, 163, 184)
-        doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.line(14, 282, 196, 282);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text('WalletVibe Personal Finance — Open/Install App: https://walletvibe.netlify.app', 14, 287);
+        doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' });
       }
 
       const outName = isFullDoc ? 'Full_Database' : activeModule.toUpperCase()

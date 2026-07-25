@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@netlify/functions": "^3.0.0",
     "firebase": "^12.16.0",
+    "firebase-admin": "^13.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

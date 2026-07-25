@@ -36,6 +36,30 @@ export function isAdminEmail(email) {
 }
 
 /**
+ * Get derived subscription tier: 'free' | 'trial' | 'pro' | 'ultra'
+ * @param {object} subscription
+ * @returns {'free'|'trial'|'pro'|'ultra'}
+ */
+export function getSubscriptionTier(subscription) {
+  if (subscription?.isAdmin) return 'ultra'
+  if (!subscription || !subscription.active) return 'free'
+  const plan = String(subscription.plan || '').toLowerCase()
+  if (plan === 'trial') return 'trial' // Trial unlocks all features for 3 days
+  if (plan.startsWith('ultra')) return 'ultra'
+  return 'pro' // 'monthly' | 'yearly'
+}
+
+/**
+ * Check if user has active Ultra tier access (including during trial or for admin)
+ * @param {object} subscription
+ * @returns {boolean}
+ */
+export function hasUltraAccess(subscription) {
+  const tier = getSubscriptionTier(subscription)
+  return tier === 'ultra' || tier === 'trial' || !!subscription?.isAdmin
+}
+
+/**
  * Get current subscription status for a user
  * @param {{ uid: string, email: string }} user
  * @returns {Promise<{ active: boolean, status: string, plan: string, expiresAt: Date|null, isAdmin: boolean }>}
@@ -148,7 +172,8 @@ export async function activateSubscriptionRazorpay(user, plan, paymentId, amount
     extraDays = 3
   }
 
-  if (plan === 'yearly') {
+  const isYearlyPlan = plan === 'yearly' || plan === 'ultra_yearly'
+  if (isYearlyPlan) {
     expiresAt.setFullYear(expiresAt.getFullYear() + 1)
   } else {
     expiresAt.setDate(expiresAt.getDate() + 30)
@@ -158,7 +183,12 @@ export async function activateSubscriptionRazorpay(user, plan, paymentId, amount
     expiresAt.setDate(expiresAt.getDate() + extraDays)
   }
 
-  let finalAmount = amount || (plan === 'yearly' ? 150 : 20)
+  let defaultAmt = 20
+  if (plan === 'yearly') defaultAmt = 150
+  else if (plan === 'ultra_monthly') defaultAmt = 49
+  else if (plan === 'ultra_yearly') defaultAmt = 399
+
+  let finalAmount = amount || defaultAmt
 
   const payload = {
     userId: user.uid,
@@ -183,9 +213,18 @@ export async function activateSubscriptionRazorpay(user, plan, paymentId, amount
  * Create Razorpay Payment Options Configuration
  */
 export function createRazorpayOptions({ user, plan, amount, razorpayKey, onSuccess, onError }) {
-  const amountPaise = Math.round((amount || (plan === 'yearly' ? 150 : 20)) * 100)
-  const isYearly = plan === 'yearly'
-  const planTitle = isYearly ? `WalletVibe Yearly Subscription (₹${amount}/year)` : `WalletVibe Monthly Subscription (₹${amount}/month)`
+  let defaultAmt = 20
+  if (plan === 'yearly') defaultAmt = 150
+  else if (plan === 'ultra_monthly') defaultAmt = 49
+  else if (plan === 'ultra_yearly') defaultAmt = 399
+
+  const finalAmt = amount || defaultAmt
+  const amountPaise = Math.round(finalAmt * 100)
+  const isYearly = plan === 'yearly' || plan === 'ultra_yearly'
+  const isUltra = plan.startsWith('ultra')
+  const tierName = isUltra ? 'Ultra' : 'Pro'
+  const durationName = isYearly ? 'Yearly' : 'Monthly'
+  const planTitle = `WalletVibe ${tierName} ${durationName} (₹${finalAmt}/${isYearly ? 'year' : 'month'})`
 
   return {
     key: razorpayKey || 'rzp_test_walletvibe',

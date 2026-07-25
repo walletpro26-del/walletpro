@@ -301,29 +301,31 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           ]))}
         />
 
-        {/* Mobile No & Email */}
-        <div className="compact-row">
-          <div className="compact-input-block" style={{ flex: 1 }} title="WhatsApp number for sending payment reminders">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 10 }} /> Mobile (WhatsApp) ℹ️
-            </label>
+        {/* Mobile No & Email (Floating Label Inputs with Icons) */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div className="float-group" style={{ flex: '0 0 42%' }} title="WhatsApp number for sending payment reminders">
             <input
               type="tel"
-              placeholder="e.g. 9876543210"
+              className="float-input"
+              placeholder=" "
               value={form.mobileNo}
               onChange={(e) => set('mobileNo', e.target.value)}
             />
-          </div>
-          <div className="compact-input-block" style={{ flex: 1 }} title="Email address for digital receipt or notifications">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 9 }} /> Email Address ℹ️
+            <label className="float-label">
+              <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 12 }} /> Mobile
             </label>
+          </div>
+          <div className="float-group" style={{ flex: 1 }} title="Email address for digital receipt or notifications">
             <input
               type="email"
-              placeholder="name@example.com"
+              className="float-input"
+              placeholder=" "
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
             />
+            <label className="float-label">
+              <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 11 }} /> Email
+            </label>
           </div>
         </div>
 
@@ -336,7 +338,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             value={form.remarks}
             onChange={(e) => set('remarks', e.target.value)}
           />
-          <label className="float-label">Remarks ℹ️</label>
+          <label className="float-label">Remarks</label>
         </div>
 
         <button type="submit" className="btn-primary emerald" disabled={loading}>

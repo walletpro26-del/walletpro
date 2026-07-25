@@ -3,12 +3,13 @@ import { auth } from '../firebase'
 import { loadSnapshot } from '../api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
 import { downloadBankCsvTemplate } from '../utils/csvTemplate'
+import BankLinkCard from './BankLinkCard'
 
 /**
  * BankHistoryView — Inline bank transaction list with live search,
  * bank filter chips, deletion capabilities, and instant mobile-first performance.
  */
-export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, onOpenImport, onOpenMerge }) {
+export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, subscription, appConfig, onOpenSubscriptionModal, onOpenImport, onOpenMerge }) {
   const currentUid = uid || auth?.currentUser?.uid || ''
 
   // Instant cache state initialization (zero loading flash on tab switch)
@@ -146,6 +147,14 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
 
   return (
     <div style={{ paddingBottom: 24 }}>
+      {/* Automatic Bank Transaction Sync Card */}
+      <BankLinkCard
+        subscription={subscription}
+        appConfig={appConfig}
+        onOpenSubscriptionModal={onOpenSubscriptionModal}
+        onSyncComplete={() => loadData(true)}
+      />
+
       {/* Header & Controls Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -159,6 +168,30 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {onOpenMerge && (
+              <button
+                type="button"
+                onClick={() => onOpenMerge('bank')}
+                title="Merge duplicate bank names"
+                style={{
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 20,
+                  padding: '5px 10px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <i className="fas fa-random" style={{ fontSize: 10, color: '#0284c7' }} />
+                <span>Merge Banks</span>
+              </button>
+            )}
+
             {/* Sync / Refresh Button */}
             <button
               onClick={() => loadData(true)}
@@ -199,7 +232,7 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
                 paddingRight: searchTerm ? 28 : 10,
                 paddingTop: 7,
                 paddingBottom: 7,
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 500,
                 border: '1px solid var(--border-color)',
                 borderRadius: 20,
@@ -220,7 +253,7 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
 
         {/* Unique Banks Filter Bar */}
         {uniqueBanks.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
             <button
               onClick={() => setSelectedBankFilter('ALL')}
               style={{
@@ -261,27 +294,6 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
                 </button>
               )
             })}
-
-            {onOpenMerge && (
-              <button
-                type="button"
-                onClick={() => onOpenMerge('bank')}
-                title="Merge duplicate bank names"
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 12,
-                  fontSize: 10.5,
-                  fontWeight: 800,
-                  whiteSpace: 'nowrap',
-                  border: '1px solid rgba(2, 132, 199, 0.4)',
-                  background: 'rgba(2, 132, 199, 0.1)',
-                  color: '#0284c7',
-                  cursor: 'pointer',
-                }}
-              >
-                🔀 Merge Bank Names
-              </button>
-            )}
           </div>
         )}
 
@@ -291,23 +303,24 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
             display: 'grid',
             gridTemplateColumns: '1fr 1fr 1fr',
             gap: 8,
-            padding: '8px 12px',
-            borderRadius: 10,
+            padding: '10px 14px',
+            borderRadius: 12,
             background: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
+            boxShadow: 'var(--shadow-sm)',
             fontSize: 11,
           }}>
             <div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Spent (Debits)</div>
-              <div style={{ color: '#ef4444', fontWeight: 800 }}>-₹{metrics.totalDebit.toLocaleString('en-IN')}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Spent (Debits)</div>
+              <div style={{ color: '#ef4444', fontWeight: 800, fontSize: 12.5, marginTop: 1 }}>-₹{metrics.totalDebit.toLocaleString('en-IN')}</div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Credits</div>
-              <div style={{ color: '#10b981', fontWeight: 800 }}>+₹{metrics.totalCredit.toLocaleString('en-IN')}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Credits</div>
+              <div style={{ color: '#10b981', fontWeight: 800, fontSize: 12.5, marginTop: 1 }}>+₹{metrics.totalCredit.toLocaleString('en-IN')}</div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Net Cash Flow</div>
-              <div style={{ color: metrics.net >= 0 ? '#10b981' : '#ef4444', fontWeight: 800 }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Net Cash Flow</div>
+              <div style={{ color: metrics.net >= 0 ? '#10b981' : '#ef4444', fontWeight: 800, fontSize: 12.5, marginTop: 1 }}>
                 {metrics.net >= 0 ? '+' : ''}₹{metrics.net.toLocaleString('en-IN')}
               </div>
             </div>

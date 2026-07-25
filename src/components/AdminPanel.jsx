@@ -49,6 +49,11 @@ export default function AdminPanel({ auth, onClose }) {
   // Editable fields for Settings tab
   const [monthlyPrice, setMonthlyPrice] = useState('')
   const [yearlyPrice, setYearlyPrice] = useState('')
+  const [ultraMonthlyPrice, setUltraMonthlyPrice] = useState('49')
+  const [ultraYearlyPrice, setUltraYearlyPrice] = useState('399')
+  const [ultraEnabled, setUltraEnabled] = useState(false)
+  const [ultraComingSoon, setUltraComingSoon] = useState(true)
+  const [hideUltraBanner, setHideUltraBanner] = useState(false)
   const [trialDays, setTrialDays] = useState('')
   const [subscriberLimit, setSubscriberLimit] = useState('10')
   const [announcement, setAnnouncement] = useState('')
@@ -84,6 +89,11 @@ export default function AdminPanel({ auth, onClose }) {
       setConfig(cfg)
       setMonthlyPrice(String(cfg.monthlyPrice || 20))
       setYearlyPrice(String(cfg.yearlyPrice || 150))
+      setUltraMonthlyPrice(String(cfg.ultraMonthlyPrice || 49))
+      setUltraYearlyPrice(String(cfg.ultraYearlyPrice || 399))
+      setUltraEnabled(!!cfg.ultraEnabled)
+      setUltraComingSoon(cfg.ultraComingSoon !== false)
+      setHideUltraBanner(!!cfg.hideUltraBanner)
       setTrialDays(String(cfg.trialDays || 0))
       setSubscriberLimit(String(cfg.subscriberLimit ?? 10))
       setAnnouncement(cfg.announcement || '')
@@ -232,10 +242,12 @@ export default function AdminPanel({ auth, onClose }) {
     try {
       const mp = parseFloat(monthlyPrice) || 20
       const yp = parseFloat(yearlyPrice) || 150
+      const ump = parseFloat(ultraMonthlyPrice) || 49
+      const uyp = parseFloat(ultraYearlyPrice) || 399
       const td = parseInt(trialDays) || 0
       const sl = parseInt(subscriberLimit) || 10
 
-      if (mp <= 0 || yp <= 0) {
+      if (mp <= 0 || yp <= 0 || ump <= 0 || uyp <= 0) {
         setError('Prices must be greater than 0')
         setSaving(false)
         return
@@ -244,6 +256,11 @@ export default function AdminPanel({ auth, onClose }) {
       await updateAppConfig(auth?.email, {
         monthlyPrice: mp,
         yearlyPrice: yp,
+        ultraMonthlyPrice: ump,
+        ultraYearlyPrice: uyp,
+        ultraEnabled,
+        ultraComingSoon,
+        hideUltraBanner,
         trialDays: td,
         subscriberLimit: sl,
         announcement,
@@ -486,8 +503,10 @@ export default function AdminPanel({ auth, onClose }) {
                     onChange={(e) => setManualPlan(e.target.value)}
                     style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10, fontWeight: 700, background: '#fff', color: '#1e293b' }}
                   >
-                    <option value="monthly">30 Days Pass</option>
-                    <option value="yearly">1 Year Saver</option>
+                    <option value="monthly">Pro Monthly Pass</option>
+                    <option value="yearly">Pro Yearly Saver</option>
+                    <option value="ultra_monthly">👑 Ultra Monthly</option>
+                    <option value="ultra_yearly">👑 Ultra Yearly</option>
                   </select>
                   <button
                     type="button"
@@ -657,7 +676,95 @@ export default function AdminPanel({ auth, onClose }) {
             </div>
           )}
 
+          {/* Pricing Control Section: Pro & Ultra Tiers */}
+          <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
+              💳 Subscription Pricing Configuration
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Monthly Price (₹)</label>
+                <input
+                  type="number"
+                  value={monthlyPrice}
+                  onChange={(e) => setMonthlyPrice(e.target.value)}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Yearly Price (₹)</label>
+                <input
+                  type="number"
+                  value={yearlyPrice}
+                  onChange={(e) => setYearlyPrice(e.target.value)}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
 
+            {/* Ultra Tier Settings */}
+            <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1.5px solid rgba(139, 92, 246, 0.25)', borderRadius: 8, padding: 8, marginTop: 6 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 800, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>👑 Ultra Tier (Auto Bank Sync via Setu)</span>
+                <span style={{ fontSize: 8, background: ultraEnabled ? '#10b981' : '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: 99 }}>
+                  {ultraEnabled ? 'ACTIVE' : 'SETUP / COMING SOON'}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Monthly (₹)</label>
+                  <input
+                    type="number"
+                    value={ultraMonthlyPrice}
+                    onChange={(e) => setUltraMonthlyPrice(e.target.value)}
+                    style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Yearly (₹)</label>
+                  <input
+                    type="number"
+                    value={ultraYearlyPrice}
+                    onChange={(e) => setUltraYearlyPrice(e.target.value)}
+                    style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#4c1d95', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={ultraEnabled}
+                    onChange={(e) => setUltraEnabled(e.target.checked)}
+                    style={{ width: 14, height: 14, accentColor: '#8b5cf6' }}
+                  />
+                  Enable Ultra Tier Purchase (Turn ON after Setu AA keys are configured)
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#6b21a8', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={ultraComingSoon}
+                    onChange={(e) => setUltraComingSoon(e.target.checked)}
+                    style={{ width: 14, height: 14, accentColor: '#ec4899' }}
+                  />
+                  Show "Coming Soon" badge on Ultra tier in Subscription modal
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={hideUltraBanner}
+                    onChange={(e) => setHideUltraBanner(e.target.checked)}
+                    style={{ width: 14, height: 14, accentColor: '#4f46e5' }}
+                  />
+                  Hide "Coming Soon" Bank Sync banner completely in Bank History view
+                </label>
+              </div>
+            </div>
+          </div>
 
           {/* ══════════════════════════════════════════════════════════
               TAB 3: CONFIGURATION & SETTINGS

@@ -8,6 +8,11 @@ const CONFIG_DOC = 'appConfig/settings'
 const DEFAULTS = {
   monthlyPrice: 20,
   yearlyPrice: 150,
+  ultraMonthlyPrice: 49,
+  ultraYearlyPrice: 399,
+  ultraEnabled: false, // Master switch for Ultra auto bank sync
+  ultraComingSoon: true, // Show "Coming Soon" badge for Ultra
+  hideUltraBanner: false, // Admin switch to hide Coming Soon banner completely in Bank History view
   currency: 'INR',
   trialDays: 0,
   appName: 'WalletVibe',

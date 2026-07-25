@@ -275,25 +275,27 @@ export default function Header({
                   ref={portalMenuRef}
                   style={{
                     position: 'fixed',
-                    top: menuPos.top + 2,
+                    top: menuPos.top + 4,
                     right: Math.max(12, menuPos.right),
-                    width: 220,
-                    background: '#0f172a',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: 12,
-                    padding: '8px 6px',
-                    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.8)',
+                    width: 200,
+                    background: 'rgba(15, 23, 42, 0.95)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 14,
+                    padding: '6px 4px',
+                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)',
                     zIndex: 999999,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 3,
+                    gap: 1,
                   }}
                 >
                   {/* User email info */}
                   {auth?.email && (
-                    <div style={{ padding: '6px 10px 8px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: 2 }}>
-                      <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Signed in as</div>
-                      <div style={{ color: '#f8fafc', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                    <div style={{ padding: '6px 10px 6px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: 3 }}>
+                      <div style={{ fontSize: 8.5, textTransform: 'uppercase', color: '#64748b', fontWeight: 800, letterSpacing: 0.5 }}>Signed in as</div>
+                      <div style={{ color: '#f8fafc', fontWeight: 700, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                         {auth.email}
                       </div>
                     </div>
@@ -306,13 +308,16 @@ export default function Header({
                       onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       onClick={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                        background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)',
-                        color: '#c4b5fd', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                        background: 'transparent', border: 'none', color: '#c4b5fd', borderRadius: 8,
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                        transition: 'all 0.15s ease',
                       }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                      <i className="fas fa-crown" style={{ color: '#fbbf24', fontSize: 12 }} />
-                      Admin Control Panel
+                      <i className="fas fa-crown" style={{ color: '#fbbf24', width: 16, textAlign: 'center', fontSize: 11 }} />
+                      Admin Panel
                     </button>
                   )}
 
@@ -322,13 +327,16 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#818cf8', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginBottom: 2,
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                      background: 'transparent', border: 'none', color: '#818cf8', borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-file-import" style={{ color: '#818cf8', width: 14 }} />
-                    Import Data ({allowNonCsvImport ? 'CSV / PDF' : 'CSV Only'})
+                    <i className="fas fa-file-import" style={{ color: '#818cf8', width: 16, textAlign: 'center', fontSize: 11 }} />
+                    Import Data ({allowNonCsvImport ? 'CSV/PDF' : 'CSV'})
                   </button>
 
                   {/* App Settings item */}
@@ -337,14 +345,15 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
                       background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
                       fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-cog" style={{ color: '#fbbf24', width: 14 }} />
+                    <i className="fas fa-cog" style={{ color: '#fbbf24', width: 16, textAlign: 'center', fontSize: 11 }} />
                     App Settings
                   </button>
 
@@ -354,13 +363,16 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', color: '#fbbf24', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginTop: 2,
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                      background: 'transparent', border: 'none', color: '#fbbf24', borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 14 }} />
-                    Rate &amp; Review App
+                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 16, textAlign: 'center', fontSize: 11 }} />
+                    Rate &amp; Review
                   </button>
 
                   {/* Refresh Data item */}
@@ -369,16 +381,19 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
                       background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
                       fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-sync-alt" style={{ color: '#34d399', width: 14 }} />
+                    <i className="fas fa-sync-alt" style={{ color: '#34d399', width: 16, textAlign: 'center', fontSize: 11 }} />
                     Refresh Data
                   </button>
+
+                  <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '3px 4px' }} />
 
                   {/* Logout item */}
                   <button
@@ -386,12 +401,15 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px',
-                      background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5',
-                      borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left', marginTop: 4,
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
+                      background: 'transparent', border: 'none', color: '#fca5a5',
+                      borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 14 }} />
+                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 16, textAlign: 'center', fontSize: 11 }} />
                     Log Out
                   </button>
                 </div>

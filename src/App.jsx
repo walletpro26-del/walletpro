@@ -457,9 +457,9 @@ export default function App() {
             }
           }}
           style={{
-            margin: '12px 14px 4px 14px',
-            padding: '10px 14px',
-            borderRadius: '12px',
+            margin: '8px 12px 2px 12px',
+            padding: '6px 12px',
+            borderRadius: '10px',
             background: appConfig.announcementType === 'warning'
               ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.22))'
               : appConfig.announcementType === 'success'
@@ -562,6 +562,9 @@ export default function App() {
             uid={authState.uid}
             isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
             allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
+            subscription={subscriptionState}
+            appConfig={appConfig}
+            onOpenSubscriptionModal={() => setShowSubscriptionModal(true)}
             onOpenImport={() => setShowBankSearch(true)}
             onOpenMerge={() => setShowBankMergeModal(true)}
           />

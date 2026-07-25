@@ -82,12 +82,12 @@ export default function TransactionList({ items = [], title, onSelect }) {
   return (
     <div>
       {/* Section Title + Inline Search Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-        <div className="section-title" style={{ margin: 0 }}>{title || 'Recent Activity'}</div>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+        <div className="section-title" style={{ margin: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>{title || 'Recent Activity'}</div>
+        <div style={{ position: 'relative', flex: '1 1 auto', maxWidth: 240, marginLeft: 'auto' }}>
           <i
             className="fas fa-search"
-            style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}
           />
           <input
             type="text"
@@ -95,7 +95,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search..."
             style={{
-              paddingLeft: 26,
+              paddingLeft: 28,
               paddingRight: searchTerm ? 26 : 10,
               paddingTop: 5,
               paddingBottom: 5,
@@ -106,7 +106,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
               background: 'var(--bg-subtle)',
               color: 'var(--text-primary)',
               outline: 'none',
-              width: 120,
+              width: '100%',
               transition: 'all 0.2s ease',
             }}
           />
@@ -246,6 +246,8 @@ export default function TransactionList({ items = [], title, onSelect }) {
                     ) : null}
                   </div>
                 )}
+                {/* Right chevron indicator */}
+                <i className="fas fa-chevron-right txn-chevron" />
               </div>
             </li>
           )
