@@ -19,7 +19,7 @@ import {
   removeBankAlias,
   findDuplicateBankCandidates,
 } from '../api/entityNormalizer'
-import { loadSnapshot, saveSnapshot } from '../api/localCache'
+import { loadSnapshot, saveSnapshot, invalidateSnapshot } from '../api/localCache'
 
 export default function PersonMergeModal({
   allExpenses = [],
@@ -426,6 +426,10 @@ export default function PersonMergeModal({
           `🎉 Successfully merged Person "${src}" → "${tgt}" (${totalUpdated} records updated in database)!`
         )
       }
+
+      invalidateSnapshot('expenses', currentUid)
+      invalidateSnapshot('lending', currentUid)
+      invalidateSnapshot('bank', currentUid)
 
       setSrcName('')
       setTargetName('')

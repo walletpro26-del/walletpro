@@ -4,7 +4,10 @@ import { addExpense, deleteExpense, getAllExpenses } from '../api/expenses'
 import { addLending, deleteLending, getAllLending } from '../api/lending'
 import { loadSnapshot } from '../api/localCache'
 import { importTaskQueue } from '../api/importTaskQueue'
-import { MAX_PDF_SIZE_BYTES } from '../api/pdfExtractor'
+import {
+  MAX_PDF_SIZE_BYTES,
+  getCachedConvertedStatements, deleteCachedConvertedStatement, downloadConvertedCsv
+} from '../api/pdfExtractor'
 import { checkCsvRateLimit, recordCsvImportSuccess, getCsvImportStats } from '../api/csvRateLimit'
 import { normalizePersonName } from '../api/entityNormalizer'
 
@@ -17,6 +20,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
   const [error, setError] = useState('')
   const [successInfo, setSuccessInfo] = useState(null) // { message, batchId, docIds, mode, count }
   const [csvStats, setCsvStats] = useState(() => getCsvImportStats())
+  const [cachedStatements, setCachedStatements] = useState(() => getCachedConvertedStatements())
   
   // Existing user transactions for intelligent duplicate detection
   const [existingExpenses, setExistingExpenses] = useState([])
@@ -786,7 +790,69 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                 )}
               </div>
 
-              {/* Import History & Undo Section */}
+              {/* Previously AI-Converted Statements (Local Device Cache) */}
+              {cachedStatements && cachedStatements.length > 0 && (
+                <div style={{ marginTop: 12, background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>📋 Previously AI-Converted Statements</span>
+                      <span style={{ fontSize: 9.5, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                        {cachedStatements.length} saved
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 9.5, color: '#64748b' }}>
+                      Zero AI credits &amp; zero Firebase usage
+                    </div>
+                  </div>
+
+                  <div className="custom-scrollbar" style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {cachedStatements.map((c) => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-card, #ffffff)', borderRadius: 8, border: '1px solid var(--border-color, #e2e8f0)' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary, #1e293b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            📄 {c.fileName}
+                          </div>
+                          <div style={{ fontSize: 9.5, color: '#64748b' }}>
+                            {new Date(c.convertedDate).toLocaleDateString('en-IN')} • {c.recordCount} records ({c.mode})
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => downloadConvertedCsv(c.items, c.fileName, c.mode || mode)}
+                            style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #10b981', background: '#ecfdf5', color: '#059669', fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                            title="Download CSV file to phone"
+                          >
+                            <i className="fas fa-download" style={{ fontSize: 9 }} /> CSV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                processExtractedItems(c.items)
+                              } catch (err) {
+                                setError('Failed to load cached statement: ' + err?.message)
+                              }
+                            }}
+                            style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: '#6366f1', color: '#fff', fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                            title="Instantly re-import transactions without AI"
+                          >
+                            <i className="fas fa-bolt" style={{ fontSize: 9 }} /> Re-Import
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCachedStatements(deleteCachedConvertedStatement(c.id))}
+                            style={{ padding: '3px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}
+                            title="Remove from local device cache"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {importHistory.length > 0 && (
                 <div style={{ marginTop: 14, borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: 12 }}>
                   <div

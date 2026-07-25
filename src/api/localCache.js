@@ -47,6 +47,32 @@ export function saveSnapshot(type, data, uid = '') {
 }
 
 /**
+ * Check if the cached snapshot is still fresh (default 3 minutes TTL)
+ */
+export function isCacheFresh(type, uid = '', maxAgeMs = 3 * 60 * 1000) {
+  try {
+    const key = getKey(type, uid)
+    const tsStr = localStorage.getItem(key + '_ts')
+    if (!tsStr) return false
+    const ts = parseInt(tsStr, 10)
+    if (isNaN(ts)) return false
+    return (Date.now() - ts) < maxAgeMs
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Invalidate snapshot timestamp so the next call fetches fresh data from server
+ */
+export function invalidateSnapshot(type, uid = '') {
+  try {
+    const key = getKey(type, uid)
+    localStorage.removeItem(key + '_ts')
+  } catch {}
+}
+
+/**
  * Load last-known data snapshot from local storage
  * @param {'expenses'|'lending'|'bank'} type
  * @param {string} uid

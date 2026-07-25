@@ -4,7 +4,7 @@ import {
   query, orderBy, limit, Timestamp, where,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
-import { saveSnapshot, loadSnapshot, addPending } from './localCache'
+import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot } from './localCache'
 
 const COL = 'lending'
 
@@ -73,6 +73,8 @@ function fromFirestore(docSnap) {
 
 export async function addLending(data) {
   const fsData = toFirestore(data)
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('lending', currentUid)
   try {
     const docRef = await addDoc(collection(db, COL), fsData)
     if (data.fileData) {
@@ -86,7 +88,6 @@ export async function addLending(data) {
         collection: COL,
         data: { ...data, _offline: true },
       })
-      const currentUid = auth.currentUser?.uid || ''
       const snapshot = loadSnapshot('lending', currentUid) || []
       const norm = normalizeLendingType(data.type || 'Lend')
       let label = data.type || 'Loan Given'
@@ -124,6 +125,8 @@ export async function addLending(data) {
 export async function updateLending(id, data) {
   const ref = doc(db, COL, id)
   const fsData = toFirestore(data)
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('lending', currentUid)
   delete fsData.fileData
   try {
     await updateDoc(ref, fsData)
@@ -142,6 +145,8 @@ export async function updateLending(id, data) {
 }
 
 export async function deleteLending(id) {
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('lending', currentUid)
   try {
     await deleteAttachmentChunks(COL, id)
     await deleteDoc(doc(db, COL, id))
@@ -160,9 +165,17 @@ export async function getRecentLending(n = 20) {
   return all.slice(0, n)
 }
 
-export async function getAllLending() {
+export async function getAllLending(forceRefresh = false) {
   const currentUid = auth.currentUser?.uid || ''
   if (!currentUid) return []
+
+  // Check if local cache is fresh (default 3 min TTL) to save Firestore read quota
+  if (!forceRefresh && isCacheFresh('lending', currentUid)) {
+    const cached = loadSnapshot('lending', currentUid)
+    if (cached && cached.length > 0) {
+      return cached.sort((a, b) => b.dateObj - a.dateObj)
+    }
+  }
 
   try {
     // Fetch user-scoped lending records

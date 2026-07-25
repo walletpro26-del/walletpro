@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { extractValidGeminiKeys } from '../api/pdfExtractor'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
@@ -60,6 +61,7 @@ export default function AdminPanel({ auth, onClose }) {
   const [cashfreeMode, setCashfreeMode] = useState('sandbox')
   const [cashfreeAppId, setCashfreeAppId] = useState('')
   const [allowNonCsvImport, setAllowNonCsvImport] = useState(true)
+  const [geminiApiKeys, setGeminiApiKeys] = useState('')
 
   useEffect(() => {
     loadConfig()
@@ -94,6 +96,7 @@ export default function AdminPanel({ auth, onClose }) {
       setCashfreeMode(cfg.cashfreeMode || 'sandbox')
       setCashfreeAppId(cfg.cashfreeAppId || '')
       setAllowNonCsvImport(cfg.allowNonCsvImport !== false)
+      setGeminiApiKeys(cfg.geminiApiKeys || '')
     } catch (err) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
@@ -253,9 +256,10 @@ export default function AdminPanel({ auth, onClose }) {
         cashfreeMode,
         cashfreeAppId,
         allowNonCsvImport,
+        geminiApiKeys,
       })
 
-      showToast('✅ Configuration saved successfully!')
+      showToast('✅ Configuration & AI API Keys saved successfully!')
     } catch (err) {
       setError(err?.message || 'Failed to save configuration')
     }
@@ -346,8 +350,8 @@ export default function AdminPanel({ auth, onClose }) {
             className="modal-close"
             style={{
               position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)',
-              color: '#fff', width: 26, height: 26, borderRadius: '50%', border: 'none',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
+              color: '#fff', width: 32, height: 32, borderRadius: '50%', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
             }}
             onClick={onClose}
             aria-label="Close"
@@ -898,6 +902,45 @@ export default function AdminPanel({ auth, onClose }) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Gemini AI Multi-Key Setup */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-brain" style={{ color: '#6366f1' }} />
+                    <span>🤖 Multiple Gemini AI API Keys (Auto-Rotation &amp; Failover)</span>
+                  </div>
+                  {(() => {
+                    const validCount = extractValidGeminiKeys(geminiApiKeys).length
+                    return (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800,
+                        background: validCount > 0 ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                        color: validCount > 0 ? '#10b981' : '#d97706',
+                        padding: '2px 8px', borderRadius: 99,
+                        border: validCount > 0 ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                      }}>
+                        {validCount > 0 ? `🟢 ${validCount} API Keys Configured` : '⚡ Using App Fallback Keys'}
+                      </span>
+                    )
+                  })()}
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
+                  Setup multiple Google Gemini API keys (comma or newline separated). If Key #1 hits rate limits (429) or quota errors, the app automatically switches to Key #2, Key #3, etc. for seamless AI parsing!
+                </p>
+                <textarea
+                  rows={3}
+                  value={geminiApiKeys}
+                  onChange={(e) => setGeminiApiKeys(e.target.value)}
+                  placeholder="Paste multiple Google AI Studio keys here (e.g. AIzaSyA123..., AIzaSyB456..., AIzaSyC789...)"
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 11, fontFamily: 'monospace',
+                    borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)',
+                    background: 'var(--bg-card, #ffffff)', color: 'var(--text-primary, #1e293b)',
+                    boxSizing: 'border-box', resize: 'vertical',
+                  }}
+                />
               </div>
 
               {/* Maintenance & Controls */}

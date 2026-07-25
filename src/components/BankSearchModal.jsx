@@ -5,7 +5,10 @@ import { collection, getDocs, query, where, writeBatch, doc, addDoc, Timestamp, 
 import { saveSnapshot, loadSnapshot } from '../api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
 
-import { parsePdfWithGemini, MAX_PDF_SIZE_BYTES } from '../api/pdfExtractor'
+import {
+  parsePdfWithGemini, MAX_PDF_SIZE_BYTES,
+  getCachedConvertedStatements, deleteCachedConvertedStatement, downloadConvertedCsv
+} from '../api/pdfExtractor'
 import { importTaskQueue } from '../api/importTaskQueue'
 import { checkCsvRateLimit, recordCsvImportSuccess } from '../api/csvRateLimit'
 
@@ -33,6 +36,7 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
   const [error, setError] = useState('')
   const [importSuccess, setImportSuccess] = useState('')
   const [csvPreviewData, setCsvPreviewData] = useState(null)
+  const [cachedStatements, setCachedStatements] = useState(() => getCachedConvertedStatements())
 
   // Bank Merge State
   const [showMergeModal, setShowMergeModal] = useState(false)
@@ -193,17 +197,17 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
     setError('')
     setImportSuccess('')
 
-    const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+    const isPureCsv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv'
 
-    if (isPdf) {
+    if (!isPureCsv) {
       if (!allowNonCsvImport) {
-        setError('⚠️ PDF / Non-CSV import feature is disabled by Admin. Only CSV file imports are currently permitted.')
+        setError('⚠️ Non-CSV (PDF/Excel/Image/Audio) import feature is disabled by Admin. Only CSV file imports are currently permitted.')
         return
       }
 
       if (file.size > MAX_PDF_SIZE_BYTES) {
         const mb = (file.size / (1024 * 1024)).toFixed(1)
-        setError(`⚠ PDF size (${mb} MB) exceeds the 10 MB limit. Please select a smaller PDF statement.`)
+        setError(`⚠ File size (${mb} MB) exceeds the 10 MB limit. Please select a smaller file.`)
         return
       }
 
@@ -694,6 +698,63 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
         {importSuccess && (
           <div style={{ margin: '10px 16px 0', padding: '10px 14px', background: 'var(--emerald-50)', border: '1px solid var(--emerald-500)', color: 'var(--emerald-600)', borderRadius: 'var(--radius-md)', fontSize: 12, fontWeight: 600 }}>
             {importSuccess}
+          </div>
+        )}
+
+        {/* ── Previously AI-Converted Statements (Local Device Cache) ── */}
+        {!csvPreviewData && cachedStatements && cachedStatements.length > 0 && (
+          <div style={{ margin: '10px 16px 0', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent-600)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📋 Previously AI-Converted Statements</span>
+                <span style={{ fontSize: 9.5, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                  {cachedStatements.length} cached locally
+                </span>
+              </div>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>
+                Zero AI credits &amp; zero Firebase usage
+              </div>
+            </div>
+            <div className="custom-scrollbar" style={{ maxHeight: 130, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {cachedStatements.map((c) => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-subtle)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      📄 {c.fileName}
+                    </div>
+                    <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>
+                      {new Date(c.convertedDate).toLocaleDateString('en-IN')} • {c.recordCount} transactions extracted
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => downloadConvertedCsv(c.items, c.fileName, c.mode || 'bank')}
+                      style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid var(--emerald-500)', background: 'var(--emerald-50)', color: 'var(--emerald-600)', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                      title="Download converted CSV file to phone"
+                    >
+                      <i className="fas fa-download" style={{ fontSize: 9 }} /> CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => processBankExtractedItems(c.items)}
+                      style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: 'var(--accent-600)', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                      title="Instantly re-import transactions into App without AI"
+                    >
+                      <i className="fas fa-bolt" style={{ fontSize: 9 }} /> Re-Import
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCachedStatements(deleteCachedConvertedStatement(c.id))}
+                      style={{ padding: '3px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer' }}
+                      title="Remove from local cache"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

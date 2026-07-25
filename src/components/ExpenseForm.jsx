@@ -246,6 +246,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         {/* For Whom */}
         <MultiSelectCombobox 
           label="For Whom? (e.g. Self, Home)"
+          title="Specify who this expense was for (e.g. Self, Family, Home, Friend)"
           value={form.forWhom}
           onChange={(val) => set('forWhom', val)}
           suggestions={suggestions?.forWhom || []}
@@ -256,6 +257,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           <div style={{ flex: 1 }}>
             <MultiSelectCombobox 
               label="Category"
+              title="Select spending category for analytics (Food, Fuel, Utility, Medical, Shopping)"
               value={form.category}
               onChange={(val) => set('category', val)}
               suggestions={Array.from(new Set([
@@ -265,21 +267,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               ]))}
             />
           </div>
-          <div className="float-group" style={{ flex: 1 }}>
+          <div className="float-group" style={{ flex: 1 }} title="Select method used to pay for this expense">
             <select className="float-input" value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)}>
               <option value="Cash">Cash</option>
               <option value="Online/UPI">Online/UPI</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Card">Card</option>
             </select>
-            <label className="float-label active">Payment Mode</label>
+            <label className="float-label active">Payment Mode ℹ️</label>
             <i className="select-chevron fas fa-chevron-down"></i>
           </div>
         </div>
 
         {/* Details */}
         <MultiSelectCombobox 
-          label="Details (e.g. Lunch)"
+          label="Details (e.g. Swiggy Order, Fuel)"
+          title="Brief description or vendor particulars"
           value={form.details}
           onChange={(val) => set('details', val)}
           suggestions={suggestions?.details || []}

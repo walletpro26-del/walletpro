@@ -292,6 +292,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         {/* Person */}
         <MultiSelectCombobox 
           label="Person Name"
+          title="Select or enter person's name for loan tracking (e.g. Rahul, Father, Office)"
           value={form.person}
           onChange={(val) => set('person', val)}
           suggestions={Array.from(new Set([
@@ -302,9 +303,9 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
 
         {/* Mobile No & Email */}
         <div className="compact-row">
-          <div className="compact-input-block" style={{ flex: 1 }}>
+          <div className="compact-input-block" style={{ flex: 1 }} title="WhatsApp number for sending payment reminders">
             <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 10 }} /> Mobile (WhatsApp)
+              <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 10 }} /> Mobile (WhatsApp) ℹ️
             </label>
             <input
               type="tel"
@@ -313,9 +314,9 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
               onChange={(e) => set('mobileNo', e.target.value)}
             />
           </div>
-          <div className="compact-input-block" style={{ flex: 1 }}>
+          <div className="compact-input-block" style={{ flex: 1 }} title="Email address for digital receipt or notifications">
             <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 9 }} /> Email Address
+              <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 9 }} /> Email Address ℹ️
             </label>
             <input
               type="email"
@@ -327,7 +328,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         </div>
 
         {/* Remarks */}
-        <div className="float-group">
+        <div className="float-group" title="Optional details, reason, or repayment note">
           <input
             type="text"
             className="float-input"
@@ -335,7 +336,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             value={form.remarks}
             onChange={(e) => set('remarks', e.target.value)}
           />
-          <label className="float-label">Remarks</label>
+          <label className="float-label">Remarks ℹ️</label>
         </div>
 
         <button type="submit" className="btn-primary emerald" disabled={loading}>

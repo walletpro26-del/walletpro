@@ -5,7 +5,7 @@
 
 import { db } from '../firebase'
 import { collection, getDocs, getDocsFromCache, query, where, deleteDoc, doc } from 'firebase/firestore'
-import { saveSnapshot, loadSnapshot } from './localCache'
+import { saveSnapshot, loadSnapshot, isCacheFresh, invalidateSnapshot } from './localCache'
 
 export function parseSafeDate(d) {
   if (!d) return new Date()
@@ -67,12 +67,20 @@ function toRecord(data) {
  * Fetch bank transactions from Firestore with multi-layer fallback & user-scoping logic.
  * Flow: server query → Firestore IndexedDB cache → localStorage cache
  */
-export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmin = false) {
+export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmin = false, forceRefresh = false) {
   const allDocsMap = new Map()
 
   if (!currentUid) {
     const cached = loadSnapshot('bank') || loadSnapshot('bank', '')
     return (cached || []).map((r) => toRecord({ ...r, id: r.id || 'cached' }))
+  }
+
+  // Check if local snapshot is fresh (default 3 min TTL) to save Firestore reads
+  if (!forceRefresh && isCacheFresh('bank', currentUid)) {
+    const cached = loadSnapshot('bank', currentUid)
+    if (cached && cached.length > 0) {
+      return cached.map((r) => toRecord({ ...r, id: r.id || 'cached' })).sort((a, b) => b.date - a.date)
+    }
   }
 
   // 1. User-scoped query by 'userId' field
@@ -97,8 +105,8 @@ export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmi
     })
   }
 
-  // 3. Admin or general fallback: full collection (tries server, then IndexedDB cache)
-  if (isAdmin || allDocsMap.size === 0) {
+  // 3. Admin fallback ONLY (never run full collection query for regular users to protect Firestore read limits)
+  if (isAdmin && allDocsMap.size === 0) {
     const snapAll = await safeGetDocs(
       query(collection(db, 'bankTransactions'))
     )
@@ -106,7 +114,7 @@ export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmi
       snapAll.docs.forEach((d) => {
         const data = d.data()
         const docUid = data.userId || data.uid || ''
-        if (isAdmin || !docUid || docUid === currentUid) {
+        if (!docUid || docUid === currentUid) {
           if (!allDocsMap.has(d.id)) {
             allDocsMap.set(d.id, { id: d.id, ...data })
           }
@@ -135,5 +143,6 @@ export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmi
  */
 export async function deleteBankTransaction(id) {
   if (!id) return
+  invalidateSnapshot('bank')
   await deleteDoc(doc(db, 'bankTransactions', id))
 }

@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isAdminEmail } from '../api/subscription'
+import { extractValidGeminiKeys } from '../api/pdfExtractor'
 
 export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription, onOpenRatingModal }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
   const [currency, setCurrency] = useState(localStorage.getItem('wv_currency') || localStorage.getItem('wp_currency') || '₹')
   const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
   const [gasUrl, setGasUrl] = useState(localStorage.getItem('wv_gas_url') || localStorage.getItem('wp_gas_url') || import.meta.env.VITE_GAS_URL || '')
-  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('wv_custom_gemini_api_key') || '')
+  const [geminiApiKey, setGeminiApiKey] = useState(
+    localStorage.getItem('wv_custom_gemini_api_keys') || localStorage.getItem('wv_custom_gemini_api_key') || ''
+  )
 
   const isAdmin = subscription?.isAdmin || isAdminEmail(auth?.email)
 
@@ -21,8 +24,10 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
     localStorage.setItem('wv_startScreen', startScreen)
     localStorage.setItem('wv_gas_url', gasUrl)
     if (geminiApiKey.trim()) {
+      localStorage.setItem('wv_custom_gemini_api_keys', geminiApiKey.trim())
       localStorage.setItem('wv_custom_gemini_api_key', geminiApiKey.trim())
     } else {
+      localStorage.removeItem('wv_custom_gemini_api_keys')
       localStorage.removeItem('wv_custom_gemini_api_key')
     }
     document.documentElement.setAttribute('data-theme', theme)
@@ -224,20 +229,66 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
             </div>
           </div>
 
+          {/* App Installation Status (PWA) */}
+          <div style={{ padding: '8px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="fas fa-mobile-alt" style={{ color: '#6366f1' }} />
+                <span>📱 App Installation Status</span>
+              </div>
+              <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
+                {typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
+                  ? 'Installed & running as a native standalone app'
+                  : 'Running in Web Browser mode'}
+              </div>
+            </div>
+            {typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) ? (
+              <span style={{ fontSize: 9.5, fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: 99, border: '1px solid #6ee7b7' }}>
+                🟢 Installed
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('wv_install_banner_dismissed')
+                  alert('💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or tap browser menu -> "Add to Home Screen".')
+                  onClose?.()
+                }}
+                style={{ fontSize: 10, fontWeight: 800, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '3px 8px', borderRadius: 6, border: 'none', cursor: 'pointer' }}
+              >
+                📲 Install App
+              </button>
+            )}
+          </div>
+
           {/* Custom Gemini AI API Key Input */}
           <div>
-            <label style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-              🔑 Custom Gemini AI API Key (Optional)
-            </label>
-            <input
-              type="password"
-              placeholder="AIzaSy... (Google AI Studio Key)"
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                🔑 Custom Gemini AI API Keys (Optional)
+              </label>
+              {(() => {
+                const count = extractValidGeminiKeys(geminiApiKey).length
+                return count > 0 ? (
+                  <span style={{ fontSize: 9, fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 99 }}>
+                    🟢 {count} Key{count > 1 ? 's' : ''} Active
+                  </span>
+                ) : null
+              })()}
+            </div>
+            <textarea
+              rows={2}
+              placeholder="Paste multiple AI Studio keys (comma/newline separated)..."
               value={geminiApiKey}
               onChange={(e) => setGeminiApiKey(e.target.value)}
-              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 11, background: 'var(--bg-card)' }}
+              style={{
+                width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)',
+                fontSize: 11, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'monospace',
+                boxSizing: 'border-box', resize: 'vertical'
+              }}
             />
             <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
-              Supply your own Google AI Studio key to bypass 429 quota limits.
+              Add multiple Google AI Studio keys to enable automatic key failover if one key hits rate limits (429).
             </div>
           </div>
 

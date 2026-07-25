@@ -18,19 +18,48 @@ export const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024
 export const PDF_RATE_LIMIT_HOURS = 24
 
 /**
- * Get available Gemini API Keys (custom key + env key)
+ * Helper to extract all valid Google Gemini API Keys from any text or string array
+ * Matches standard Google API Key pattern starting with 'AIzaSy' (39 chars long)
+ */
+export function extractValidGeminiKeys(input) {
+  if (!input) return []
+  const str = Array.isArray(input) ? input.join('\n') : String(input)
+  const matches = str.match(/AIzaSy[A-Za-z0-9_-]{33}/g) || []
+  return Array.from(new Set(matches))
+}
+
+/**
+ * Get available Gemini API Keys (App Config + Custom Local Keys + Env Keys + Fallbacks)
+ * Automatically aggregates multiple keys for seamless failover & rotation!
  */
 export function getGeminiApiKeys() {
-  const keys = []
-  const customKey = localStorage.getItem('wv_custom_gemini_api_key')
-  if (customKey && customKey.trim().startsWith('AIzaSy')) {
-    keys.push(customKey.trim())
-  }
-  const envKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBsdYsWG-1eRUAOT5XPFl9AqHSPY9D636c'
-  if (envKey && !keys.includes(envKey.trim())) {
-    keys.push(envKey.trim())
-  }
-  return keys
+  const keysSet = new Set()
+
+  // 1. User/Admin local custom keys (single key or multiple keys text)
+  const localKeys1 = localStorage.getItem('wv_custom_gemini_api_keys')
+  const localKeys2 = localStorage.getItem('wv_custom_gemini_api_key')
+  extractValidGeminiKeys(localKeys1).forEach((k) => keysSet.add(k))
+  extractValidGeminiKeys(localKeys2).forEach((k) => keysSet.add(k))
+
+  // 2. Admin configured keys from appConfig (cached in localStorage)
+  const adminKeys = localStorage.getItem('wv_admin_gemini_api_keys')
+  extractValidGeminiKeys(adminKeys).forEach((k) => keysSet.add(k))
+
+  try {
+    const cachedConfigStr = localStorage.getItem('wv_cached_app_config') || '{}'
+    const cachedConfig = JSON.parse(cachedConfigStr)
+    if (cachedConfig?.geminiApiKeys) {
+      extractValidGeminiKeys(cachedConfig.geminiApiKeys).forEach((k) => keysSet.add(k))
+    }
+  } catch (e) {}
+
+  // 4. Environment variables fallback
+  const envKeys1 = import.meta.env.VITE_GEMINI_API_KEYS
+  const envKeys2 = import.meta.env.VITE_GEMINI_API_KEY
+  extractValidGeminiKeys(envKeys1).forEach((k) => keysSet.add(k))
+  extractValidGeminiKeys(envKeys2).forEach((k) => keysSet.add(k))
+
+  return Array.from(keysSet)
 }
 
 /**
@@ -68,6 +97,134 @@ export function checkPdfRateLimit(isAdmin = false) {
 
 export function recordPdfImportSuccess() {
   localStorage.setItem('wv_last_pdf_import_time', String(Date.now()))
+}
+
+/**
+ * Auto-converts extracted JSON items to standard CSV format and triggers a file download to phone/device.
+ */
+export function downloadConvertedCsv(items, sourceFileName = 'statement', mode = 'bank') {
+  if (!Array.isArray(items) || items.length === 0) return null
+
+  let csvContent = '\uFEFF' // UTF-8 BOM for Excel compatibility
+  function escapeCSV(val) {
+    if (val === null || val === undefined) return '""'
+    const str = String(val).replace(/"/g, '""')
+    return `"${str}"`
+  }
+
+  if (mode === 'bank') {
+    csvContent += 'Date,Bank,Description,Debit,Credit,Balance\n'
+    items.forEach(b => {
+      const dStr = b.date ? (b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10)) : ''
+      csvContent += [
+        escapeCSV(dStr),
+        escapeCSV(b.bank || ''),
+        escapeCSV(b.description || ''),
+        escapeCSV(b.debit || 0),
+        escapeCSV(b.credit || 0),
+        escapeCSV(b.balance || 0)
+      ].join(',') + '\n'
+    })
+  } else if (mode === 'expense') {
+    csvContent += 'Date,Category,For Whom,Details,Amount,Payment Mode,Remarks\n'
+    items.forEach(e => {
+      const dStr = e.date ? (e.date instanceof Date ? e.date.toISOString().slice(0, 10) : String(e.date).slice(0, 10)) : ''
+      csvContent += [
+        escapeCSV(dStr),
+        escapeCSV(e.category || ''),
+        escapeCSV(e.forWhom || ''),
+        escapeCSV(e.details || ''),
+        escapeCSV(e.amount || 0),
+        escapeCSV(e.paymentMode || ''),
+        escapeCSV(e.remarks || '')
+      ].join(',') + '\n'
+    })
+  } else if (mode === 'lending') {
+    csvContent += 'Date,Type,Person,Amount,Remarks\n'
+    items.forEach(l => {
+      const dStr = l.date ? (l.date instanceof Date ? l.date.toISOString().slice(0, 10) : String(l.date).slice(0, 10)) : ''
+      csvContent += [
+        escapeCSV(dStr),
+        escapeCSV(l.type || ''),
+        escapeCSV(l.person || ''),
+        escapeCSV(l.amount || 0),
+        escapeCSV(l.remarks || '')
+      ].join(',') + '\n'
+    })
+  }
+
+  const cleanBaseName = (sourceFileName || 'statement').replace(/\.[^/.]+$/, "")
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const outName = `WalletVibe_Converted_${cleanBaseName}_${todayStr}.csv`
+
+  try {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = outName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.warn('Auto CSV download trigger failed:', err)
+  }
+
+  return { csvContent, outName }
+}
+
+/**
+ * Saves AI-converted statement in local device cache to prevent re-parsing & save AI credits / Firebase quota.
+ */
+export function saveConvertedStatementToCache(fileName, items, csvContent, mode = 'bank') {
+  try {
+    const existingJson = localStorage.getItem('wv_cached_ai_converted_statements') || '[]'
+    let cacheList = JSON.parse(existingJson)
+    if (!Array.isArray(cacheList)) cacheList = []
+
+    // Deduplicate if same file converted recently
+    cacheList = cacheList.filter(c => c.fileName !== fileName)
+
+    const newItem = {
+      id: `ai_conv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      fileName,
+      mode,
+      convertedDate: new Date().toISOString(),
+      recordCount: items.length,
+      csvContent,
+      items
+    }
+
+    cacheList.unshift(newItem)
+    if (cacheList.length > 20) cacheList = cacheList.slice(0, 20)
+
+    localStorage.setItem('wv_cached_ai_converted_statements', JSON.stringify(cacheList))
+    return newItem
+  } catch (err) {
+    console.warn('Cache save failed:', err)
+    return null
+  }
+}
+
+export function getCachedConvertedStatements() {
+  try {
+    const existingJson = localStorage.getItem('wv_cached_ai_converted_statements') || '[]'
+    const cacheList = JSON.parse(existingJson)
+    return Array.isArray(cacheList) ? cacheList : []
+  } catch {
+    return []
+  }
+}
+
+export function deleteCachedConvertedStatement(id) {
+  try {
+    const list = getCachedConvertedStatements().filter(c => c.id !== id)
+    localStorage.setItem('wv_cached_ai_converted_statements', JSON.stringify(list))
+    return list
+  } catch {
+    return []
+  }
 }
 
 function fileToBase64(file) {
@@ -257,17 +414,23 @@ Return ONLY raw JSON without markdown or markdown code fences.`
   }
 
   const apiKeys = getGeminiApiKeys()
+  if (!apiKeys || apiKeys.length === 0) {
+    throw new Error('⚠️ No Gemini AI API Key configured. Please add your free Gemini AI API Key(s) in Admin Panel or Settings Modal to enable document parsing.')
+  }
+
   let lastError = null
   let rateLimitErrorOccurred = false
 
-  onProgress?.('Step 2/3: Connecting to Gemini AI Flash models...', 35)
+  onProgress?.(`Step 2/3: Rotating across ${apiKeys.length} Gemini AI API key(s)...`, 35)
 
   // Try across API keys & Flash models until one succeeds
+  let keyIndex = 0
   for (const apiKey of apiKeys) {
+    keyIndex++
     for (const modelName of FLASH_MODELS) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
 
-      onProgress?.(`Extracting via ${modelName}...`, 55)
+      onProgress?.(`AI Extraction via Key #${keyIndex} of ${apiKeys.length} (${modelName})...`, 55)
 
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
@@ -315,7 +478,13 @@ Return ONLY raw JSON without markdown or markdown code fences.`
             recordPdfImportSuccess()
           }
 
-          onProgress?.('Extraction completed successfully!', 100)
+          // Auto-download converted CSV file to user's phone/device & save in local cache
+          const { csvContent } = downloadConvertedCsv(items, file.name, mode) || {}
+          if (csvContent) {
+            saveConvertedStatementToCache(file.name, items, csvContent, mode)
+          }
+
+          onProgress?.('Extraction completed & saved as CSV to device!', 100)
           return items
         } catch (err) {
           lastError = err

@@ -14,6 +14,7 @@ export default function MultiSelectCombobox({
   suggestions = [],
   placeholder = ' ',
   allowMulti = true,   // Show the multi-select toggle option
+  title = '',
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -156,7 +157,7 @@ export default function MultiSelectCombobox({
   )
 
   return (
-    <div className="float-group" ref={containerRef} style={open ? { zIndex: 100 } : undefined}>
+    <div className="float-group" ref={containerRef} style={open ? { zIndex: 100 } : undefined} title={title || label}>
       <input
         type="text"
         className="float-input"

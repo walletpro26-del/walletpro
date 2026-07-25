@@ -199,6 +199,54 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
         ].join(',') + '\n'
       })
 
+    } else if (scope === 'expense') {
+      fileName = `WalletVibe_Expenses_Full_${toYYYYMMDD(new Date())}.csv`
+      csvContent += '=== WALLETVIBE ALL EXPENSES EXPORT ===\n'
+      csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+      csvContent += 'Date,For Whom,Category,Details,Amount (INR),Payment Mode,Remarks\n'
+      ;(allExpenses || []).forEach(e => {
+        const dStr = e.dateObj ? toYYYYMMDD(e.dateObj) : (e.date ? e.date.slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(dStr),
+          escapeCSV(e.forWhom || 'Self'),
+          escapeCSV(e.category || ''),
+          escapeCSV(e.details || ''),
+          escapeCSV(e.amount || 0),
+          escapeCSV(e.paymentMode || 'Cash'),
+          escapeCSV(e.remarks || '')
+        ].join(',') + '\n'
+      })
+    } else if (scope === 'lending') {
+      fileName = `WalletVibe_Lending_Full_${toYYYYMMDD(new Date())}.csv`
+      csvContent += '=== WALLETVIBE ALL LENDING & BORROWING EXPORT ===\n'
+      csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+      csvContent += 'Date,Type,Person,Amount (INR),Remarks\n'
+      ;(allLending || []).forEach(l => {
+        const dStr = l.dateObj ? toYYYYMMDD(l.dateObj) : (l.date ? l.date.slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(dStr),
+          escapeCSV(l.label || l.type || ''),
+          escapeCSV(l.person || ''),
+          escapeCSV(l.amount || 0),
+          escapeCSV(l.remarks || '')
+        ].join(',') + '\n'
+      })
+    } else if (scope === 'bank') {
+      fileName = `WalletVibe_BankTransactions_Full_${toYYYYMMDD(new Date())}.csv`
+      csvContent += '=== WALLETVIBE ALL BANK TRANSACTIONS EXPORT ===\n'
+      csvContent += `Generated Date,${toYYYYMMDD(new Date())}\n\n`
+      csvContent += 'Date,Bank,Description,Debit (INR),Credit (INR),Balance (INR)\n'
+      ;(bankRecords || []).forEach(b => {
+        const dStr = b.dateObj ? toYYYYMMDD(b.dateObj) : (b.date ? String(b.date).slice(0, 10) : '')
+        csvContent += [
+          escapeCSV(dStr),
+          escapeCSV(b.bank || ''),
+          escapeCSV(b.description || ''),
+          escapeCSV(b.debit || 0),
+          escapeCSV(b.credit || 0),
+          escapeCSV(b.balance || 0)
+        ].join(',') + '\n'
+      })
     } else {
       // Current Range Export
       const rangeLabel = activeRange === 'allTime' ? 'AllTime' : (startDate && endDate ? `${startDate}_to_${endDate}` : activeRange)
@@ -262,14 +310,17 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = (targetModule = 'range') => {
     setDownloading(true)
     try {
       const doc = new jsPDF()
 
+      const activeModule = (targetModule === 'expense' || targetModule === 'lending' || targetModule === 'bank') ? targetModule : reportType
+      const isFullDoc = targetModule === 'full'
+
       // Set document properties
       doc.setProperties({
-        title: `WalletVibe Report — ${reportType === 'expense' ? 'Expenses' : 'Lend / Borrow'}`,
+        title: `WalletVibe Report — ${isFullDoc ? 'Full Database' : activeModule === 'expense' ? 'Expenses' : activeModule === 'lending' ? 'Lend / Borrow' : 'Bank Transactions'}`,
         author: 'WalletVibe App',
       })
 
@@ -282,13 +333,13 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(10)
       doc.setTextColor(100, 116, 139) // Slate-500 #64748b
-      doc.text('Personal Financial Statement', 14, 25)
+      doc.text(isFullDoc ? 'Full Database Financial Report' : 'Personal Financial Statement', 14, 25)
 
       // Right-aligned header metadata
       doc.setFontSize(9)
       doc.setTextColor(71, 85, 105) // Slate-600 #475569
       const generatedText = `Generated: ${new Date().toLocaleDateString('en-IN', { dateStyle: 'long' })}`
-      const typeText = `Type: ${reportType === 'expense' ? 'Expenses Statement' : 'Lend / Borrow Ledger'}`
+      const typeText = `Type: ${isFullDoc ? 'Full Database (All Modules)' : activeModule === 'expense' ? 'Expenses Statement' : activeModule === 'lending' ? 'Lend / Borrow Ledger' : 'Bank Statement'}`
       doc.text(generatedText, 196, 20, { align: 'right' })
       doc.text(typeText, 196, 25, { align: 'right' })
 
@@ -299,154 +350,226 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
 
       let currentY = 36
 
-      // Report Parameters Card
-      doc.setFillColor(248, 250, 252) // Slate-50 #f8fafc
-      doc.setDrawColor(226, 232, 240) // Slate-200 #e2e8f0
-      doc.roundedRect(14, currentY, 182, 22, 2, 2, 'FD')
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(51, 65, 85)
-      doc.text('REPORT PARAMETERS', 18, currentY + 6)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.setTextColor(71, 85, 105)
-      const periodLabel = `Period: ${isAllTime ? 'All Time' : `${formatDate(startDate)} to ${formatDate(endDate)}`}`
-      doc.text(periodLabel, 18, currentY + 12)
-
-      let filterLabel = ''
-      if (reportType === 'expense') {
-        const catStr = selectedCats.length ? selectedCats.join(', ') : 'All'
-        const whomStr = selectedWhom.length ? selectedWhom.join(', ') : 'All'
-        filterLabel = `Categories: ${catStr.length > 30 ? catStr.slice(0, 30) + '...' : catStr}  |  For Whom: ${whomStr}`
-      } else {
-        const typeStr = selectedTypes.length ? selectedTypes.join(', ') : 'All'
-        const personStr = selectedPersons.length ? selectedPersons.join(', ') : 'All'
-        filterLabel = `Types: ${typeStr}  |  Persons: ${personStr.length > 35 ? personStr.slice(0, 35) + '...' : personStr}`
-      }
-      doc.text(filterLabel, 18, currentY + 17)
-
-      currentY += 28
-
-      // Summary Stats Cards
-      if (pdfSettings.showStats) {
+      if (isFullDoc) {
+        // FULL DATABASE PDF REPORT: Render all 3 sections
         doc.setFillColor(248, 250, 252)
-        doc.setDrawColor(203, 213, 225) // Slate-300 #cbd5e1
-
-        // Left Box
-        doc.roundedRect(14, currentY, 88, 16, 2, 2, 'FD')
+        doc.setDrawColor(226, 232, 240)
+        doc.roundedRect(14, currentY, 182, 16, 2, 2, 'FD')
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(8)
+        doc.setFontSize(9)
+        doc.setTextColor(51, 65, 85)
+        doc.text('FULL DATABASE SUMMARY', 18, currentY + 6)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8.5)
         doc.setTextColor(100, 116, 139)
-        const stat1Label = reportType === 'expense' ? 'TOTAL EXPENSES' : 'TOTAL RECEIVABLE'
-        doc.text(stat1Label, 18, currentY + 5)
-        
-        doc.setFontSize(12)
-        const val1 = reportType === 'expense' ? expenseReport.total : lendingReport.receivable
-        doc.setTextColor(reportType === 'expense' ? 239 : 5, reportType === 'expense' ? 68 : 150, reportType === 'expense' ? 68 : 105)
-        doc.text(`Rs.${val1.toLocaleString('en-IN')}`, 18, currentY + 12)
-
-        // Right Box
-        doc.setFillColor(248, 250, 252)
-        doc.roundedRect(108, currentY, 88, 16, 2, 2, 'FD')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(8)
-        doc.setTextColor(100, 116, 139)
-        const stat2Label = reportType === 'expense' ? 'TOTAL TRANSACTIONS' : 'TOTAL PAYABLE'
-        doc.text(stat2Label, 112, currentY + 5)
-        
-        doc.setFontSize(12)
-        const val2Str = reportType === 'expense' ? expenseReport.items.length.toString() : `Rs.${lendingReport.payable.toLocaleString('en-IN')}`
-        doc.setTextColor(reportType === 'expense' ? 15 : 239, reportType === 'expense' ? 23 : 68, reportType === 'expense' ? 42 : 68)
-        doc.text(val2Str, 112, currentY + 12)
-
+        doc.text(`Total Records: ${allExpenses.length} Expenses | ${allLending.length} Lending Entries | ${bankRecords.length} Bank Transactions`, 18, currentY + 12)
         currentY += 22
-      }
 
-      // Breakdown Summary Tables
-      if (pdfSettings.showBreakdown) {
+        // ── SECTION 1: EXPENSES ──
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
-        doc.setTextColor(15, 23, 42)
-        doc.text('Summary Breakdown', 14, currentY + 4)
+        doc.setTextColor(49, 46, 129)
+        doc.text('1. All Expenses Statement', 14, currentY + 4)
         currentY += 8
 
-        if (reportType === 'expense') {
-          const catEntries = Object.entries(expenseReport.byCat).sort((a, b) => b[1] - a[1])
-          const whomEntries = Object.entries(expenseReport.byWhom).sort((a, b) => b[1] - a[1])
+        const expRows = (allExpenses || []).map((item) => {
+          const d = new Date(item.date || item.dateObj)
+          const dateStr = !isNaN(d.getTime()) ? `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en', { month: 'short' })}-${String(d.getFullYear()).slice(-2)}` : String(item.date || '').slice(0, 10)
+          return {
+            date: dateStr,
+            catPerson: item.category || 'Uncategorized',
+            whomType: item.forWhom || 'Self',
+            paymentBank: item.paymentMode || 'Cash',
+            remarks: [item.details, item.remarks].filter(Boolean).join(' — ') || '—',
+            amount: `-Rs.${(item.amount || 0).toLocaleString('en-IN')}`
+          }
+        })
 
-          autoTable(doc, {
-            startY: currentY,
-            margin: { left: 14, right: 108 },
-            head: [['Category', 'Total Amount']],
-            body: catEntries.map(([cat, total]) => [cat, `Rs.${total.toLocaleString('en-IN')}`]),
-            theme: 'striped',
-            headStyles: { fillColor: [49, 46, 129], fontSize: 8 },
-            bodyStyles: { fontSize: 8 },
-            columnStyles: { 1: { halign: 'right' } },
-          })
+        autoTable(doc, {
+          startY: currentY,
+          columns: [
+            { header: 'Date', dataKey: 'date' },
+            { header: 'Category', dataKey: 'catPerson' },
+            { header: 'For Whom', dataKey: 'whomType' },
+            { header: 'Payment', dataKey: 'paymentBank' },
+            { header: 'Details / Remarks', dataKey: 'remarks' },
+            { header: 'Amount', dataKey: 'amount' },
+          ],
+          body: expRows,
+          theme: 'striped',
+          headStyles: { fillColor: [49, 46, 129], fontSize: 7.5 },
+          bodyStyles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+          columnStyles: { amount: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] } },
+          margin: { left: 14, right: 14 },
+          tableWidth: 182,
+        })
 
-          autoTable(doc, {
-            startY: currentY,
-            margin: { left: 108, right: 14 },
-            head: [['For Whom', 'Total Amount']],
-            body: whomEntries.map(([whom, total]) => [whom, `Rs.${total.toLocaleString('en-IN')}`]),
-            theme: 'striped',
-            headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
-            bodyStyles: { fontSize: 8 },
-            columnStyles: { 1: { halign: 'right' } },
-          })
+        currentY = (doc.lastAutoTable.finalY || currentY) + 12
 
-          currentY = Math.max(doc.lastAutoTable.finalY || currentY, currentY) + 10
-        } else {
-          const personEntries = Object.entries(lendingReport.byPerson).sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net))
-          
-          autoTable(doc, {
-            startY: currentY,
-            head: [['Person', 'Net Balance']],
-            body: personEntries.map(([person, d]) => [
-              person, 
-              `${d.net >= 0 ? '+' : ''}Rs.${d.net.toLocaleString('en-IN')}`
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [5, 150, 105], fontSize: 8 },
-            bodyStyles: { fontSize: 8 },
-            columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
-            didParseCell: function(data) {
-              if (data.column.index === 1 && data.section === 'body') {
-                const isPositive = data.cell.raw.startsWith('+');
-                data.cell.styles.textColor = isPositive ? [5, 150, 105] : [239, 68, 68];
-              }
+        // ── SECTION 2: LENDING & BORROWING ──
+        if (currentY > 240) { doc.addPage(); currentY = 20 }
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.setTextColor(5, 150, 105)
+        doc.text('2. Lend & Borrow Ledger', 14, currentY + 4)
+        currentY += 8
+
+        const lendRows = (allLending || []).map((item) => {
+          const d = new Date(item.date || item.dateObj)
+          const dateStr = !isNaN(d.getTime()) ? `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en', { month: 'short' })}-${String(d.getFullYear()).slice(-2)}` : String(item.date || '').slice(0, 10)
+          const norm = normalizeLendingType(item.type)
+          const amt = (item.amount || 0).toLocaleString('en-IN')
+          let typeText = item.type
+          let amtStr = `Rs.${amt}`
+          if (norm === 'LEND') { typeText = 'Loan Given'; amtStr = `-Rs.${amt}` }
+          else if (norm === 'BORROW') { typeText = 'Borrowed'; amtStr = `+Rs.${amt}` }
+          else if (norm === 'THEY_RETURN') { typeText = 'Received Return'; amtStr = `+Rs.${amt}` }
+          else if (norm === 'I_RETURN') { typeText = 'I Returned'; amtStr = `-Rs.${amt}` }
+          else if (norm === 'FORGIVE') { typeText = 'Forgiven'; amtStr = `-Rs.${amt}` }
+
+          return {
+            date: dateStr,
+            catPerson: item.person || '—',
+            whomType: typeText,
+            remarks: item.remarks || '—',
+            amount: amtStr
+          }
+        })
+
+        autoTable(doc, {
+          startY: currentY,
+          columns: [
+            { header: 'Date', dataKey: 'date' },
+            { header: 'Person', dataKey: 'catPerson' },
+            { header: 'Type', dataKey: 'whomType' },
+            { header: 'Remarks', dataKey: 'remarks' },
+            { header: 'Amount', dataKey: 'amount' },
+          ],
+          body: lendRows,
+          theme: 'striped',
+          headStyles: { fillColor: [5, 150, 105], fontSize: 7.5 },
+          bodyStyles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+          columnStyles: { amount: { halign: 'right', fontStyle: 'bold' } },
+          margin: { left: 14, right: 14 },
+          tableWidth: 182,
+          didParseCell: function(data) {
+            if (data.column.dataKey === 'amount' && data.section === 'body') {
+              const isPositive = data.cell.raw.startsWith('+');
+              data.cell.styles.textColor = isPositive ? [5, 150, 105] : [239, 68, 68];
             }
-          })
-          currentY = (doc.lastAutoTable.finalY || currentY) + 10
-        }
-      }
+          }
+        })
 
-      // Detailed Transaction Ledger
-      if (pdfSettings.showLedger) {
+        currentY = (doc.lastAutoTable.finalY || currentY) + 12
+
+        // ── SECTION 3: BANK TRANSACTIONS ──
+        if (currentY > 240) { doc.addPage(); currentY = 20 }
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.setTextColor(2, 132, 199)
+        doc.text('3. Bank Transactions History', 14, currentY + 4)
+        currentY += 8
+
+        const bankPdfRows = (bankRecords || []).map((item) => {
+          const d = new Date(item.date || item.dateObj)
+          const dateStr = !isNaN(d.getTime()) ? `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en', { month: 'short' })}-${String(d.getFullYear()).slice(-2)}` : String(item.date || '').slice(0, 10)
+          const amtVal = item.debit ? parseFloat(item.debit) : parseFloat(item.credit || 0)
+          const amtStr = item.debit ? `-Rs.${amtVal.toLocaleString('en-IN')}` : `+Rs.${amtVal.toLocaleString('en-IN')}`
+          return {
+            date: dateStr,
+            catPerson: item.bank || 'Bank',
+            whomType: item.description || '—',
+            paymentBank: item.debit ? 'Debit' : 'Credit',
+            amount: amtStr,
+            balance: item.balance ? `Rs.${parseFloat(item.balance).toLocaleString('en-IN')}` : '—'
+          }
+        })
+
+        autoTable(doc, {
+          startY: currentY,
+          columns: [
+            { header: 'Date', dataKey: 'date' },
+            { header: 'Bank', dataKey: 'catPerson' },
+            { header: 'Description', dataKey: 'whomType' },
+            { header: 'Type', dataKey: 'paymentBank' },
+            { header: 'Amount', dataKey: 'amount' },
+            { header: 'Ending Balance', dataKey: 'balance' },
+          ],
+          body: bankPdfRows,
+          theme: 'striped',
+          headStyles: { fillColor: [2, 132, 199], fontSize: 7.5 },
+          bodyStyles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+          columnStyles: { amount: { halign: 'right', fontStyle: 'bold' }, balance: { halign: 'right' } },
+          margin: { left: 14, right: 14 },
+          tableWidth: 182,
+          didParseCell: function(data) {
+            if (data.column.dataKey === 'amount' && data.section === 'body') {
+              const isPositive = data.cell.raw.startsWith('+');
+              data.cell.styles.textColor = isPositive ? [5, 150, 105] : [239, 68, 68];
+            }
+          }
+        })
+
+      } else {
+        // Report Parameters Card for single module
+        doc.setFillColor(248, 250, 252)
+        doc.setDrawColor(226, 232, 240)
+        doc.roundedRect(14, currentY, 182, 22, 2, 2, 'FD')
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(51, 65, 85)
+        doc.text('REPORT PARAMETERS', 18, currentY + 6)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(71, 85, 105)
+        const periodLabel = `Period: ${isAllTime || targetModule !== 'range' ? 'All Time' : `${formatDate(startDate)} to ${formatDate(endDate)}`}`
+        doc.text(periodLabel, 18, currentY + 12)
+
+        let filterLabel = ''
+        if (activeModule === 'expense') {
+          const catStr = selectedCats.length ? selectedCats.join(', ') : 'All'
+          const whomStr = selectedWhom.length ? selectedWhom.join(', ') : 'All'
+          filterLabel = `Categories: ${catStr.length > 30 ? catStr.slice(0, 30) + '...' : catStr}  |  For Whom: ${whomStr}`
+        } else if (activeModule === 'lending') {
+          const typeStr = selectedTypes.length ? selectedTypes.join(', ') : 'All'
+          const personStr = selectedPersons.length ? selectedPersons.join(', ') : 'All'
+          filterLabel = `Types: ${typeStr}  |  Persons: ${personStr.length > 35 ? personStr.slice(0, 35) + '...' : personStr}`
+        } else {
+          filterLabel = `Bank History: All Accounts & Statements (${bankRecords.length} transactions)`
+        }
+        doc.text(filterLabel, 18, currentY + 17)
+
+        currentY += 28
+
+        // Detailed Transaction Ledger
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
         doc.setTextColor(15, 23, 42)
-        doc.text('Transaction Ledger (Detailed Report)', 14, currentY + 4)
+        doc.text(`Detailed ${activeModule === 'expense' ? 'Expenses' : activeModule === 'lending' ? 'Lend & Borrow' : 'Bank Transactions'} Statement`, 14, currentY + 4)
         currentY += 8
 
         const columns = []
         if (pdfColumns.date) columns.push({ header: 'Date', dataKey: 'date' })
-        if (pdfColumns.catPerson) columns.push({ header: reportType === 'expense' ? 'Category' : reportType === 'lending' ? 'Person' : 'Bank', dataKey: 'catPerson' })
-        if (pdfColumns.whomType) columns.push({ header: reportType === 'expense' ? 'For Whom' : reportType === 'lending' ? 'Type' : 'Description', dataKey: 'whomType' })
-        if (pdfColumns.paymentBank) columns.push({ header: reportType === 'expense' ? 'Payment' : reportType === 'lending' ? 'Mode' : 'Type', dataKey: 'paymentBank' })
+        if (pdfColumns.catPerson) columns.push({ header: activeModule === 'expense' ? 'Category' : activeModule === 'lending' ? 'Person' : 'Bank', dataKey: 'catPerson' })
+        if (pdfColumns.whomType) columns.push({ header: activeModule === 'expense' ? 'For Whom' : activeModule === 'lending' ? 'Type' : 'Description', dataKey: 'whomType' })
+        if (pdfColumns.paymentBank) columns.push({ header: activeModule === 'expense' ? 'Payment' : activeModule === 'lending' ? 'Mode' : 'Type', dataKey: 'paymentBank' })
         if (pdfColumns.contact) columns.push({ header: 'Contact', dataKey: 'contact' })
         if (pdfColumns.remarks) columns.push({ header: 'Remarks / Details', dataKey: 'remarks' })
         if (pdfColumns.amount) columns.push({ header: 'Amount', dataKey: 'amount' })
 
-        const rawItems = reportType === 'expense' ? expenseReport.items : reportType === 'lending' ? lendingReport.items : filteredBankTxns
+        let rawItems = []
+        if (targetModule === 'expense') rawItems = allExpenses
+        else if (targetModule === 'lending') rawItems = allLending
+        else if (targetModule === 'bank') rawItems = bankRecords
+        else rawItems = reportType === 'expense' ? expenseReport.items : reportType === 'lending' ? lendingReport.items : filteredBankTxns
+
         const rows = (rawItems || [])
           .sort((a, b) => new Date(b.date || b.dateObj) - new Date(a.date || a.dateObj))
           .map((item) => {
-            const isLend = reportType === 'lending'
-            const isBank = reportType === 'bank'
+            const isLend = activeModule === 'lending'
+            const isBank = activeModule === 'bank'
             const amtVal = item.amount || (item.debit ? parseFloat(item.debit) : parseFloat(item.credit || 0))
             const amt = (amtVal || 0).toLocaleString('en-IN')
             
@@ -524,7 +647,8 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
         doc.text(`Page ${i} of ${pageCount}`, 196, 287, { align: 'right' })
       }
 
-      doc.save(`WalletVibe_${reportType.toUpperCase()}_Detailed_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      const outName = isFullDoc ? 'Full_Database' : activeModule.toUpperCase()
+      doc.save(`WalletVibe_${outName}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error('PDF generation error:', err);
       alert('Could not generate PDF. Please try using Print instead.');
@@ -757,124 +881,195 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
                     marginTop: '8px',
                     backgroundColor: 'var(--bg-card)',
                     border: '1px solid var(--border-color)',
-                    borderRadius: '14px',
-                    boxShadow: 'var(--shadow-lg)',
-                    minWidth: '240px',
-                    maxHeight: 'min(380px, 65vh)',
+                    borderRadius: '16px',
+                    boxShadow: '0 15px 35px rgba(0,0,0,0.25)',
+                    minWidth: '290px',
+                    maxHeight: 'min(500px, 80vh)',
                     overflowY: 'auto',
                     zIndex: 100,
-                    padding: '10px',
+                    padding: '12px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '6px'
+                    gap: '8px'
                   }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Excel / CSV Exports
+                    {/* SECTION 1: SEPARATE MODULE EXPORTS */}
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--accent-600)', padding: '2px 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      📁 Separate Module Exports (CSV / PDF)
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => { setExportMenuOpen(false); exportToExcelCSV('full') }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
-                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
-                      }}
-                    >
-                      <i className="fas fa-database" style={{ color: 'var(--accent-600)', fontSize: 14 }} />
-                      <div>
-                        <div>Full Database (Excel CSV)</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Expenses + Lending + Bank history</div>
+                    {/* 💸 Expenses Module */}
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: 8, border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>💸 Expenses Statement</span>
+                        <span style={{ fontSize: 9.5, color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '1px 6px', borderRadius: 10 }}>{allExpenses.length} records</span>
                       </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => { setExportMenuOpen(false); exportToExcelCSV('range') }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
-                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
-                      }}
-                    >
-                      <i className="fas fa-filter" style={{ color: 'var(--emerald-600)', fontSize: 14 }} />
-                      <div>
-                        <div>Filtered Range (Excel CSV)</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>{activeRange === 'allTime' ? 'All Time' : activeRange} {reportType} data</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); exportToExcelCSV('expense') }}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Expenses as Excel CSV"
+                        >
+                          <i className="fas fa-file-excel" /> Excel CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); handleDownloadPDF('expense') }}
+                          disabled={downloading}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Expenses as PDF Report"
+                        >
+                          <i className="fas fa-file-pdf" /> PDF Report
+                        </button>
                       </div>
-                    </button>
-
-                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
-
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      PDF & Print Statements
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => { setExportMenuOpen(false); handleDownloadPDF() }}
-                      disabled={downloading}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
-                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
-                      }}
-                    >
-                      <i className="fas fa-file-pdf" style={{ color: 'var(--red-500)', fontSize: 14 }} />
-                      <div>
-                        <div>Download PDF Detailed Report</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Customized printable report</div>
+                    {/* 🤝 Lend / Borrow Module */}
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: 8, border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>🤝 Lend &amp; Borrow Ledger</span>
+                        <span style={{ fontSize: 9.5, color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '1px 6px', borderRadius: 10 }}>{allLending.length} records</span>
                       </div>
-                    </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); exportToExcelCSV('lending') }}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Lend/Borrow entries as Excel CSV"
+                        >
+                          <i className="fas fa-file-excel" /> Excel CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); handleDownloadPDF('lending') }}
+                          disabled={downloading}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Lend/Borrow entries as PDF Report"
+                        >
+                          <i className="fas fa-file-pdf" /> PDF Report
+                        </button>
+                      </div>
+                    </div>
 
-                    {/* WhatsApp & Email Full Detailed Statement Actions */}
+                    {/* 🏛️ Bank Transactions Module */}
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: 8, border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>🏛️ Bank History</span>
+                        <span style={{ fontSize: 9.5, color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '1px 6px', borderRadius: 10 }}>{bankRecords.length} records</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); exportToExcelCSV('bank') }}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Bank Transactions as Excel CSV"
+                        >
+                          <i className="fas fa-file-excel" /> Excel CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); handleDownloadPDF('bank') }}
+                          disabled={downloading}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download all Bank Transactions as PDF Report"
+                        >
+                          <i className="fas fa-file-pdf" /> PDF Report
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '2px 0' }} />
+
+                    {/* SECTION 2: CONSOLIDATED EXPORTS */}
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--accent-600)', padding: '2px 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      📦 All-in-One Consolidated Exports
+                    </div>
+
+                    {/* Full Database */}
+                    <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.06))', borderRadius: 10, padding: 8, border: '1px solid rgba(99,102,241,0.2)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#4f46e5', marginBottom: 2 }}>
+                        🌐 Full Database (Expenses + Lending + Bank)
+                      </div>
+                      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 6 }}>All historical records across all 3 modules</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); exportToExcelCSV('full') }}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#10b981', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download full database as CSV"
+                        >
+                          <i className="fas fa-database" /> Full CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); handleDownloadPDF('full') }}
+                          disabled={downloading}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download full database as PDF Report"
+                        >
+                          <i className="fas fa-file-pdf" /> Full PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active Filtered Range */}
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: 8, border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                        🎯 Active Filtered View ({reportType})
+                      </div>
+                      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 6 }}>{activeRange === 'allTime' ? 'All Time' : activeRange} range data</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); exportToExcelCSV('range') }}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download active filtered view as CSV"
+                        >
+                          <i className="fas fa-filter" /> Filtered CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setExportMenuOpen(false); handleDownloadPDF('range') }}
+                          disabled={downloading}
+                          style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 10.5, fontWeight: 700, color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                          title="Download active filtered view as PDF Report"
+                        >
+                          <i className="fas fa-file-pdf" /> Filtered PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '2px 0' }} />
+
+                    {/* WhatsApp & Email & Print Actions */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         type="button"
                         onClick={() => { setExportMenuOpen(false); handleShareReportWhatsApp() }}
-                        style={{
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          padding: '7px 8px', borderRadius: 6, border: 'none', background: '#25D366',
-                          color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                        }}
-                        title="Share full statement text via WhatsApp"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 6, border: 'none', background: '#25D366', color: '#fff', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                        title="Share report summary via WhatsApp"
                       >
-                        <i className="fab fa-whatsapp" style={{ fontSize: 13 }} /> WhatsApp
+                        <i className="fab fa-whatsapp" /> WhatsApp
                       </button>
 
                       <button
                         type="button"
                         onClick={() => { setExportMenuOpen(false); handleShareReportEmail() }}
-                        style={{
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          padding: '7px 8px', borderRadius: 6, border: 'none', background: '#3b82f6',
-                          color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                        }}
-                        title="Send full detailed statement via Email"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 6, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                        title="Send report summary via Email"
                       >
-                        <i className="fas fa-envelope" style={{ fontSize: 11 }} /> Email
+                        <i className="fas fa-envelope" /> Email
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setExportMenuOpen(false); window.print() }}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                        title="Print statement"
+                      >
+                        <i className="fas fa-print" /> Print
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => { setExportMenuOpen(false); window.print() }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                        borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--slate-50)',
-                        cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
-                        textAlign: 'left', width: '100%', transition: 'all 0.15s'
-                      }}
-                    >
-                      <i className="fas fa-print" style={{ color: 'var(--indigo-600)', fontSize: 14 }} />
-                      <div>
-                        <div>Print Statement</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Send directly to printer</div>
-                      </div>
-                    </button>
 
                     <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
 

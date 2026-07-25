@@ -4,7 +4,7 @@ import {
   query, orderBy, limit, where, Timestamp,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
-import { saveSnapshot, loadSnapshot, addPending } from './localCache'
+import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot } from './localCache'
 
 const COL = 'expenses'
 
@@ -51,6 +51,8 @@ function fromFirestore(docSnap) {
 
 export async function addExpense(data) {
   const fsData = toFirestore(data)
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('expenses', currentUid)
   try {
     const docRef = await addDoc(collection(db, COL), fsData)
     if (data.fileData) {
@@ -65,7 +67,6 @@ export async function addExpense(data) {
         collection: COL,
         data: { ...data, _offline: true },
       })
-      const currentUid = auth.currentUser?.uid || ''
       // Optimistically update snapshot
       const snapshot = loadSnapshot('expenses', currentUid) || []
       const optimistic = {
@@ -95,6 +96,8 @@ export async function addExpense(data) {
 export async function updateExpense(id, data) {
   const ref = doc(db, COL, id)
   const fsData = toFirestore(data)
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('expenses', currentUid)
   delete fsData.fileData
   try {
     await updateDoc(ref, fsData)
@@ -113,6 +116,8 @@ export async function updateExpense(id, data) {
 }
 
 export async function deleteExpense(id) {
+  const currentUid = auth.currentUser?.uid || ''
+  invalidateSnapshot('expenses', currentUid)
   try {
     await deleteAttachmentChunks(COL, id)
     await deleteDoc(doc(db, COL, id))
@@ -131,9 +136,17 @@ export async function getRecentExpenses(n = 20) {
   return all.slice(0, n)
 }
 
-export async function getAllExpenses() {
+export async function getAllExpenses(forceRefresh = false) {
   const currentUid = auth.currentUser?.uid || ''
   if (!currentUid) return []
+
+  // Check if local cache is fresh (default 3 min TTL) to save Firestore read quota
+  if (!forceRefresh && isCacheFresh('expenses', currentUid)) {
+    const cached = loadSnapshot('expenses', currentUid)
+    if (cached && cached.length > 0) {
+      return cached.sort((a, b) => b.dateObj - a.dateObj)
+    }
+  }
 
   try {
     // Fetch user-scoped expenses

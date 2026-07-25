@@ -1008,20 +1008,36 @@ select.float-input { padding-right: 32px; }
   font-weight: 500;
 }
 .modal-close {
-  width: 26px; height: 26px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border-radius: 50%;
-  border: none;
+  border: 1px solid var(--border-color);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   flex-shrink: 0;
+  outline: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.modal-close:hover { background: var(--bg-elevated); color: var(--text-primary); transform: scale(1.1) rotate(90deg); }
+.modal-close:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+.modal-close:active {
+  transform: scale(0.92);
+}
 
 .modal-body {
   padding: 20px;

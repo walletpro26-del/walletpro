@@ -22,14 +22,26 @@ const DEFAULTS = {
   cashfreeAppId: '',
   subscriberLimit: 10,
   allowNonCsvImport: true,
+  geminiApiKeys: '', // Admin-configured multiple Gemini AI API keys (comma or newline separated)
 }
 
 let _cachedConfig = null
 let _cacheTime = 0
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+function syncLocalConfigCache(cfg) {
+  try {
+    if (cfg) {
+      localStorage.setItem('wv_cached_app_config', JSON.stringify(cfg))
+      if (cfg.geminiApiKeys) {
+        localStorage.setItem('wv_admin_gemini_api_keys', String(cfg.geminiApiKeys))
+      }
+    }
+  } catch (e) {}
+}
+
 /**
- * Get app configuration from Firestore (with in-memory cache)
+ * Get app configuration from Firestore (with in-memory & localStorage cache)
  * @returns {Promise<object>}
  */
 export async function getAppConfig() {
@@ -50,6 +62,7 @@ export async function getAppConfig() {
     }
 
     _cacheTime = Date.now()
+    syncLocalConfigCache(_cachedConfig)
     return _cachedConfig
   } catch (err) {
     // Quietly fallback to defaults if Firestore rules restrict appConfig document

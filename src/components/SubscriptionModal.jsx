@@ -253,7 +253,7 @@ export default function SubscriptionModal({
               <div style={{ marginBottom: 16, background: 'var(--bg-body, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12 }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted, #64748b)', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>WalletVibe Pro Features</span>
-                  <a href="/WalletVibe_Pro_Features.pdf" target="_blank" download style={{ textTransform: 'none', color: '#6366f1', textDecoration: 'none', fontWeight: 700, fontSize: 9, display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <a href="/WalletVibe_Pro_Features.pdf" target="_blank" rel="noopener noreferrer" download style={{ textTransform: 'none', color: '#6366f1', textDecoration: 'none', fontWeight: 700, fontSize: 9, display: 'flex', alignItems: 'center', gap: 3 }}>
                     <i className="fas fa-file-pdf" style={{ fontSize: 10 }} /> Features.pdf
                   </a>
                 </div>
