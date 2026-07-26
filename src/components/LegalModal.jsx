@@ -442,8 +442,8 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
                     </span>
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>
-                    <a href="tel:+919682547458" style={{ color: 'inherit', textDecoration: 'none' }}>
-                      +91 96825 47458
+                    <a href="https://wa.me/919682547458" target="_blank" rel="noopener noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fab fa-whatsapp" style={{ fontSize: 16 }} /> +91 96825 47458
                     </a>
                   </div>
                   <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
@@ -506,12 +506,41 @@ export default function LegalModal({ initialTab = 'privacy', onClose }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: 10,
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 11, color: '#64748b' }}>
-            © {new Date().getFullYear()} <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>NextLifTechnologies</a>. All Rights Reserved.
-          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {activeTab !== 'privacy' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const tabs = ['privacy', 'terms', 'refund', 'contact']
+                  const idx = tabs.indexOf(activeTab)
+                  if (idx > 0) setActiveTab(tabs[idx - 1])
+                }}
+                className="btn-outline"
+                style={{ padding: '6px 12px', fontSize: 12, borderRadius: 8 }}
+              >
+                <i className="fas fa-chevron-left" style={{ marginRight: 4 }} /> Back
+              </button>
+            )}
+            {activeTab !== 'contact' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const tabs = ['privacy', 'terms', 'refund', 'contact']
+                  const idx = tabs.indexOf(activeTab)
+                  if (idx < tabs.length - 1) setActiveTab(tabs[idx + 1])
+                }}
+                className="btn-outline"
+                style={{ padding: '6px 12px', fontSize: 12, borderRadius: 8 }}
+              >
+                Next <i className="fas fa-chevron-right" style={{ marginLeft: 4 }} />
+              </button>
+            )}
+          </div>
+
           <button
             onClick={onClose}
             className="btn-primary"

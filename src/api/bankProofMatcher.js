@@ -122,8 +122,8 @@ export function findMatchingBankProof(item, customBankRecords = null) {
       matchReasons.push('Description Match')
     }
 
-    // Inclusion criteria: Exact amount OR (near amount & date within 10d) OR score >= 35
-    if (amtDiff < 0.05 || (relDiff <= 0.05 && dateDiffDays <= 10) || score >= 35) {
+    // Inclusion criteria: Date must be within 120 days AND (exact amount OR near amount & date <= 30d OR score >= 50)
+    if (dateDiffDays <= 120 && (amtDiff < 0.05 || (relDiff <= 0.05 && dateDiffDays <= 30) || score >= 50)) {
       const confidence = Math.min(99, Math.max(35, Math.round(score)))
       matches.push({
         bankTransaction: b,
@@ -135,6 +135,6 @@ export function findMatchingBankProof(item, customBankRecords = null) {
     }
   })
 
-  // Sort from top to bottom by highest matching percentage
-  return matches.sort((a, b) => b.confidence - a.confidence)
+  // Sort from top to bottom by highest matching percentage and cap to top 10
+  return matches.sort((a, b) => b.confidence - a.confidence).slice(0, 10)
 }

@@ -199,7 +199,7 @@ export default function Header({
           {/* Subscription Status Pill */}
           <button
             type="button"
-            onClick={onManageSubscription}
+            onClick={(subscription?.isAdmin || isAdminEmail(auth?.email)) ? onAdminPanel : onManageSubscription}
             title={subscription?.isAdmin ? 'Admin Account (Free Lifetime)' : (subscription?.active ? 'Pro Active' : 'Subscribe Now')}
             style={{
               height: 32,

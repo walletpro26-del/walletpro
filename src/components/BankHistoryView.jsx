@@ -459,7 +459,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
       {filtered.length > 0 && (
         <>
           <ul className="txn-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {visibleRecords.map((r) => {
+            {visibleRecords.map((r, index) => {
               const isCredit = (r.credit || 0) > 0 && !(r.debit || 0 > 0)
               const amount = isCredit ? r.credit : r.debit
               const amtCls = isCredit ? 'positive' : 'negative'
@@ -490,6 +490,9 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
                   {/* Main Info */}
                   <div className="txn-info" style={{ flex: 1, minWidth: 0 }}>
                     <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                        Sl. {index + 1}
+                      </span>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>
                         {r.description || '—'}
                       </span>

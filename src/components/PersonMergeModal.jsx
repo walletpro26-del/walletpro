@@ -948,7 +948,7 @@ export default function PersonMergeModal({
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }} className="custom-scrollbar">
-                  {Object.entries(aliasRules).map(([raw, target]) => (
+                  {Object.entries(aliasRules).map(([raw, target], index) => (
                     <div
                       key={raw}
                       style={{
@@ -962,9 +962,12 @@ export default function PersonMergeModal({
                         fontSize: 11,
                       }}
                     >
-                      <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                          Sl. {index + 1}
+                        </span>
                         <span style={{ color: '#ef4444', fontWeight: 700 }}>"{raw}"</span>
-                        <span style={{ color: '#94a3b8', margin: '0 6px' }}>➔</span>
+                        <span style={{ color: '#94a3b8', margin: '0 4px' }}>➔</span>
                         <span style={{ color: '#10b981', fontWeight: 800 }}>"{target}"</span>
                       </div>
                       <button

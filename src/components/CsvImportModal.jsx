@@ -922,7 +922,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
 
               {/* Preview List */}
               <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
-                {csvPreviewData.items.map((item) => (
+                {csvPreviewData.items.map((item, idx) => (
                   <div
                     key={item.id}
                     onClick={() => toggleItem(item.id)}
@@ -942,6 +942,9 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                            Sl. {idx + 1}
+                          </span>
                           {mode === 'expense' ? item.category : item.person}
                           {item.isDuplicate && (
                             <span style={{ fontSize: 8.5, fontWeight: 800, color: '#d97706', background: 'rgba(245,158,11,0.15)', padding: '2px 6px', borderRadius: 99, border: '1px solid rgba(245,158,11,0.3)' }}>

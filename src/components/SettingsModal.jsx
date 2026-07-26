@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isAdminEmail } from '../api/subscription'
 import { extractValidGeminiKeys } from '../api/pdfExtractor'
+import { checkIsPwaInstalled } from './InstallBanner'
 
 export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription, onOpenRatingModal }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
@@ -105,38 +106,45 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
 
         {/* Compact Body */}
         <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 16px', overflowY: 'auto', flex: 1 }}>
-          {/* User Account & Subscription Compact Row */}
+          {/* User Account & Subscription Card */}
           <div style={{
-            background: 'var(--bg-subtle)',
+            background: 'var(--bg-subtle, #f8fafc)',
             borderRadius: 12,
-            border: '1px solid var(--border-color)',
+            border: '1px solid var(--border-color, #e2e8f0)',
             padding: '10px 12px',
             display: 'flex',
             alignItems: 'center',
-            justify: 'space-between',
+            justifyContent: 'space-between',
             gap: 10
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
               <div style={{
-                width: 34,
-                height: 34,
+                width: 36,
+                height: 36,
                 borderRadius: '50%',
-                background: 'var(--accent-gradient)',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                 color: '#fff',
                 fontWeight: 800,
                 fontSize: 14,
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'center',
-                flexShrink: 0
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
               }}>
                 {userInitial}
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {auth?.name || auth?.email || 'WalletVibe User'}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 12, fontWeight: 800, color: 'var(--text-primary, #1e293b)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                  }}
+                  title={auth?.email || auth?.name}
+                >
+                  {auth?.email || auth?.name || 'WalletVibe User'}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted, #64748b)', marginTop: 1, fontWeight: 700 }}>
                   {subscription?.isAdmin ? '👑 Free Lifetime Admin' : (subscription?.active ? '⭐ Active Plan' : '⚠️ Free Account')}
                 </div>
               </div>
@@ -149,9 +157,19 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   onClose?.()
                   onManageSubscription?.()
                 }}
-                style={{ padding: '5px 10px', fontSize: 10.5, borderRadius: 6 }}
+                style={{
+                  width: 'auto',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                  padding: '6px 14px',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                }}
               >
-                {subscription?.active ? 'Manage' : 'Upgrade'}
+                {subscription?.active ? 'Manage Plan' : '⚡ Upgrade'}
               </button>
             )}
           </div>
@@ -170,24 +188,26 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                     type="button"
                     onClick={() => setTheme(t.id)}
                     style={{
-                      padding: '6px 4px',
+                      padding: '8px 6px',
                       borderRadius: 8,
-                      border: isActive ? '2px solid var(--accent-600)' : '1px solid var(--border-color)',
+                      border: isActive ? '2px solid #6366f1' : '1px solid var(--border-color, #e2e8f0)',
                       background: t.bg,
                       color: t.color,
                       cursor: 'pointer',
                       textAlign: 'center',
                       fontSize: 10.5,
-                      fontWeight: 700,
-                      boxShadow: isActive ? 'var(--shadow-xs)' : 'none',
-                      transition: 'all 0.15s'
+                      fontWeight: 800,
+                      boxShadow: isActive ? '0 0 0 2px rgba(99,102,241,0.2)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      minHeight: 44,
                     }}
                   >
                     <div>{t.name}</div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginTop: 3 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.bg, border: '1px solid #ccc' }} />
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.accent }} />
-                    </div>
+                    <div style={{ height: 4, width: '100%', borderRadius: 2, background: t.accent, marginTop: 4 }} />
                   </button>
                 )
               })}
@@ -229,37 +249,52 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
             </div>
           </div>
 
-          {/* App Installation Status (PWA) */}
-          <div style={{ padding: '8px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <i className="fas fa-mobile-alt" style={{ color: '#6366f1' }} />
-                <span>📱 App Installation Status</span>
+          {/* App Installation Status (PWA Recognition) */}
+          {(() => {
+            const isPwaInstalled = checkIsPwaInstalled()
+
+            return (
+              <div style={{
+                padding: '9px 12px',
+                background: isPwaInstalled ? 'rgba(16,185,129,0.06)' : 'var(--bg-subtle, #f8fafc)',
+                border: isPwaInstalled ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: isPwaInstalled ? '#047857' : 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className={`fas ${isPwaInstalled ? 'fa-check-circle' : 'fa-mobile-alt'}`} style={{ color: isPwaInstalled ? '#10b981' : '#6366f1' }} />
+                    <span>App Installation Status</span>
+                  </div>
+                  <div style={{ fontSize: 9.5, color: isPwaInstalled ? '#065f46' : '#64748b', marginTop: 2 }}>
+                    {isPwaInstalled
+                      ? 'Installed & Recognized on your device (PWA Standalone Mode)'
+                      : 'Running in Web Browser mode'}
+                  </div>
+                </div>
+                {isPwaInstalled ? (
+                  <span style={{ fontSize: 9.5, fontWeight: 900, background: '#10b981', color: '#ffffff', padding: '3px 8px', borderRadius: 99, flexShrink: 0 }}>
+                    ✓ Installed
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem('wv_install_banner_dismissed')
+                      alert('💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or tap browser menu -> "Add to Home Screen".')
+                      onClose?.()
+                    }}
+                    style={{ fontSize: 10, fontWeight: 800, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    📲 Install App
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
-                {typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
-                  ? 'Installed & running as a native standalone app'
-                  : 'Running in Web Browser mode'}
-              </div>
-            </div>
-            {typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) ? (
-              <span style={{ fontSize: 9.5, fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: 99, border: '1px solid #6ee7b7' }}>
-                🟢 Installed
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem('wv_install_banner_dismissed')
-                  alert('💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or tap browser menu -> "Add to Home Screen".')
-                  onClose?.()
-                }}
-                style={{ fontSize: 10, fontWeight: 800, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '3px 8px', borderRadius: 6, border: 'none', cursor: 'pointer' }}
-              >
-                📲 Install App
-              </button>
-            )}
-          </div>
+            )
+          })()}
 
           {/* Custom Gemini AI API Key Input */}
           <div>
@@ -312,7 +347,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                   gap: 4
                 }}
               >

@@ -146,6 +146,9 @@ export default function TransactionList({ items = [], title, onSelect }) {
 
               <div className="txn-info">
                 <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                    Sl. {i + 1}
+                  </span>
                   <span>{titleText}</span>
                   {bankMatch && (
                     <span

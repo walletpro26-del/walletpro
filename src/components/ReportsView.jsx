@@ -489,12 +489,13 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
         doc.text('3. Bank Transactions History', 14, currentY + 4)
         currentY += 8
 
-        const bankPdfRows = (bankRecords || []).map((item) => {
+        const bankPdfRows = (bankRecords || []).map((item, idx) => {
           const d = new Date(item.date || item.dateObj)
           const dateStr = !isNaN(d.getTime()) ? `${String(d.getDate()).padStart(2, '0')}-${d.toLocaleString('en', { month: 'short' })}-${String(d.getFullYear()).slice(-2)}` : String(item.date || '').slice(0, 10)
           const amtVal = item.debit ? parseFloat(item.debit) : parseFloat(item.credit || 0)
           const amtStr = item.debit ? `-Rs.${amtVal.toLocaleString('en-IN')}` : `+Rs.${amtVal.toLocaleString('en-IN')}`
           return {
+            sNo: idx + 1,
             date: dateStr,
             catPerson: item.bank || 'Bank',
             whomType: item.description || '—',
@@ -507,6 +508,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
         autoTable(doc, {
           startY: currentY,
           columns: [
+            { header: 'Sl. No.', dataKey: 'sNo' },
             { header: 'Date', dataKey: 'date' },
             { header: 'Bank', dataKey: 'catPerson' },
             { header: 'Description', dataKey: 'whomType' },
@@ -569,7 +571,9 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
         doc.text(`Detailed ${activeModule === 'expense' ? 'Expenses' : activeModule === 'lending' ? 'Lend & Borrow' : 'Bank Transactions'} Statement`, 14, currentY + 4)
         currentY += 8
 
-        const columns = []
+        const columns = [
+          { header: 'Sl. No.', dataKey: 'sNo' }
+        ]
         if (pdfColumns.date) columns.push({ header: 'Date', dataKey: 'date' })
         if (pdfColumns.catPerson) columns.push({ header: activeModule === 'expense' ? 'Category' : activeModule === 'lending' ? 'Person' : 'Bank', dataKey: 'catPerson' })
         if (pdfColumns.whomType) columns.push({ header: activeModule === 'expense' ? 'For Whom' : activeModule === 'lending' ? 'Type' : 'Description', dataKey: 'whomType' })
@@ -586,7 +590,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
 
         const rows = (rawItems || [])
           .sort((a, b) => new Date(b.date || b.dateObj) - new Date(a.date || a.dateObj))
-          .map((item) => {
+          .map((item, idx) => {
             const isLend = activeModule === 'lending'
             const isBank = activeModule === 'bank'
             const amtVal = item.amount || (item.debit ? parseFloat(item.debit) : parseFloat(item.credit || 0))
@@ -598,10 +602,10 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
             if (isLend) {
               const norm = normalizeLendingType(item.type)
               if (norm === 'LEND') { typeText = 'Loan Given'; amtStr = `-Rs.${amt}` }
-              else if (norm === 'BORROW') { typeText = 'Borrowed'; amtStr = `+Rs.${amt}` }
-              else if (norm === 'THEY_RETURN') { typeText = 'Received Return'; amtStr = `+Rs.${amt}` }
-              else if (norm === 'I_RETURN') { typeText = 'I Returned'; amtStr = `-Rs.${amt}` }
-              else if (norm === 'FORGIVE') { typeText = 'Forgiven'; amtStr = `-Rs.${amt}` }
+              else if (norm === 'BORROW') { typeText = 'Loan Taken'; amtStr = `+Rs.${amt}` }
+              else if (norm === 'THEY_RETURN') { typeText = 'Recv Return'; amtStr = `+Rs.${amt}` }
+              else if (norm === 'I_RETURN') { typeText = 'Paid Return'; amtStr = `-Rs.${amt}` }
+              else if (norm === 'FORGIVE') { typeText = 'Forgiven'; amtStr = `Rs.${amt}` }
             } else if (isBank) {
               amtStr = item.debit ? `-Rs.${amt}` : `+Rs.${amt}`
             } else {
@@ -614,7 +618,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
             const yr = String(d.getFullYear()).slice(-2)
             const dateStr = `${day}-${mon}-${yr}`
 
-            const rowData = {}
+            const rowData = { sNo: idx + 1 }
             if (pdfColumns.date) rowData.date = dateStr
             if (pdfColumns.catPerson) rowData.catPerson = isBank ? (item.bank || 'Bank') : isLend ? (item.person || '—') : (item.category || 'Uncategorized')
             if (pdfColumns.whomType) rowData.whomType = isBank ? (item.description || '—') : isLend ? typeText : (item.forWhom || 'Self')

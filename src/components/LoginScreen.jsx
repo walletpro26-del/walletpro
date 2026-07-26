@@ -1,14 +1,34 @@
 import { useState, useEffect } from 'react'
 import { signInWithGoogle } from '../api/auth'
+import { listenAppConfig } from '../api/appConfig'
 import WalletVibeLogo from './WalletVibeLogo'
 import LegalModal from './LegalModal'
 import PreLoginFeaturesModal from './PreLoginFeaturesModal'
 
-export default function LoginScreen() {
+export default function LoginScreen({ registrationError = '', appConfig: initialAppConfig = null }) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(registrationError)
+  const [appConfig, setAppConfig] = useState(initialAppConfig)
   const [legalModalTab, setLegalModalTab] = useState(null)
   const [showFeaturesModal, setShowFeaturesModal] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
+
+  useEffect(() => {
+    setError(registrationError)
+  }, [registrationError])
+
+  useEffect(() => {
+    if (!appConfig) {
+      const unsub = listenAppConfig((cfg) => setAppConfig(cfg))
+      return unsub
+    }
+  }, [appConfig])
+
+  function handleCopyAdminEmail() {
+    navigator.clipboard.writeText('walletpro26@gmail.com')
+    setCopiedEmail(true)
+    setTimeout(() => setCopiedEmail(false), 3000)
+  }
 
   function closeLegalModal() {
     setLegalModalTab(null)
@@ -16,6 +36,11 @@ export default function LoginScreen() {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
   }
+
+  const subscriberLimit = Number(appConfig?.subscriberLimit ?? 10)
+  const isUnlimited = subscriberLimit <= 0
+  const activeSubscriberCount = Number(appConfig?.activeSubscriberCount ?? 0)
+  const isLimitReached = !isUnlimited && activeSubscriberCount >= subscriberLimit
 
   useEffect(() => {
     function handleHashOrQuery() {
@@ -114,11 +139,87 @@ export default function LoginScreen() {
           <i className="fas fa-layer-group" style={{ fontSize: 11 }} /> Explore App Features
         </button>
 
+        {/* Subscriber Limit Capacity Info Banner */}
+        {isLimitReached && (
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 12,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: '#f87171',
+              fontSize: 11,
+              fontWeight: 700,
+              marginBottom: 16,
+              textAlign: 'left',
+              backdropFilter: 'blur(8px)',
+              lineHeight: 1.4,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 900, color: '#fca5a5', marginBottom: 4 }}>
+              <i className="fas fa-exclamation-triangle" />
+              <span>Registration &amp; Subscriptions Full ({activeSubscriberCount} / {subscriberLimit})</span>
+            </div>
+            <div style={{ color: 'rgba(254, 226, 226, 0.9)', fontSize: 10.5, marginBottom: 10 }}>
+              Online user registration is currently closed because the maximum capacity of {subscriberLimit} active accounts has been reached. Existing registered users can log in normally. If you need a new account, please contact the admin for direct activation.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a
+                href="mailto:walletpro26@gmail.com?subject=WalletVibe%20Pro%20New%20User%20Registration%20Request"
+                style={{
+                  padding: '6px 12px', background: '#ef4444', color: '#fff',
+                  borderRadius: 6, fontSize: 10.5, fontWeight: 800, textDecoration: 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 6px rgba(239,68,68,0.3)'
+                }}
+              >
+                <i className="fas fa-envelope" /> Contact Admin
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyAdminEmail}
+                style={{
+                  padding: '6px 12px', background: 'rgba(255,255,255,0.15)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 10.5,
+                  fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                }}
+              >
+                <i className={`fas ${copiedEmail ? 'fa-check' : 'fa-copy'}`} />
+                {copiedEmail ? 'Copied Email!' : 'Copy Admin Email'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
-          <div className="login-error">
-            <i className="fas fa-exclamation-circle" />
-            {error}
+          <div className="login-error" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <i className="fas fa-exclamation-circle" />
+              <span>{error}</span>
+            </div>
+            {error.includes('Registration Closed') && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <a
+                  href="mailto:walletpro26@gmail.com?subject=WalletVibe%20Pro%20Registration%20Access%20Request"
+                  style={{
+                    padding: '4px 8px', background: '#ef4444', color: '#fff',
+                    borderRadius: 4, fontSize: 10, fontWeight: 800, textDecoration: 'none',
+                  }}
+                >
+                  ✉️ Email Admin
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyAdminEmail}
+                  style={{
+                    padding: '4px 8px', background: 'rgba(255,255,255,0.2)', color: '#fff',
+                    border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 800, cursor: 'pointer'
+                  }}
+                >
+                  {copiedEmail ? '✓ Copied' : '📋 Copy Email'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

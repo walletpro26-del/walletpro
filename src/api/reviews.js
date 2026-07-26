@@ -16,13 +16,14 @@ export async function submitReview({ name, mobile, email, rating, comment, userI
   if (!mobile || !mobile.trim()) throw new Error('Please enter your mobile number.')
   if (!rating || rating < 1 || rating > 5) throw new Error('Please select a star rating between 1 and 5.')
 
-  const docId = userId || email?.replace(/[^a-zA-Z0-9]/g, '_') || 'anon_' + Date.now()
+  const cleanEmail = (email || '').toLowerCase().trim()
+  const docId = userId || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_') || 'anon_' + Date.now()
 
   const reviewData = {
     docId,
     name: name.trim(),
     mobile: mobile.trim(),
-    email: email ? email.trim() : '',
+    email: cleanEmail,
     rating: Number(rating),
     comment: comment ? comment.trim() : '',
     userId: userId || '',
@@ -30,41 +31,55 @@ export async function submitReview({ name, mobile, email, rating, comment, userI
     createdAt: Timestamp.now(),
   }
 
+  // 1. Primary write to appReviews collection
   try {
     const docRef = doc(db, REVIEWS_COLLECTION, docId)
     await setDoc(docRef, reviewData, { merge: true })
-
-    // Save locally in cache
-    localStorage.setItem('wv_user_review', JSON.stringify({
-      ...reviewData,
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    }))
-
-    return reviewData
   } catch (err) {
-    // Fallback to local storage if offline or permissions issue
-    localStorage.setItem('wv_user_review', JSON.stringify({
-      ...reviewData,
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    }))
-    return reviewData
+    console.warn('[reviews] Firestore appReviews write warning:', err?.message)
   }
+
+  // 2. Secondary write to userProfiles collection (guaranteed allowed collection)
+  if (docId || cleanEmail) {
+    try {
+      const userDocId = userId || cleanEmail.replace(/[.@]/g, '_')
+      const profileRef = doc(db, 'userProfiles', userDocId)
+      await setDoc(profileRef, {
+        rating: Number(rating),
+        reviewComment: comment ? comment.trim() : '',
+        reviewName: name.trim(),
+        reviewMobile: mobile.trim(),
+        reviewUpdatedAt: Timestamp.now(),
+      }, { merge: true })
+    } catch (e) {
+      console.warn('[reviews] Firestore userProfiles review write warning:', e?.message)
+    }
+  }
+
+  // 3. Save in local storage cache for instant offline rendering
+  localStorage.setItem('wv_user_review', JSON.stringify({
+    ...reviewData,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  }))
+
+  return reviewData
 }
 
 /**
  * Get all user reviews from Firestore (with local fallback)
  */
 export async function getAllReviews() {
-  try {
-    const q = query(collection(db, REVIEWS_COLLECTION), orderBy('updatedAt', 'desc'))
-    const snap = await getDocs(q)
+  let reviews = []
 
-    let reviews = snap.docs.map((d) => {
+  // Fetch from appReviews collection without unindexed orderBy constraint
+  try {
+    const snap = await getDocs(collection(db, REVIEWS_COLLECTION))
+    snap.docs.forEach((d) => {
       const data = d.data()
-      const dateObj = data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-      return {
+      if (!data) return
+      const dateObj = data.updatedAt?.toDate?.() || new Date(data.updatedAt || Date.now())
+      reviews.push({
         id: d.id,
         name: data.name || 'Anonymous User',
         mobile: data.mobile || '',
@@ -72,76 +87,56 @@ export async function getAllReviews() {
         rating: Number(data.rating || 5),
         comment: data.comment || '',
         date: dateObj,
+      })
+    })
+  } catch (err) {
+    console.warn('[reviews] Fetch appReviews warning:', err?.message)
+  }
+
+  // Fetch reviews embedded in userProfiles collection as backup
+  try {
+    const profSnap = await getDocs(collection(db, 'userProfiles'))
+    profSnap.docs.forEach((d) => {
+      const data = d.data()
+      if (data && data.rating && !reviews.some((r) => r.email === (data.email || '').toLowerCase())) {
+        const dateObj = data.reviewUpdatedAt?.toDate?.() || new Date()
+        reviews.push({
+          id: 'prof_' + d.id,
+          name: data.reviewName || data.name || 'User',
+          mobile: data.reviewMobile || '',
+          email: data.email || '',
+          rating: Number(data.rating),
+          comment: data.reviewComment || '',
+          date: dateObj,
+        })
       }
     })
+  } catch (e) {}
 
-    // Include local review if not present
-    const localStr = localStorage.getItem('wv_user_review')
-    if (localStr) {
-      try {
-        const localRev = JSON.parse(localStr)
-        const exists = reviews.some((r) => r.id === localRev.docId || r.email === localRev.email)
-        if (!exists) {
-          reviews.unshift({
-            id: localRev.docId || 'local_rev',
-            name: localRev.name,
-            mobile: localRev.mobile,
-            email: localRev.email,
-            rating: localRev.rating,
-            comment: localRev.comment,
-            date: new Date(localRev.updatedAt),
-          })
-        }
-      } catch (e) {
-        // quiet catch
-      }
-    }
+  // Sort by date descending in JavaScript memory
+  reviews.sort((a, b) => (b.date?.getTime ? b.date.getTime() : 0) - (a.date?.getTime ? a.date.getTime() : 0))
 
-    // Default sample reviews if empty
-    if (reviews.length === 0) {
-      reviews = [
-        {
-          id: 'sample_1',
-          name: 'Rahul Sharma',
-          mobile: '9876543210',
-          email: 'rahul.sharma@gmail.com',
-          rating: 5,
-          comment: 'Outstanding personal finance manager! PDF statement auto-parsing via Gemini AI saved me hours of manual data entry.',
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        },
-        {
-          id: 'sample_2',
-          name: 'Anita Verma',
-          mobile: '9812345678',
-          email: 'anita.v@gmail.com',
-          rating: 5,
-          comment: 'The Lend/Borrow ledger and Bank History tracking are super smooth. 1-click CSV Undo import is a lifesaver!',
-          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        },
-      ]
-    }
-
-    return reviews
-  } catch (err) {
-    // Return sample/cached reviews on error
-    const localStr = localStorage.getItem('wv_user_review')
-    const list = []
-    if (localStr) {
-      try {
-        const r = JSON.parse(localStr)
-        list.push({
-          id: r.docId || 'local_1',
-          name: r.name,
-          mobile: r.mobile,
-          email: r.email,
-          rating: r.rating,
-          comment: r.comment,
-          date: new Date(r.updatedAt),
+  // Include local review if not present
+  const localStr = localStorage.getItem('wv_user_review')
+  if (localStr) {
+    try {
+      const localRev = JSON.parse(localStr)
+      const exists = reviews.some((r) => r.id === localRev.docId || (localRev.email && r.email === localRev.email))
+      if (!exists) {
+        reviews.unshift({
+          id: localRev.docId || 'local_rev',
+          name: localRev.name,
+          mobile: localRev.mobile,
+          email: localRev.email,
+          rating: localRev.rating,
+          comment: localRev.comment,
+          date: new Date(localRev.updatedAt),
         })
-      } catch (e) {}
-    }
-    return list
+      }
+    } catch (e) {}
   }
+
+  return reviews
 }
 
 /**

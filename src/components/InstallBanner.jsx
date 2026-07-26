@@ -4,7 +4,30 @@ function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
 }
 
-function checkIsStandalone() {
+export function checkIsPwaInstalled() {
+  if (typeof window === 'undefined') return false
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true ||
+    document.referrer.includes('android-app://')
+
+  const isStorageSaved =
+    localStorage.getItem('wv_pwa_installed_success') === 'true' ||
+    localStorage.getItem('wv_pwa_installed') === 'true' ||
+    localStorage.getItem('wv_app_installed') === 'true'
+
+  return Boolean(isStandalone || isStorageSaved)
+}
+
+export function markPwaInstalled() {
+  try {
+    localStorage.setItem('wv_pwa_installed_success', 'true')
+    localStorage.setItem('wv_pwa_installed', 'true')
+    localStorage.setItem('wv_app_installed', 'true')
+  } catch (e) {}
+}
+
+export function checkIsStandaloneMode() {
   if (typeof window === 'undefined') return false
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -15,9 +38,8 @@ function checkIsStandalone() {
 
 export default function InstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
-  const [isStandalone, setIsStandalone] = useState(checkIsStandalone)
-  const [installedSuccess, setInstalledSuccess] = useState(() => localStorage.getItem('wv_pwa_installed_success') === 'true')
-  const [showIOSHelp, setShowIOSHelp] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(checkIsStandaloneMode)
+  const [isInstalled, setIsInstalled] = useState(checkIsPwaInstalled)
   const [dismissed, setDismissed] = useState(() => localStorage.getItem('wv_install_banner_dismissed') === 'true')
 
   useEffect(() => {
@@ -27,18 +49,23 @@ export default function InstallBanner() {
     }
 
     const handleAppInstalled = () => {
-      setInstalledSuccess(true)
+      markPwaInstalled()
+      setIsInstalled(true)
       setIsStandalone(true)
-      localStorage.setItem('wv_pwa_installed_success', 'true')
       setDeferredPrompt(null)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall)
     window.addEventListener('appinstalled', handleAppInstalled)
 
-    // Check media query match change
     const mediaQuery = window.matchMedia('(display-mode: standalone)')
-    const handleMediaChange = (e) => setIsStandalone(e.matches)
+    const handleMediaChange = (e) => {
+      if (e.matches) {
+        setIsStandalone(true)
+        setIsInstalled(true)
+        markPwaInstalled()
+      }
+    }
     mediaQuery.addEventListener?.('change', handleMediaChange)
 
     return () => {
@@ -83,16 +110,21 @@ export default function InstallBanner() {
     )
   }
 
-  // Case 2: Just completed installation
-  if (installedSuccess && !dismissed) {
+  // Case 2: App is installed on device (Recognized from prior install)
+  if (isInstalled) {
+    if (dismissed) return null
     return (
       <div style={{
         padding: '10px 14px', margin: '12px 14px 4px', borderRadius: 12,
         background: '#ecfdf5', border: '1px solid #6ee7b7', color: '#065f46',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10
       }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700 }}>
-          🎉 <strong>WalletVibe App Installed Successfully!</strong> You can now launch it directly from your phone app icon.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700 }}>
+          <span style={{ fontSize: 14 }}>🎉</span>
+          <div>
+            <div><strong>WalletVibe App Installed &amp; Recognized!</strong></div>
+            <div style={{ fontSize: 10, opacity: 0.9 }}>Launch directly from your phone app icon for full offline PWA experience.</div>
+          </div>
         </div>
         <button
           type="button"
@@ -170,8 +202,8 @@ export default function InstallBanner() {
             deferredPrompt.prompt()
             const choice = await deferredPrompt.userChoice
             if (choice?.outcome === 'accepted') {
-              setInstalledSuccess(true)
-              localStorage.setItem('wv_pwa_installed_success', 'true')
+              markPwaInstalled()
+              setIsInstalled(true)
             }
             setDeferredPrompt(null)
           }}

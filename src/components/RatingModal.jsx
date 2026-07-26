@@ -71,9 +71,21 @@ export default function RatingModal({ user, onClose }) {
         userId: user?.uid,
       })
 
-      setSuccessMsg('🎉 Thank you! Your rating & review have been published.')
+      setSuccessMsg('🎉 Thank you! Redirecting to Admin WhatsApp...')
       const updatedList = await getAllReviews()
       setReviews(updatedList)
+
+      // Automatically redirect/open Admin's WhatsApp with review content prefilled
+      const waText =
+        `🌟 WalletVibe Pro Rating & Review:\n\n` +
+        `• Rating: ${rating}/5 Stars (${starLabels[rating] || 'Rated'})\n` +
+        `• Name: ${name}\n` +
+        `• Mobile: ${mobile}\n` +
+        `• Email: ${email || user?.email || 'Not specified'}\n` +
+        (comment ? `\nReview / Feedback:\n"${comment}"` : '')
+
+      const waUrl = `https://wa.me/919682547458?text=${encodeURIComponent(waText)}`
+      window.open(waUrl, '_blank')
 
       setTimeout(() => {
         setActiveTab('view')

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { onAuthChange, signOut } from './api/auth'
 import {
   addExpense, updateExpense, deleteExpense,
@@ -9,7 +9,7 @@ import {
   getAllLending, computeLendingStatsLocally,
 } from './api/lending'
 
-import { getSubscriptionStatus, listenSubscriptionStatus, isAdminEmail } from './api/subscription'
+import { getSubscriptionStatus, listenSubscriptionStatus, isAdminEmail, ensureUserProfile } from './api/subscription'
 import { getAppConfig, listenAppConfig } from './api/appConfig'
 import { loadSnapshot } from './api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from './api/bankTransactions'
@@ -102,6 +102,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
+  const [registrationError, setRegistrationError] = useState('')
 
   // Modals
   const [selectedTxn, setSelectedTxn] = useState(null)
@@ -175,6 +176,18 @@ export default function App() {
     const unsub = onAuthChange((state) => {
       setAuthState(state)
       setAuthReady(true)
+      if (state.loggedIn && state.uid) {
+        ensureUserProfile(state).catch((err) => {
+          if (err?.code === 'REGISTRATION_CLOSED_LIMIT_REACHED' || err?.message?.includes('REGISTRATION_CLOSED_LIMIT_REACHED')) {
+            signOut().catch(() => {})
+            setAuthState({ loggedIn: false, uid: null, email: '', name: '' })
+            const limitVal = err?.message?.split(':')[1] || '30'
+            setRegistrationError(
+              `🚫 Registration Paused: Online subscriber capacity is full (${limitVal} active accounts max). Brand new account registrations are currently paused. Please contact admin (walletpro26@gmail.com) for direct account access.`
+            )
+          }
+        })
+      }
     })
     return unsub
   }, [])
@@ -184,6 +197,73 @@ export default function App() {
     const theme = localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light'
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
+
+  const isSubscriptionBlocking = !subscriptionState.active && !subscriptionState.isAdmin
+
+  const activeModalName = useMemo(() => {
+    if (selectedTxn) return 'selectedTxn'
+    if (showSettings) return 'showSettings'
+    if (csvImportModalType) return 'csvImportModalType'
+    if (showBankSearch) return 'showBankSearch'
+    if (showBankMergeModal) return 'showBankMergeModal'
+    if (showMigration) return 'showMigration'
+    if (legalModalTab) return 'legalModalTab'
+    if (showRatingModal) return 'showRatingModal'
+    if (showAboutModal) return 'showAboutModal'
+    if (showSubscriptionModal) return 'showSubscriptionModal'
+    if (showAdminPanel) return 'showAdminPanel'
+    return null
+  }, [
+    selectedTxn, showSettings, csvImportModalType, showBankSearch,
+    showBankMergeModal, showMigration, legalModalTab, showRatingModal,
+    showAboutModal, showSubscriptionModal, showAdminPanel
+  ])
+
+  const closeAllModals = useCallback(() => {
+    setSelectedTxn(null)
+    setShowSettings(false)
+    setCsvImportModalType(null)
+    setShowBankSearch(false)
+    setShowBankMergeModal(false)
+    setShowMigration(false)
+    setLegalModalTab(null)
+    setShowRatingModal(false)
+    setShowAboutModal(false)
+    setShowSubscriptionModal(false)
+    setShowAdminPanel(false)
+  }, [])
+
+  const lastModalRef = useRef(null)
+
+  // Push synthetic history state when any modal opens so phone back button closes modal instead of exiting app
+  useEffect(() => {
+    if (activeModalName && !lastModalRef.current) {
+      window.history.pushState({ wvModalOpen: true, modalName: activeModalName }, '')
+      lastModalRef.current = activeModalName
+    } else if (!activeModalName && lastModalRef.current) {
+      if (window.history.state?.wvModalOpen) {
+        window.history.back()
+      }
+      lastModalRef.current = null
+    } else if (activeModalName) {
+      lastModalRef.current = activeModalName
+    }
+  }, [activeModalName])
+
+  // Mobile / Android Phone Back Button Handler — works for ALL modals & tabs across app
+  useEffect(() => {
+    function handlePopState(e) {
+      if (activeModalName) {
+        closeAllModals()
+        lastModalRef.current = null
+      } else if (activeTab !== 'expense') {
+        setActiveTab('expense')
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [activeModalName, activeTab, closeAllModals])
 
   // Load data & subscription when logged in, and subscribe to real-time appConfig & subscription changes
   useEffect(() => {
@@ -271,9 +351,12 @@ export default function App() {
     setTimeout(() => setToast(''), 3000)
   }
 
-  // Animated tab switch
+  // Animated tab switch with mobile back button history support
   function switchTab(tab) {
     if (tab === activeTab) return
+    if (activeTab === 'expense' && tab !== 'expense') {
+      window.history.pushState({ wvTabOpen: true, tab }, '')
+    }
     setTabTransition(true)
     setTimeout(() => {
       setActiveTab(tab)
@@ -395,7 +478,7 @@ export default function App() {
 
   // Login screen
   if (!authState.loggedIn) {
-    return <LoginScreen onLogin={() => {}} />
+    return <LoginScreen registrationError={registrationError} appConfig={appConfig} />
   }
 
   return (
@@ -521,6 +604,50 @@ export default function App() {
         </div>
       )}
 
+      {/* Targeted Pending / Registered User Personal Finance Nudge Banner */}
+      {!appConfig?.announcement && (!subscriptionState?.status || subscriptionState?.status === 'registered' || subscriptionState?.status === 'pending_verification' || subscriptionState?.status === 'none') && !subscriptionState?.isAdmin && (
+        <div
+          onClick={() => setShowSubscriptionModal(true)}
+          style={{
+            margin: '8px 12px 2px 12px',
+            padding: '8px 12px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(16, 185, 129, 0.12))',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            color: 'var(--text-primary, #1e293b)',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justify: 'space-between',
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+            <span style={{ fontSize: 14, flexShrink: 0 }}>📊</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Master your personal finances! Start your trial or activate Pro to unlock AI bank statement parsing.
+            </span>
+          </div>
+          <span style={{
+            fontSize: '10px',
+            textTransform: 'uppercase',
+            padding: '4px 10px',
+            borderRadius: '99px',
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: '#fff',
+            fontWeight: 800,
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
+            whiteSpace: 'nowrap',
+          }}>
+            Try Pro ⚡
+          </span>
+        </div>
+      )}
+
       {/* Error */}
       {error && <div className="error-banner">{error}</div>}
 
@@ -619,15 +746,29 @@ export default function App() {
       {showAboutModal && (
         <AboutModal onClose={() => setShowAboutModal(false)} />
       )}
-      {selectedTxn && (
-        <TransactionModal
-          item={selectedTxn}
-          allLending={allLending}
-          onClose={() => setSelectedTxn(null)}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
-      )}
+      {selectedTxn && (() => {
+        const activeTxnList = (selectedTxn.sheet === 'bank' || selectedTxn.bank !== undefined)
+          ? (bankRecords || [])
+          : (selectedTxn.isLend || selectedTxn.sheet === 'lending')
+          ? (allLending || [])
+          : (allExpenses || [])
+
+        const selectedTxnIndex = activeTxnList.findIndex((t) => (t.id && t.id === selectedTxn.id) || t === selectedTxn)
+        const handlePrevTxn = selectedTxnIndex > 0 ? () => setSelectedTxn(activeTxnList[selectedTxnIndex - 1]) : null
+        const handleNextTxn = selectedTxnIndex >= 0 && selectedTxnIndex < activeTxnList.length - 1 ? () => setSelectedTxn(activeTxnList[selectedTxnIndex + 1]) : null
+
+        return (
+          <TransactionModal
+            item={selectedTxn}
+            allLending={allLending}
+            onClose={() => setSelectedTxn(null)}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onPrev={handlePrevTxn}
+            onNext={handleNextTxn}
+          />
+        )
+      })()}
       {showSettings && (
         <SettingsModal
           auth={authState}

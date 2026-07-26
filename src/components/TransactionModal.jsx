@@ -5,7 +5,7 @@ import { openWhatsApp, openEmail } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
 import { findMatchingBankProof } from '../api/bankProofMatcher'
 
-export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare }) {
+export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare, onPrev, onNext }) {
   const [attachmentData, setAttachmentData] = useState(null)
   const [loadingAttachment, setLoadingAttachment] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
@@ -21,9 +21,9 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
 
   const displayBankMatches = useMemo(() => {
     if (!bankMatches || bankMatches.length === 0) return []
-    if (showAllBankMatches) return bankMatches
-    const highQuality = bankMatches.filter((m) => m.confidence >= 50)
-    return highQuality.length > 0 ? highQuality.slice(0, 3) : bankMatches.slice(0, 3)
+    // Always cap default view to top 3 matches strictly
+    if (!showAllBankMatches) return bankMatches.slice(0, 3)
+    return bankMatches.slice(0, 10)
   }, [bankMatches, showAllBankMatches])
 
   const isBank = Boolean(item?.sheet === 'bank' || item?.bank !== undefined)
@@ -100,9 +100,33 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                 <div className="modal-date">{formatDate(item.dateObj || item.date)}</div>
               </div>
             </div>
-            <button className="modal-close" onClick={onClose}>
-              <i className="fas fa-times"></i>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {onPrev && (
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={onPrev}
+                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6 }}
+                  title="Previous Transaction"
+                >
+                  <i className="fas fa-chevron-left" /> Back
+                </button>
+              )}
+              {onNext && (
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={onNext}
+                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6 }}
+                  title="Next Transaction"
+                >
+                  Next <i className="fas fa-chevron-right" />
+                </button>
+              )}
+              <button className="modal-close" onClick={onClose}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
           </div>
 
           <div className="modal-body custom-scrollbar">
@@ -347,7 +371,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                   >
                     {showAllBankMatches
                       ? '▲ Show Top 3 Matches Only'
-                      : `▼ Show All ${bankMatches.length} Matches (Including lower confidence)`}
+                      : `▼ Show Top Matches (${bankMatches.length} available)`}
                   </button>
                 )}
               </div>

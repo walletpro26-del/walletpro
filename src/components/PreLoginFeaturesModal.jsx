@@ -312,7 +312,36 @@ export default function PreLoginFeaturesModal({ onClose }) {
         </div>
 
         {/* CTA Footer */}
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color, #e2e8f0)', background: 'var(--bg-subtle, #f8fafc)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color, #e2e8f0)', background: 'var(--bg-subtle, #f8fafc)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => {
+                const tabs = ['expenses', 'lending', 'bank', 'reports', 'security']
+                const idx = tabs.indexOf(activeTab)
+                if (idx > 0) setActiveTab(tabs[idx - 1])
+              }}
+              disabled={activeTab === 'expenses'}
+              className="btn-outline"
+              style={{ flex: 1, padding: '7px 12px', fontSize: 12, borderRadius: 8, opacity: activeTab === 'expenses' ? 0.4 : 1 }}
+            >
+              <i className="fas fa-chevron-left" style={{ marginRight: 4 }} /> Previous Feature
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const tabs = ['expenses', 'lending', 'bank', 'reports', 'security']
+                const idx = tabs.indexOf(activeTab)
+                if (idx < tabs.length - 1) setActiveTab(tabs[idx + 1])
+              }}
+              disabled={activeTab === 'security'}
+              className="btn-outline"
+              style={{ flex: 1, padding: '7px 12px', fontSize: 12, borderRadius: 8, opacity: activeTab === 'security' ? 0.4 : 1 }}
+            >
+              Next Feature <i className="fas fa-chevron-right" style={{ marginLeft: 4 }} />
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={handleModalGoogleLogin}

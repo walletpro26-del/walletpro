@@ -15,6 +15,8 @@ import {
   getSubscriberCounts,
   deduplicateSubscriptions,
   purgeDuplicateSubscriptions,
+  deleteSubscriptionAccount,
+  backfillUserProfiles,
 } from '../api/subscription'
 
 export default function AdminPanel({ auth, onClose }) {
@@ -36,9 +38,10 @@ export default function AdminPanel({ auth, onClose }) {
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
 
-  // Subscriptions list
+  // Subscriptions list & filter state
   const [allSubscriptions, setAllSubscriptions] = useState([])
   const [searchFilter, setSearchFilter] = useState('')
+  const [filterTab, setFilterTab] = useState('all') // 'all' | 'regular' | 'admin' | 'pending' | 'inactive'
   const [refreshing, setRefreshing] = useState(false)
 
   // Manual User Lookup & Activation State
@@ -67,6 +70,12 @@ export default function AdminPanel({ auth, onClose }) {
   const [cashfreeAppId, setCashfreeAppId] = useState('')
   const [allowNonCsvImport, setAllowNonCsvImport] = useState(true)
   const [geminiApiKeys, setGeminiApiKeys] = useState('')
+
+  // Sync/Backfill Firebase Auth Users State
+  const [syncEmails, setSyncEmails] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [showSyncPanel, setShowSyncPanel] = useState(false)
+  const [showQuickActivate, setShowQuickActivate] = useState(false)
 
   useEffect(() => {
     loadConfig()
@@ -130,46 +139,52 @@ export default function AdminPanel({ auth, onClose }) {
   async function calculateRealtimeStorage() {
     setCalculatingStorage(true)
     try {
-      const expensesSnap = await getDocs(collection(db, 'expenses'))
-      const lendingSnap = await getDocs(collection(db, 'lending'))
-      const usersSnap = await getDocs(collection(db, 'userProfiles'))
-      const remindersSnap = await getDocs(collection(db, 'scheduledReminders'))
+      const [expensesSnap, lendingSnap, usersSnap, subsSnap, bankSnap, reviewsSnap, remindersSnap] = await Promise.all([
+        getDocs(collection(db, 'expenses')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'lending')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'userProfiles')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'subscriptions')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'bankTransactions')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'appReviews')).catch(() => ({ size: 0, forEach: () => {} })),
+        getDocs(collection(db, 'scheduledReminders')).catch(() => ({ size: 0, forEach: () => {} })),
+      ])
 
       let totalBytes = 0
       let totalDocs = 0
 
-      expensesSnap.forEach((docSnap) => {
-        totalDocs++
-        const str = JSON.stringify(docSnap.data() || {})
-        totalBytes += str.length + 64
-      })
-      lendingSnap.forEach((docSnap) => {
-        totalDocs++
-        const str = JSON.stringify(docSnap.data() || {})
-        totalBytes += str.length + 64
-      })
-      usersSnap.forEach((docSnap) => {
-        totalDocs++
-        const str = JSON.stringify(docSnap.data() || {})
-        totalBytes += str.length + 64
-      })
-      remindersSnap.forEach((docSnap) => {
-        totalDocs++
-        const str = JSON.stringify(docSnap.data() || {})
-        totalBytes += str.length + 64
-      })
+      const processSnap = (snap) => {
+        if (!snap || !snap.forEach) return
+        snap.forEach((docSnap) => {
+          totalDocs++
+          const dataStr = JSON.stringify(docSnap.data() || {})
+          const idStr = docSnap.id || ''
+          // Firestore document overhead spec: doc ID length + data string length + 64 bytes index overhead
+          totalBytes += dataStr.length + idStr.length + 64
+        })
+      }
+
+      processSnap(expensesSnap)
+      processSnap(lendingSnap)
+      processSnap(usersSnap)
+      processSnap(subsSnap)
+      processSnap(bankSnap)
+      processSnap(reviewsSnap)
+      processSnap(remindersSnap)
 
       const calculatedMB = parseFloat((totalBytes / (1024 * 1024)).toFixed(3))
       setCalcStats({
-        expensesCount: expensesSnap.size,
-        lendingCount: lendingSnap.size,
-        usersCount: usersSnap.size,
-        remindersCount: remindersSnap.size,
+        expensesCount: expensesSnap.size || 0,
+        lendingCount: lendingSnap.size || 0,
+        usersCount: usersSnap.size || 0,
+        subsCount: subsSnap.size || 0,
+        bankCount: bankSnap.size || 0,
+        reviewsCount: reviewsSnap.size || 0,
+        remindersCount: remindersSnap.size || 0,
         totalDocs,
         totalBytes,
         calculatedMB,
       })
-      showToast(`⚡ Real-time scan complete: ${totalDocs} documents analyzed!`)
+      showToast(`⚡ Real-time scan complete: ${totalDocs} documents analyzed across 7 collections!`)
     } catch (err) {
       console.warn('[AdminPanel] Storage calc warning:', err?.message)
     } finally {
@@ -324,19 +339,85 @@ export default function AdminPanel({ auth, onClose }) {
     }
   }
 
+  async function handleDeleteAccount(targetEmailOrUid) {
+    const target = String(targetEmailOrUid || '').trim()
+    if (!target) return
+    if (!window.confirm(`⚠️ Permanently delete account "${target}" from Firestore?\n\nThis will remove both subscriptions and userProfiles documents associated with this email/UID.`)) {
+      return
+    }
+    setPurging(true)
+    setError('')
+    try {
+      const res = await deleteSubscriptionAccount(auth?.email, target)
+      showToast(`🗑️ Permanently deleted account ${target} (${res.deletedCount} document(s) purged from Firestore)!`)
+      await handleRefresh()
+    } catch (err) {
+      setError(err?.message || 'Failed to delete account')
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  async function handleSyncUsers() {
+    const emails = syncEmails
+      .split(/[\n,;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e && e.includes('@'))
+
+    if (!emails.length) {
+      setError('Paste at least one valid email address')
+      return
+    }
+
+    setSyncing(true)
+    setError('')
+    try {
+      const res = await backfillUserProfiles(auth?.email, emails)
+      if (res.addedCount > 0) {
+        showToast(`✅ Synced ${res.addedCount} new user(s) to Firestore! (${res.skippedCount} already existed)`)
+      } else {
+        showToast(`✨ All ${res.skippedCount} email(s) already exist in Firestore — nothing to sync.`)
+      }
+      if (res.errors.length) {
+        setError(`Errors: ${res.errors.join(', ')}`)
+      }
+      setSyncEmails('')
+      setShowSyncPanel(false)
+      await handleRefresh()
+    } catch (err) {
+      setError(err?.message || 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   // Deduplicate allSubscriptions by unique email address
   const uniqueSubscriptions = deduplicateSubscriptions(allSubscriptions)
 
-  // Filter deduplicated subscriptions for Tab 1
+  // Filter deduplicated subscriptions by Search Query and Hyperlink Stat Card Filter
   const filteredSubscriptions = uniqueSubscriptions.filter((s) => {
-    if (!searchFilter.trim()) return true
-    const term = searchFilter.toLowerCase().trim()
-    return (s.email || '').toLowerCase().includes(term) || (s.userId || s.id || '').toLowerCase().includes(term) || (s.utr || '').toLowerCase().includes(term)
+    // 1. Text Search Filter
+    if (searchFilter.trim()) {
+      const term = searchFilter.toLowerCase().trim()
+      const matches = (s.email || '').toLowerCase().includes(term) || (s.userId || s.id || '').toLowerCase().includes(term) || (s.utr || '').toLowerCase().includes(term)
+      if (!matches) return false
+    }
+
+    // 2. Stat Card Hyperlink Filter — Only walletpro26@gmail.com is "Admin"
+    const expiresAt = s.expiresAt?.toDate ? s.expiresAt.toDate() : (s.expiresAt ? new Date(s.expiresAt) : null)
+    const isSuperAdmin = isAdminEmail(s.email)
+    const isAdminActivatedUser = !isSuperAdmin && (s.gateway === 'admin_granted' || s.adminActivated || s.plan === 'lifetime_admin')
+    const isActive = (s.status === 'active' || isSuperAdmin || isAdminActivatedUser) && (!expiresAt || expiresAt > new Date())
+
+    if (filterTab === 'regular') return isActive && !isSuperAdmin
+    if (filterTab === 'admin') return isSuperAdmin
+    if (filterTab === 'pending') return !isSuperAdmin && (s.status === 'pending_verification' || s.status === 'registered')
+    if (filterTab === 'inactive') return !isActive && !isSuperAdmin && s.status !== 'pending_verification' && s.status !== 'registered'
+
+    return true
   })
 
-  const { totalActive, adminActivatedCount, regularActiveCount } = getSubscriberCounts(allSubscriptions)
-  const pendingSubsCount = uniqueSubscriptions.filter((s) => s.status === 'pending_verification').length
-  const revokedSubsCount = uniqueSubscriptions.filter((s) => s.status === 'expired' || s.status === 'revoked').length
+  const { totalAccounts, adminActivatedCount, regularActiveCount, pendingCount: pendingSubsCount, inactiveCount: revokedSubsCount } = getSubscriberCounts(uniqueSubscriptions)
   const parsedLimit = parseInt(subscriberLimit, 10)
   const limitNum = isNaN(parsedLimit) ? (config?.subscriberLimit ?? 10) : Math.max(0, parsedLimit)
 
@@ -391,12 +472,10 @@ export default function AdminPanel({ auth, onClose }) {
               </p>
             </div>
           </div>
-
-          {/* Tab Switcher (Compact Header Navigation) */}
           <div style={{ display: 'flex', gap: 4, marginTop: 12, background: 'rgba(0,0,0,0.3)', padding: 3, borderRadius: 8 }}>
             <button
               type="button"
-              onClick={() => setActiveTab('users')}
+              onClick={() => { setActiveTab('users'); setFilterTab('all'); }}
               style={{
                 flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                 background: activeTab === 'users' ? '#ffffff' : 'transparent',
@@ -461,75 +540,159 @@ export default function AdminPanel({ auth, onClose }) {
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'users' && (
             <div>
-              {/* Quick Status Stats Bar */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 10 }}>
-                <div style={{ background: regularActiveCount >= limitNum ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)', border: `1px solid ${regularActiveCount >= limitNum ? '#ef4444' : '#10b981'}`, borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+              {/* Quick Status Stats Bar (Clickable Hyperlink Filters) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5, marginBottom: 10 }}>
+                {/* 1. All Accounts Stat Card */}
+                <div
+                  onClick={() => setFilterTab('all')}
+                  style={{
+                    background: filterTab === 'all' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.06)',
+                    border: `1.5px solid ${filterTab === 'all' ? '#4f46e5' : '#818cf8'}`,
+                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'all' ? '0 0 0 2px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Show All Registered Accounts"
+                >
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#4f46e5' }}>
+                    {uniqueSubscriptions.length}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#4338ca', fontWeight: 800 }}>
+                    👥 All ({uniqueSubscriptions.length})
+                  </div>
+                </div>
+
+                {/* 2. Regular Active Subscribers Stat Card */}
+                <div
+                  onClick={() => setFilterTab(filterTab === 'regular' ? 'all' : 'regular')}
+                  style={{
+                    background: filterTab === 'regular' ? 'rgba(16,185,129,0.18)' : (regularActiveCount >= limitNum ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'),
+                    border: `1.5px solid ${filterTab === 'regular' ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : '#10b981')}`,
+                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'regular' ? '0 0 0 2px rgba(16,185,129,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Click to filter by Regular Active Subscribers"
+                >
                   <div style={{ fontSize: 13, fontWeight: 900, color: regularActiveCount >= limitNum ? '#ef4444' : '#059669' }}>
                     {regularActiveCount} / {limitNum}
                   </div>
-                  <div style={{ fontSize: 8.5, color: regularActiveCount >= limitNum ? '#b91c1c' : '#047857', fontWeight: 700 }}>
-                    {regularActiveCount >= limitNum ? '🔴 Regular Limit' : '🟢 Regular Subs'}
+                  <div style={{ fontSize: 8, color: regularActiveCount >= limitNum ? '#b91c1c' : '#047857', fontWeight: 800 }}>
+                    {regularActiveCount >= limitNum ? '🔴 Limit' : '🟢 Regular'}
                   </div>
                 </div>
-                <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid #6366f1', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+
+                {/* 3. Admin Granted Stat Card */}
+                <div
+                  onClick={() => setFilterTab(filterTab === 'admin' ? 'all' : 'admin')}
+                  style={{
+                    background: filterTab === 'admin' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
+                    border: `1.5px solid ${filterTab === 'admin' ? '#4338ca' : '#6366f1'}`,
+                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'admin' ? '0 0 0 2px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Click to filter by Admin Granted (Exempt) accounts"
+                >
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#4f46e5' }}>{adminActivatedCount}</div>
-                  <div style={{ fontSize: 8.5, color: '#4338ca', fontWeight: 700 }}>👑 Admin Granted</div>
+                  <div style={{ fontSize: 8, color: '#4338ca', fontWeight: 800 }}>👑 Admin</div>
                 </div>
-                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid #f59e0b', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+
+                {/* 4. Pending Verification Stat Card */}
+                <div
+                  onClick={() => setFilterTab(filterTab === 'pending' ? 'all' : 'pending')}
+                  style={{
+                    background: filterTab === 'pending' ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.08)',
+                    border: `1.5px solid ${filterTab === 'pending' ? '#b45309' : '#f59e0b'}`,
+                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'pending' ? '0 0 0 2px rgba(245,158,11,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Click to filter by Pending Verification accounts"
+                >
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#d97706' }}>{pendingSubsCount}</div>
-                  <div style={{ fontSize: 8.5, color: '#b45309', fontWeight: 700 }}>⏳ Pending</div>
+                  <div style={{ fontSize: 8, color: '#b45309', fontWeight: 800 }}>⏳ Pending</div>
                 </div>
-                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+
+                {/* 5. Inactive Stat Card */}
+                <div
+                  onClick={() => setFilterTab(filterTab === 'inactive' ? 'all' : 'inactive')}
+                  style={{
+                    background: filterTab === 'inactive' ? 'rgba(100,116,139,0.18)' : 'var(--bg-subtle, #f8fafc)',
+                    border: `1.5px solid ${filterTab === 'inactive' ? '#334155' : 'var(--border-color, #e2e8f0)'}`,
+                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'inactive' ? '0 0 0 2px rgba(100,116,139,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Click to filter by Inactive / Registered accounts"
+                >
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#64748b' }}>{revokedSubsCount}</div>
-                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>🔴 Inactive</div>
+                  <div style={{ fontSize: 8, color: '#64748b', fontWeight: 800 }}>🔴 Inactive</div>
                 </div>
               </div>
 
-              {/* Quick Manual Access Tool */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid #6366f1', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <i className="fas fa-user-plus" /> Activate / Deactivate Any Account
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <input
-                    type="text"
-                    placeholder="Enter email or UID (e.g. user@gmail.com)"
-                    value={manualUser}
-                    onChange={(e) => setManualUser(e.target.value)}
-                    style={{
-                      flex: 2, minWidth: 160, padding: '6px 9px', borderRadius: 6,
-                      border: '1px solid var(--border-color, #e2e8f0)', fontSize: 11, fontWeight: 600,
-                      background: '#fff', color: '#1e293b',
-                    }}
-                  />
-                  <select
-                    value={manualPlan}
-                    onChange={(e) => setManualPlan(e.target.value)}
-                    style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10, fontWeight: 700, background: '#fff', color: '#1e293b' }}
-                  >
-                    <option value="monthly">Pro Monthly Pass</option>
-                    <option value="yearly">Pro Yearly Saver</option>
-                    <option value="ultra_monthly">👑 Ultra Monthly</option>
-                    <option value="ultra_yearly">👑 Ultra Yearly</option>
-                  </select>
+              {/* Active Filter Clear Chip */}
+              {filterTab !== 'all' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 10, fontWeight: 700, color: '#6366f1' }}>
+                  <span>Filtered by: <strong style={{ textTransform: 'uppercase' }}>{filterTab} accounts ({filteredSubscriptions.length})</strong></span>
                   <button
                     type="button"
-                    onClick={() => handleManualSet('active')}
-                    disabled={manualSubmitting || !manualUser.trim()}
-                    style={{ padding: '6px 10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    onClick={() => setFilterTab('all')}
+                    style={{ background: 'rgba(99,102,241,0.1)', border: 'none', color: '#4f46e5', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 9, fontWeight: 800 }}
                   >
-                    ⚡ Activate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleManualSet('revoked')}
-                    disabled={manualSubmitting || !manualUser.trim()}
-                    style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    ⛔ Deactivate
+                    Clear Filter ×
                   </button>
                 </div>
-              </div>
+              )}
+
+              {/* Collapsible Quick Manual Access Tool */}
+              {showQuickActivate && (
+                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid #6366f1', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span><i className="fas fa-user-plus" /> Activate / Deactivate Any Account</span>
+                    <button type="button" onClick={() => setShowQuickActivate(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>×</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      placeholder="Enter email or UID (e.g. user@gmail.com)"
+                      value={manualUser}
+                      onChange={(e) => setManualUser(e.target.value)}
+                      style={{
+                        flex: 2, minWidth: 160, padding: '6px 9px', borderRadius: 6,
+                        border: '1px solid var(--border-color, #e2e8f0)', fontSize: 11, fontWeight: 600,
+                        background: '#fff', color: '#1e293b',
+                      }}
+                    />
+                    <select
+                      value={manualPlan}
+                      onChange={(e) => setManualPlan(e.target.value)}
+                      style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10, fontWeight: 700, background: '#fff', color: '#1e293b' }}
+                    >
+                      <option value="monthly">Pro Monthly Pass</option>
+                      <option value="yearly">Pro Yearly Saver</option>
+                      <option value="ultra_monthly">👑 Ultra Monthly</option>
+                      <option value="ultra_yearly">👑 Ultra Yearly</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleManualSet('active')}
+                      disabled={manualSubmitting || !manualUser.trim()}
+                      style={{ padding: '6px 10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      ⚡ Activate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleManualSet('revoked')}
+                      disabled={manualSubmitting || !manualUser.trim()}
+                      style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      ⛔ Deactivate
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Registered Accounts Filter Input */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -548,7 +711,16 @@ export default function AdminPanel({ auth, onClose }) {
                     }}
                   />
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickActivate(!showQuickActivate)}
+                    style={{ background: showQuickActivate ? '#6366f1' : 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: showQuickActivate ? '#fff' : '#6366f1', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    title="Toggle manual account activation form"
+                  >
+                    <i className="fas fa-user-plus" style={{ marginRight: 4 }} />
+                    {showQuickActivate ? 'Close Form' : 'Activate User'}
+                  </button>
                   <button
                     type="button"
                     onClick={handlePurgeDuplicates}
@@ -561,6 +733,15 @@ export default function AdminPanel({ auth, onClose }) {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setShowSyncPanel(!showSyncPanel)}
+                    style={{ background: showSyncPanel ? '#6366f1' : 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: showSyncPanel ? '#fff' : '#6366f1', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    title="Import Firebase Auth users into Firestore (paste emails from Firebase Console)"
+                  >
+                    <i className={`fas ${showSyncPanel ? 'fa-chevron-up' : 'fa-cloud-download-alt'}`} style={{ marginRight: 4 }} />
+                    {showSyncPanel ? 'Close Sync' : 'Sync Users'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleRefresh}
                     style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >
@@ -569,25 +750,59 @@ export default function AdminPanel({ auth, onClose }) {
                 </div>
               </div>
 
+              {/* Sync Firebase Auth Users Panel */}
+              {showSyncPanel && (
+                <div style={{ padding: 10, background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
+                    🔄 Import Firebase Auth Users
+                  </div>
+                  <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+                    Paste emails from <strong>Firebase Console → Authentication</strong> (one per line, comma, or semicolon separated).
+                    Users already in Firestore will be skipped. New ones appear under <strong>⏳ Pending</strong>.
+                  </div>
+                  <textarea
+                    value={syncEmails}
+                    onChange={(e) => setSyncEmails(e.target.value)}
+                    placeholder={'daraehsan199@gmail.com\nsameerqasmi5@gmail.com\njawharwani09@gmail.com\n...paste all emails here'}
+                    style={{
+                      width: '100%', minHeight: 80, padding: 8, borderRadius: 6,
+                      border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10,
+                      fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box',
+                      background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)',
+                    }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                    <span style={{ fontSize: 9, color: '#94a3b8' }}>
+                      {syncEmails.split(/[\n,;]+/).filter((e) => e.trim() && e.includes('@')).length} valid email(s) detected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSyncUsers}
+                      disabled={syncing}
+                      style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      <i className={`fas ${syncing ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`} style={{ marginRight: 4 }} />
+                      {syncing ? 'Syncing...' : 'Sync to Firestore'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Registered Accounts Cards List */}
               {filteredSubscriptions.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 8, fontSize: 11, color: '#64748b' }}>
                   No registered account records found matching query.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 310, overflowY: 'auto' }} className="custom-scrollbar">
-                  {filteredSubscriptions.map((sub) => {
-                    const isActive = sub.status === 'active'
-                    const isPending = sub.status === 'pending_verification'
-                    const isRevoked = sub.status === 'revoked' || sub.status === 'expired'
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: showQuickActivate || showSyncPanel ? 290 : 440, overflowY: 'auto' }} className="custom-scrollbar">
+                  {filteredSubscriptions.map((sub, idx) => {
                     const expiresDate = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : (sub.expiresAt ? new Date(sub.expiresAt) : null)
 
-                    const isAdminGranted =
-                      sub.gateway === 'admin_granted' ||
-                      sub.adminActivated === true ||
-                      !!sub.updatedByAdmin ||
-                      sub.plan === 'lifetime_admin' ||
-                      isAdminEmail(sub.email)
+                    const isSuperAdmin = isAdminEmail(sub.email)
+                    const isAdminActivatedUser = !isSuperAdmin && (sub.gateway === 'admin_granted' || sub.adminActivated === true || sub.plan === 'lifetime_admin')
+
+                    const isActive = (sub.status === 'active' || isSuperAdmin || isAdminActivatedUser) && (!expiresDate || expiresDate > new Date())
+                    const isPending = !isSuperAdmin && (sub.status === 'pending_verification' || sub.status === 'registered')
+                    const isRevoked = !isSuperAdmin && !isAdminActivatedUser && !isPending && (sub.status === 'revoked' || sub.status === 'expired' || sub.status === 'inactive')
 
                     return (
                       <div
@@ -595,28 +810,41 @@ export default function AdminPanel({ auth, onClose }) {
                         style={{
                           padding: '8px 10px',
                           borderRadius: 8,
-                          border: isActive ? (isAdminGranted ? '1px solid #a5b4fc' : '1px solid #a7f3d0') : isPending ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
-                          background: isActive ? (isAdminGranted ? 'rgba(99,102,241,0.04)' : 'rgba(16,185,129,0.03)') : isPending ? 'rgba(245,158,11,0.05)' : 'var(--bg-subtle, #f8fafc)',
+                          border: isActive ? (isSuperAdmin ? '1px solid #a5b4fc' : '1px solid #a7f3d0') : isPending ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
+                          background: isActive ? (isSuperAdmin ? 'rgba(99,102,241,0.04)' : 'rgba(16,185,129,0.03)') : isPending ? 'rgba(245,158,11,0.05)' : 'var(--bg-subtle, #f8fafc)',
                           fontSize: 11,
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                                Sl. {idx + 1}
+                              </span>
                               <strong style={{ color: 'var(--text-primary, #1e293b)', fontSize: 11 }}>{sub.email || sub.userId}</strong>
-                              {isActive && isAdminGranted && (
-                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(99,102,241,0.15)', color: '#4f46e5', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
-                                  👑 Admin Granted (Exempt)
+                              {isActive && isAdminEmail(sub.email) && (
+                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(99,102,241,0.2)', color: '#4338ca', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                  👑 Super Admin
                                 </span>
                               )}
-                              {isActive && !isAdminGranted && (
+                              {isActive && isAdminActivatedUser && (
+                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(16,185,129,0.15)', color: '#047857', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                  ⚡ Admin Activated
+                                </span>
+                              )}
+                              {isActive && !isSuperAdmin && !isAdminActivatedUser && (
                                 <span style={{ fontSize: 7.5, fontWeight: 900, background: sub.plan === 'trial' ? 'rgba(16,185,129,0.15)' : 'rgba(14,165,233,0.15)', color: sub.plan === 'trial' ? '#047857' : '#0284c7', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
                                   {sub.plan === 'trial' ? '🎁 Free Trial' : '💳 Paid Sub'}
                                 </span>
                               )}
+                              {(!isActive && (sub.hadPaidSubscription || sub.paidAmount || sub.paymentId)) && (
+                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(16,185,129,0.15)', color: '#047857', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                  💳 Paid Record (₹{sub.paidAmount || 150})
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
-                              Plan: <strong style={{ color: '#6366f1' }}>{(sub.plan || 'monthly').toUpperCase()}</strong>
+                              Plan: <strong style={{ color: '#6366f1' }}>{(sub.plan || 'NONE').toUpperCase()}</strong>
                               {expiresDate && (
                                 <> &bull; Expires: <span>{expiresDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
                               )}
@@ -630,46 +858,80 @@ export default function AdminPanel({ auth, onClose }) {
                               color: isActive ? '#059669' : isPending ? '#d97706' : '#ef4444',
                             }}
                           >
-                            {isActive ? '🟢 Active' : isPending ? '⏳ Pending' : '🔴 Inactive'}
+                            {isActive ? '🟢 Active' : isPending ? (sub.status === 'registered' ? '📋 Registered' : '⏳ Pending') : '🔴 Inactive'}
                           </span>
                         </div>
 
                         {/* Inline Actions */}
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                          {!isActive ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
-                                style={{ padding: '3px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ⚡ Activate 30D
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleManualSet('active', sub.email || sub.userId, 'yearly')}
-                                style={{ padding: '3px 8px', background: '#059669', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ⚡ Activate 1Yr
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
-                                style={{ padding: '3px 8px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ➕ +30 Days
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleManualSet('revoked', sub.email || sub.userId)}
-                                style={{ padding: '3px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                ⛔ Deactivate
-                              </button>
-                            </>
+                        <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {!isActive ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualSet('active', sub.email || sub.userId, 'yearly')}
+                                  style={{ padding: '3px 8px', background: '#059669', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  title="Activate 1-Year Pro Subscription"
+                                >
+                                  ⚡ Activate 1Yr
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
+                                  style={{ padding: '3px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  title="Activate 30-Day Pro Subscription"
+                                >
+                                  ⚡ Activate 30D
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const rawMobile = sub.mobile || sub.mobileNo || ''
+                                    const cleanPhone = rawMobile.replace(/[^0-9]/g, '')
+                                    const targetPhone = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone
+                                    const msg = encodeURIComponent(
+                                      `Hi! 👋 Welcome to WalletVibe Pro — the premier personal finance manager.\n\n` +
+                                      `Track your daily expenses, lend/borrow ledgers, and bank statements automatically with AI.\n\n` +
+                                      `Start your trial or activate Pro access here: ${window.location.origin}`
+                                    )
+                                    window.open(targetPhone ? `https://wa.me/${targetPhone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank')
+                                  }}
+                                  style={{ padding: '3px 8px', background: 'rgba(37, 211, 102, 0.15)', color: '#15803d', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  title="Send WhatsApp Nudge to user to try WalletVibe Personal Finance"
+                                >
+                                  <i className="fab fa-whatsapp" style={{ marginRight: 3 }} /> Nudge
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
+                                  style={{ padding: '3px 8px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                >
+                                  ➕ +30 Days
+                                </button>
+                                {!isSuperAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleManualSet('revoked', sub.email || sub.userId)}
+                                    style={{ padding: '3px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  >
+                                    ⛔ Deactivate
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          {!isAdminEmail(sub.email) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAccount(sub.email || sub.userId || sub.id)}
+                              style={{ padding: '3px 8px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                              title="Permanently Delete Account from Firestore (Both subscriptions & userProfiles)"
+                            >
+                              🗑️ Delete Account
+                            </button>
                           )}
                         </div>
                       </div>
@@ -680,168 +942,138 @@ export default function AdminPanel({ auth, onClose }) {
             </div>
           )}
 
-          {/* Pricing Control Section: Pro & Ultra Tiers */}
-          <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
-              💳 Subscription Pricing Configuration
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
-              <div>
-                <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Monthly Price (₹)</label>
-                <input
-                  type="number"
-                  value={monthlyPrice}
-                  onChange={(e) => setMonthlyPrice(e.target.value)}
-                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Yearly Price (₹)</label>
-                <input
-                  type="number"
-                  value={yearlyPrice}
-                  onChange={(e) => setYearlyPrice(e.target.value)}
-                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
-
-            {/* Ultra Tier Settings */}
-            <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1.5px solid rgba(139, 92, 246, 0.25)', borderRadius: 8, padding: 8, marginTop: 6 }}>
-              <div style={{ fontSize: 9.5, fontWeight: 800, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>👑 Ultra Tier (Auto Bank Sync via Setu)</span>
-                <span style={{ fontSize: 8, background: ultraEnabled ? '#10b981' : '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: 99 }}>
-                  {ultraEnabled ? 'ACTIVE' : 'SETUP / COMING SOON'}
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <div>
-                  <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Monthly (₹)</label>
-                  <input
-                    type="number"
-                    value={ultraMonthlyPrice}
-                    onChange={(e) => setUltraMonthlyPrice(e.target.value)}
-                    style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Yearly (₹)</label>
-                  <input
-                    type="number"
-                    value={ultraYearlyPrice}
-                    onChange={(e) => setUltraYearlyPrice(e.target.value)}
-                    style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#4c1d95', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={ultraEnabled}
-                    onChange={(e) => setUltraEnabled(e.target.checked)}
-                    style={{ width: 14, height: 14, accentColor: '#8b5cf6' }}
-                  />
-                  Enable Ultra Tier Purchase (Turn ON after Setu AA keys are configured)
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#6b21a8', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={ultraComingSoon}
-                    onChange={(e) => setUltraComingSoon(e.target.checked)}
-                    style={{ width: 14, height: 14, accentColor: '#ec4899' }}
-                  />
-                  Show "Coming Soon" badge on Ultra tier in Subscription modal
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={hideUltraBanner}
-                    onChange={(e) => setHideUltraBanner(e.target.checked)}
-                    style={{ width: 14, height: 14, accentColor: '#4f46e5' }}
-                  />
-                  Hide "Coming Soon" Bank Sync banner completely in Bank History view
-                </label>
-              </div>
-            </div>
-          </div>
-
           {/* ══════════════════════════════════════════════════════════
               TAB 3: CONFIGURATION & SETTINGS
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'settings' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Pricing section */}
+              {/* Pricing section: Pro & Ultra Tiers */}
               <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
-                  💰 Subscription Pricing (₹ INR)
+                  💰 Subscription Pricing Configuration (₹ INR)
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Monthly Price (₹)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Monthly Price (₹)</label>
                     <input
                       type="number"
                       value={monthlyPrice}
                       onChange={(e) => setMonthlyPrice(e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700 }}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
                     />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Yearly Price (₹)</label>
+                  <div>
+                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Yearly Price (₹)</label>
                     <input
                       type="number"
                       value={yearlyPrice}
                       onChange={(e) => setYearlyPrice(e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700 }}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
                     />
+                  </div>
+                </div>
+
+                {/* Ultra Tier Settings */}
+                <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1.5px solid rgba(139, 92, 246, 0.25)', borderRadius: 8, padding: 8, marginTop: 6 }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>👑 Ultra Tier (Auto Bank Sync via Setu)</span>
+                    <span style={{ fontSize: 8, background: ultraEnabled ? '#10b981' : '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: 99 }}>
+                      {ultraEnabled ? 'ACTIVE' : 'SETUP / COMING SOON'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Monthly (₹)</label>
+                      <input
+                        type="number"
+                        value={ultraMonthlyPrice}
+                        onChange={(e) => setUltraMonthlyPrice(e.target.value)}
+                        style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Yearly (₹)</label>
+                      <input
+                        type="number"
+                        value={ultraYearlyPrice}
+                        onChange={(e) => setUltraYearlyPrice(e.target.value)}
+                        style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#4c1d95', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={ultraEnabled}
+                        onChange={(e) => setUltraEnabled(e.target.checked)}
+                        style={{ width: 14, height: 14, accentColor: '#8b5cf6' }}
+                      />
+                      Enable Ultra Tier Purchase (Turn ON after Setu AA keys are configured)
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#6b21a8', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={ultraComingSoon}
+                        onChange={(e) => setUltraComingSoon(e.target.checked)}
+                        style={{ width: 14, height: 14, accentColor: '#ec4899' }}
+                      />
+                      Show "Coming Soon" badge on Ultra tier in Subscription modal
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={hideUltraBanner}
+                        onChange={(e) => setHideUltraBanner(e.target.checked)}
+                        style={{ width: 14, height: 14, accentColor: '#4f46e5' }}
+                      />
+                      Hide "Coming Soon" Bank Sync banner completely in Bank History view
+                    </label>
                   </div>
                 </div>
               </div>
 
               {/* Subscriber Limit Section */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>👥 Subscriber Limit Control</span>
-                  <span style={{ fontSize: 8.5, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 6px', borderRadius: 4, textTransform: 'none', fontWeight: 700 }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><i className="fas fa-users-cog" /> Subscriber Limit Control</span>
+                  <span style={{ fontSize: 8.5, color: limitNum <= 0 ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : '#10b981'), background: limitNum <= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.08)', padding: '2px 8px', borderRadius: 99, fontWeight: 800 }}>
                     {limitNum <= 0 ? '♾️ Unlimited Allowed' : `Regular Active: ${regularActiveCount} / ${limitNum}`}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{ width: 140 }}>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Max Regular Subs (0 = Unlimited)</label>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        value={subscriberLimit}
-                        onChange={(e) => setSubscriberLimit(e.target.value)}
-                        style={{ width: 70, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setSubscriberLimit(subscriberLimit === '0' ? '10' : '0')}
-                        style={{
-                          padding: '5px 8px',
-                          fontSize: 10,
-                          fontWeight: 800,
-                          borderRadius: 6,
-                          border: '1px solid #6366f1',
-                          background: subscriberLimit === '0' ? '#6366f1' : '#fff',
-                          color: subscriberLimit === '0' ? '#fff' : '#6366f1',
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {subscriberLimit === '0' ? '♾️ Unlimited' : 'Set Unlimited'}
-                      </button>
-                    </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      value={subscriberLimit}
+                      onChange={(e) => setSubscriberLimit(e.target.value)}
+                      style={{ width: 75, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 12, fontWeight: 800, boxSizing: 'border-box', background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSubscriberLimit(subscriberLimit === '0' ? '10' : '0')}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        borderRadius: 6,
+                        border: '1px solid #6366f1',
+                        background: subscriberLimit === '0' ? '#6366f1' : 'rgba(99,102,241,0.08)',
+                        color: subscriberLimit === '0' ? '#fff' : '#4f46e5',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {subscriberLimit === '0' ? '♾️ Unlimited Set' : 'Set Unlimited (0)'}
+                    </button>
                   </div>
-                  <div style={{ flex: 1, fontSize: 9, color: '#64748b', lineHeight: 1.35 }}>
-                    Controls maximum regular online subscribers allowed (default: 10, enter <strong>0</strong> for Unlimited). Accounts activated directly by Admin are <strong>exempt</strong> from this limit.
+                  <div style={{ flex: 1, minWidth: 180, fontSize: 9.5, color: '#64748b', lineHeight: 1.35 }}>
+                    Max regular subscribers allowed (enter <strong>0</strong> for Unlimited). Admin-activated accounts are <strong>exempt</strong>.
                   </div>
                 </div>
               </div>
@@ -1254,25 +1486,44 @@ export default function AdminPanel({ auth, onClose }) {
 
                 {calcStats ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Expenses: <strong>{calcStats.expensesCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Lending: <strong>{calcStats.lendingCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       User Profiles: <strong>{calcStats.usersCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: '#fff', border: '1px solid #cbd5e1' }}>
-                      Reminders: <strong>{calcStats.remindersCount} docs</strong>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                      Subscriptions: <strong>{calcStats.subsCount} docs</strong>
                     </div>
-                    <div style={{ gridColumn: 'span 2', padding: '6px 8px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#059669', fontWeight: 800 }}>
-                      ✔ Total Scanned: {calcStats.totalDocs} docs (~{calcStats.calculatedMB} MB estimated JSON footprint)
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                      Bank Sync: <strong>{calcStats.bankCount} docs</strong>
+                    </div>
+                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                      Reviews &amp; Reminders: <strong>{(calcStats.reviewsCount || 0) + (calcStats.remindersCount || 0)} docs</strong>
+                    </div>
+                    <div style={{ gridColumn: 'span 2', padding: '8px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#059669', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                      <span>✔ Scanned {calcStats.totalDocs} docs (~{calcStats.calculatedMB} MiB payload)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = calcStats.calculatedMB || 0.1
+                          setStorageBytes(val)
+                          setCloudMetricInput(String(val))
+                          localStorage.setItem('wv_firestore_occupancy_mb', String(val))
+                          showToast(`✔ Applied scanned payload (${val} MiB) to Storage Occupancy!`)
+                        }}
+                        style={{ padding: '4px 10px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        ⚡ Apply to Gauge
+                      </button>
                     </div>
                   </div>
                 ) : (
                   <div style={{ fontSize: 9.5, color: '#64748b', fontStyle: 'italic' }}>
-                    Click "Run Real-Time Scan" to query live document byte sizes across expenses, lending, user accounts, and reminders.
+                    Click "Run Real-Time Scan" to query live document byte sizes across expenses, lending, user accounts, bank transactions, and reviews.
                   </div>
                 )}
               </div>
