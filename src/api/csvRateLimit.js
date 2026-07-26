@@ -60,6 +60,17 @@ export function checkCsvRateLimit(isAdmin = false) {
   return { allowed: true, todayCount, monthCount }
 }
 
+export function checkImportRowCountLimit(rowCount = 0, isAdmin = false, maxRows = 500) {
+  if (isAdmin) return { allowed: true }
+  if (rowCount > maxRows) {
+    return {
+      allowed: false,
+      reason: `🚫 Import Row Limit Exceeded: Standard accounts can import a maximum of ${maxRows} records per file (your file has ${rowCount} rows). Please split your file or contact Admin for high-volume batch processing.`,
+    }
+  }
+  return { allowed: true }
+}
+
 export function recordCsvImportSuccess() {
   try {
     const raw = localStorage.getItem('wv_csv_import_timestamps')

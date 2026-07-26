@@ -12,13 +12,22 @@ import { normalizePersonName } from '../api/entityNormalizer'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid, isAdmin = false }) {
+export default function ReportsView({ allExpenses = [], allLending = [], bankRecords: parentBankRecords = [], onSelectTxn, uid, isAdmin = false }) {
   const [reportType, setReportType] = useState('expense') // 'expense' | 'lending' | 'bank'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [isAllTime, setIsAllTime] = useState(true)
   const [activeRange, setActiveRange] = useState('allTime')
-  const [bankRecords, setBankRecords] = useState([])
+  const [bankRecords, setBankRecords] = useState(() => {
+    if (Array.isArray(parentBankRecords) && parentBankRecords.length > 0) {
+      return parentBankRecords.map((r) => ({
+        ...r,
+        dateObj: parseSafeDate(r.dateObj || r.date),
+        date: parseSafeDate(r.dateObj || r.date),
+      }))
+    }
+    return []
+  })
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [expenseBreakdownTab, setExpenseBreakdownTab] = useState('category') // 'category' | 'person'
   const [expenseSearchTerm, setExpenseSearchTerm] = useState('')
@@ -27,6 +36,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
   useEffect(() => {
     setBankVisibleCount(40)
   }, [reportType, startDate, endDate, isAllTime])
+
   const [pdfSettings, setPdfSettings] = useState({
     showStats: true,
     showBreakdown: true,
@@ -49,6 +59,15 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
   })
 
   useEffect(() => {
+    if (Array.isArray(parentBankRecords) && parentBankRecords.length > 0) {
+      setBankRecords(parentBankRecords.map((r) => ({
+        ...r,
+        dateObj: parseSafeDate(r.dateObj || r.date),
+        date: parseSafeDate(r.dateObj || r.date),
+      })))
+      return
+    }
+
     const currentUid = uid || auth?.currentUser?.uid || ''
     const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
     if (cached && cached.length > 0) {
@@ -71,7 +90,7 @@ export default function ReportsView({ allExpenses, allLending, onSelectTxn, uid,
     }
 
     loadBankFromFirestore()
-  }, [uid, isAdmin])
+  }, [parentBankRecords, uid, isAdmin])
 
   function toYYYYMMDD(date) {
     const y = date.getFullYear()

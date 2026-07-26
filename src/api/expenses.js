@@ -13,6 +13,7 @@ function toFirestore(data) {
   return {
     timestamp: Timestamp.fromDate(ts),
     userId: auth.currentUser?.uid || '',
+    uid: auth.currentUser?.uid || '',
     forWhom: data.forWhom || 'Self',
     category: data.category || '',
     details: data.details || '',
@@ -49,10 +50,26 @@ function fromFirestore(docSnap) {
   }
 }
 
+// In-memory runtime cache for expenses to eliminate duplicate Firestore reads
+const _memExpenseCacheMap = new Map()
+const _memExpenseCacheTimeMap = new Map()
+const EXPENSE_CACHE_TTL = 15 * 60 * 1000 // 15 minutes
+
+export function invalidateExpenseInMemoryCache(uid = '') {
+  if (uid) {
+    _memExpenseCacheMap.delete(uid)
+    _memExpenseCacheTimeMap.delete(uid)
+  } else {
+    _memExpenseCacheMap.clear()
+    _memExpenseCacheTimeMap.clear()
+  }
+}
+
 export async function addExpense(data) {
   const fsData = toFirestore(data)
   const currentUid = auth.currentUser?.uid || ''
   invalidateSnapshot('expenses', currentUid)
+  invalidateExpenseInMemoryCache(currentUid)
   try {
     const docRef = await addDoc(collection(db, COL), fsData)
     if (data.fileData) {
@@ -98,6 +115,7 @@ export async function updateExpense(id, data) {
   const fsData = toFirestore(data)
   const currentUid = auth.currentUser?.uid || ''
   invalidateSnapshot('expenses', currentUid)
+  invalidateExpenseInMemoryCache(currentUid)
   delete fsData.fileData
   try {
     await updateDoc(ref, fsData)
@@ -115,9 +133,60 @@ export async function updateExpense(id, data) {
   }
 }
 
-export async function deleteExpense(id) {
+function unpackExpenseDoc(docSnap) {
+  const data = docSnap.data()
+  if (data.isBatch && Array.isArray(data.items)) {
+    return data.items.map((item, idx) => {
+      const ts = item.date ? new Date(item.date) : new Date()
+      return {
+        id: item.id || `${docSnap.id}_idx_${idx}`,
+        parentDocId: docSnap.id,
+        date: ts.toISOString(),
+        dateObj: ts,
+        forWhom: item.forWhom || 'Self',
+        category: item.category || '',
+        details: item.details || '',
+        amount: parseFloat(item.amount) || 0,
+        paymentMode: item.paymentMode || 'Cash',
+        remarks: item.remarks || '',
+        fileName: item.fileName || '',
+        mimeType: item.mimeType || '',
+        hasAttachment: false,
+        hasChunkedAttachment: false,
+        fileData: null,
+        receipt: '',
+      }
+    })
+  }
+  return [fromFirestore(docSnap)]
+}
+
+export async function deleteExpense(id, parentDocId = null) {
   const currentUid = auth.currentUser?.uid || ''
   invalidateSnapshot('expenses', currentUid)
+  invalidateExpenseInMemoryCache(currentUid)
+
+  if (parentDocId) {
+    try {
+      const ref = doc(db, COL, parentDocId)
+      const snap = await getDocs(query(collection(db, COL), where('__name__', '==', parentDocId)))
+      if (snap && !snap.empty) {
+        const data = snap.docs[0].data()
+        if (Array.isArray(data.items)) {
+          const updatedItems = data.items.filter((item) => item.id !== id)
+          if (updatedItems.length === 0) {
+            await deleteDoc(ref)
+          } else {
+            await updateDoc(ref, { items: updatedItems, count: updatedItems.length, updatedAt: Timestamp.now() })
+          }
+          return { success: true }
+        }
+      }
+    } catch (err) {
+      console.warn('[expenses] Batch item delete fallback:', err?.message)
+    }
+  }
+
   try {
     await deleteAttachmentChunks(COL, id)
     await deleteDoc(doc(db, COL, id))
@@ -140,11 +209,20 @@ export async function getAllExpenses(forceRefresh = false) {
   const currentUid = auth.currentUser?.uid || ''
   if (!currentUid) return []
 
-  // Check if local cache is fresh (default 3 min TTL) to save Firestore read quota
+  // 1. In-memory runtime cache (0 Firestore reads)
+  const memTime = _memExpenseCacheTimeMap.get(currentUid) || 0
+  if (!forceRefresh && _memExpenseCacheMap.has(currentUid) && (Date.now() - memTime) < EXPENSE_CACHE_TTL) {
+    return _memExpenseCacheMap.get(currentUid)
+  }
+
+  // 2. Check if local snapshot is fresh (15 min TTL)
   if (!forceRefresh && isCacheFresh('expenses', currentUid)) {
     const cached = loadSnapshot('expenses', currentUid)
     if (cached && cached.length > 0) {
-      return cached.sort((a, b) => b.dateObj - a.dateObj)
+      const sorted = cached.sort((a, b) => b.dateObj - a.dateObj)
+      _memExpenseCacheMap.set(currentUid, sorted)
+      _memExpenseCacheTimeMap.set(currentUid, Date.now())
+      return sorted
     }
   }
 
@@ -152,19 +230,72 @@ export async function getAllExpenses(forceRefresh = false) {
     // Fetch user-scoped expenses
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await getDocs(qScoped)
-    let items = snapScoped.docs.map(fromFirestore)
+
+    let items = []
+    snapScoped.docs.forEach((docSnap) => {
+      items.push(...unpackExpenseDoc(docSnap))
+    })
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
-    // Save to user-scoped local cache for offline use
     saveSnapshot('expenses', sorted, currentUid)
+    _memExpenseCacheMap.set(currentUid, sorted)
+    _memExpenseCacheTimeMap.set(currentUid, Date.now())
     return sorted
   } catch (err) {
     console.warn('Expenses fetch failed, using local cache:', err?.message)
-    // Offline fallback — return cached data for this user
     const cached = loadSnapshot('expenses', currentUid)
     if (cached) return cached.sort((a, b) => new Date(b.date) - new Date(a.date))
     return []
   }
+}
+
+/**
+ * Save Expenses as a single Batched Array Document (1 Write per 300 records!)
+ * @param {string} currentUid
+ * @param {Array<object>} itemsArray
+ * @returns {Promise<{ success: boolean, docCount: number }>}
+ */
+export async function saveExpensesBatch(currentUid, itemsArray = []) {
+  if (!currentUid) throw new Error('User not authenticated')
+  if (!Array.isArray(itemsArray) || itemsArray.length === 0) return { success: true, docCount: 0 }
+
+  invalidateSnapshot('expenses', currentUid)
+  invalidateExpenseInMemoryCache(currentUid)
+
+  const CHUNK_SIZE = 300
+  let docCount = 0
+
+  for (let i = 0; i < itemsArray.length; i += CHUNK_SIZE) {
+    const chunk = itemsArray.slice(i, i + CHUNK_SIZE)
+    const formattedItems = chunk.map((item, idx) => {
+      const ts = item.date ? new Date(item.date) : new Date()
+      return {
+        id: item.id || `exp_${Date.now()}_${i + idx}_${Math.floor(Math.random() * 1000)}`,
+        date: ts.toISOString(),
+        forWhom: item.forWhom || 'Self',
+        category: item.category || '',
+        details: item.details || '',
+        amount: parseFloat(item.amount) || 0,
+        paymentMode: item.paymentMode || 'Cash',
+        remarks: item.remarks || '',
+      }
+    })
+
+    const payload = {
+      userId: currentUid,
+      uid: currentUid,
+      isBatch: true,
+      count: formattedItems.length,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      items: formattedItems,
+    }
+
+    await addDoc(collection(db, COL), payload)
+    docCount++
+  }
+
+  return { success: true, docCount }
 }
 
 export async function getExpenseAttachment(id) {

@@ -47,9 +47,9 @@ export function saveSnapshot(type, data, uid = '') {
 }
 
 /**
- * Check if the cached snapshot is still fresh (default 3 minutes TTL)
+ * Check if the cached snapshot is still fresh (default 15 minutes TTL)
  */
-export function isCacheFresh(type, uid = '', maxAgeMs = 3 * 60 * 1000) {
+export function isCacheFresh(type, uid = '', maxAgeMs = 15 * 60 * 1000) {
   try {
     const key = getKey(type, uid)
     const tsStr = localStorage.getItem(key + '_ts')

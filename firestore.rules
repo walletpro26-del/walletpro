@@ -20,7 +20,9 @@ service cloud.firestore {
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
       allow update, delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
@@ -29,7 +31,9 @@ service cloud.firestore {
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
       allow update, delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
@@ -40,23 +44,51 @@ service cloud.firestore {
         resource.data.uid == request.auth.uid ||
         isAdmin()
       );
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.uid == request.auth.uid ||
+        isAdmin()
+      );
       allow update, delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Subscriptions ──
     match /subscriptions/{userId} {
       allow read: if request.auth != null && (
-        request.auth.uid == userId || isAdmin()
+        request.auth.uid == userId ||
+        isAdmin() ||
+        (request.auth.token.email != null && (
+          userId == request.auth.token.email ||
+          resource.data.email == request.auth.token.email
+        ))
       );
       allow write: if request.auth != null && (
-        request.auth.uid == userId || isAdmin()
+        request.auth.uid == userId ||
+        isAdmin() ||
+        (request.auth.token.email != null && (
+          userId == request.auth.token.email ||
+          resource.data.email == request.auth.token.email
+        ))
       );
     }
 
     // ── UPI Payments ──
     match /upi_payments/{orderId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
     }
 
     // ── App Config (readable by all authenticated, writable by admin) ──
@@ -78,14 +110,18 @@ service cloud.firestore {
     // ── Scheduled Reminders (admin full access, users own) ──
     match /scheduledReminders/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
       allow update, delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Reviews ──
     match /reviews/{docId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
       allow update, delete: if request.auth != null && (isOwner() || isAdmin());
     }
 

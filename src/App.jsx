@@ -9,7 +9,7 @@ import {
   getAllLending, computeLendingStatsLocally,
 } from './api/lending'
 
-import { getSubscriptionStatus, isAdminEmail } from './api/subscription'
+import { getSubscriptionStatus, listenSubscriptionStatus, isAdminEmail } from './api/subscription'
 import { getAppConfig, listenAppConfig } from './api/appConfig'
 import { loadSnapshot } from './api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from './api/bankTransactions'
@@ -185,19 +185,31 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
-  // Load data & subscription when logged in, and subscribe to real-time appConfig changes
+  // Load data & subscription when logged in, and subscribe to real-time appConfig & subscription changes
   useEffect(() => {
     const unsubConfig = listenAppConfig((cfg) => {
       setAppConfig(cfg)
     })
 
+    let unsubSub = null
+
     if (authState.loggedIn) {
       checkSubscription(authState)
       loadDashboard()
+
+      unsubSub = listenSubscriptionStatus(authState.uid, authState.email, (sub) => {
+        setSubscriptionState(sub)
+        if (sub.active || sub.isAdmin) {
+          setShowSubscriptionModal(false)
+        }
+      })
     }
 
-    return () => unsubConfig?.()
-  }, [authState.loggedIn, authState.uid])
+    return () => {
+      unsubConfig?.()
+      unsubSub?.()
+    }
+  }, [authState.loggedIn, authState.uid, authState.email])
 
   const checkSubscription = useCallback(async (user) => {
     try {
@@ -206,6 +218,8 @@ export default function App() {
       // If non-admin and inactive/expired/pending, show subscription modal automatically
       if (!sub.active && !sub.isAdmin) {
         setShowSubscriptionModal(true)
+      } else {
+        setShowSubscriptionModal(false)
       }
     } catch (err) {
       console.warn('[App] Check subscription failed:', err?.message)
@@ -559,6 +573,7 @@ export default function App() {
 
         {activeTab === 'bank' && (
           <BankHistoryView
+            bankRecords={bankRecords}
             uid={authState.uid}
             isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
             allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
@@ -572,6 +587,7 @@ export default function App() {
 
         {activeTab === 'reports' && (
           <ReportsView
+            bankRecords={bankRecords}
             allExpenses={allExpenses}
             allLending={allLending}
             uid={authState.uid}

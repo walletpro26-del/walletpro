@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { addExpense, deleteExpense, getAllExpenses } from '../api/expenses'
-import { addLending, deleteLending, getAllLending } from '../api/lending'
+import { auth } from '../firebase'
+import { addExpense, deleteExpense, getAllExpenses, saveExpensesBatch } from '../api/expenses'
+import { addLending, deleteLending, getAllLending, saveLendingBatch } from '../api/lending'
+import { saveBankTransactionsBatch } from '../api/bankTransactions'
 import { loadSnapshot } from '../api/localCache'
 import { importTaskQueue } from '../api/importTaskQueue'
 import {
@@ -490,38 +492,25 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       commitFn: async (updateProgress) => {
         const createdDocIds = []
         let idx = 0
-        if (mode === 'expense') {
-          for (const item of selectedItems) {
-            idx++
-            updateProgress(Math.round((idx / selectedItems.length) * 100), `Saving expense ${idx} of ${selectedItems.length}...`)
-            const res = await addExpense({
-              date: item.date,
-              amount: item.amount,
-              category: item.category,
-              forWhom: item.forWhom,
-              details: item.details,
-              paymentMode: item.paymentMode,
-              remarks: item.remarks,
-              importBatchId: batchId,
-              formType: 'expense',
-            })
-            if (res?.id) createdDocIds.push(res.id)
+        const currentUid = auth?.currentUser?.uid || ''
+        if (mode === 'bank') {
+          updateProgress(50, `Saving bank statement (${selectedItems.length} transactions) into 1 batched document...`)
+          const bankName = selectedItems[0]?.bank || 'Bank'
+          const res = await saveBankTransactionsBatch(currentUid, selectedItems, bankName)
+          if (res?.docCount) {
+            createdDocIds.push(`batch_bank_${Date.now()}`)
+          }
+        } else if (mode === 'expense') {
+          updateProgress(50, `Saving ${selectedItems.length} expenses into 1 batched document...`)
+          const res = await saveExpensesBatch(currentUid, selectedItems)
+          if (res?.docCount) {
+            createdDocIds.push(`batch_exp_${Date.now()}`)
           }
         } else {
-          for (const item of selectedItems) {
-            idx++
-            updateProgress(Math.round((idx / selectedItems.length) * 100), `Saving lend/borrow ${idx} of ${selectedItems.length}...`)
-            const res = await addLending({
-              date: item.date,
-              amount: item.amount,
-              person: item.person,
-              type: item.type,
-              remarks: item.remarks,
-              isSettled: item.isSettled,
-              importBatchId: batchId,
-              formType: 'lending',
-            })
-            if (res?.id) createdDocIds.push(res.id)
+          updateProgress(50, `Saving ${selectedItems.length} lend/borrow records into 1 batched document...`)
+          const res = await saveLendingBatch(currentUid, selectedItems)
+          if (res?.docCount) {
+            createdDocIds.push(`batch_lend_${Date.now()}`)
           }
         }
 

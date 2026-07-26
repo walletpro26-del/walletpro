@@ -55,9 +55,10 @@ export default function SubscriptionModal({
   }, [])
 
   const [copiedEmail, setCopiedEmail] = useState(false)
-  const subscriberLimit = appConfig?.subscriberLimit ?? 10
-  const { regularActiveCount } = getSubscriberCounts(allSubscriptions)
-  const isLimitReached = !subscription?.active && regularActiveCount >= subscriberLimit
+  const subscriberLimit = Number(appConfig?.subscriberLimit ?? 10)
+  const isUnlimited = subscriberLimit <= 0
+  const regularActiveCount = appConfig?.activeSubscriberCount ?? getSubscriberCounts(allSubscriptions).regularActiveCount ?? 0
+  const isLimitReached = !subscription?.active && !subscription?.isAdmin && !isUnlimited && regularActiveCount >= subscriberLimit
 
   function handleCopyAdminEmail() {
     navigator.clipboard.writeText('walletpro26@gmail.com')
@@ -65,10 +66,10 @@ export default function SubscriptionModal({
     setTimeout(() => setCopiedEmail(false), 3000)
   }
 
-  // Real-time listener: watch subscription status
+  // Real-time listener: watch subscription status (by UID & email)
   useEffect(() => {
-    if (!user?.uid) return
-    const unsub = listenSubscriptionStatus(user.uid, (sub) => {
+    if (!user?.uid && !user?.email) return
+    const unsub = listenSubscriptionStatus(user.uid, user.email, (sub) => {
       if (sub.status === 'active' && sub.active) {
         setActivationResult({
           orderId: sub.orderId || orderId,
@@ -79,7 +80,7 @@ export default function SubscriptionModal({
       }
     })
     return unsub
-  }, [user?.uid])
+  }, [user?.uid, user?.email])
 
   async function handleRazorpayCheckout() {
     setError('')

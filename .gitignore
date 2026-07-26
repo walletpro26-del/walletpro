@@ -6,10 +6,10 @@ dist/
 .vscode/
 coverage/
 *.log
+desktop.ini
+**/desktop.ini
 
 # Local Netlify folder
 .netlify
-
-
 
 appssccriptwebpage/

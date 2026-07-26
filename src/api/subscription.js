@@ -1,4 +1,4 @@
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import {
   doc,
   getDoc,
@@ -65,7 +65,7 @@ export function hasUltraAccess(subscription) {
  * @returns {Promise<{ active: boolean, status: string, plan: string, expiresAt: Date|null, isAdmin: boolean }>}
  */
 export async function getSubscriptionStatus(user) {
-  if (!user || !user.uid) {
+  if (!user || (!user.uid && !user.email)) {
     return { active: false, status: 'unauthenticated', plan: 'none', expiresAt: null, isAdmin: false }
   }
 
@@ -80,31 +80,97 @@ export async function getSubscriptionStatus(user) {
     }
   }
 
-  // 2. Query Firestore subscriptions collection
+  // 2. Query Firestore subscriptions collection by UID
   try {
-    const subRef = doc(db, 'subscriptions', user.uid)
-    const snap = await getDoc(subRef)
+    if (user.uid) {
+      const subRef = doc(db, 'subscriptions', user.uid)
+      const snap = await getDoc(subRef)
 
-    if (snap.exists()) {
-      const data = snap.data()
-      const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
-      const isPending = data.status === 'pending_verification'
-      const isActive = data.status === 'active' && expiresAt && expiresAt > new Date()
+      if (snap.exists()) {
+        const data = snap.data()
+        const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+        const isPending = data.status === 'pending_verification'
+        const isActive = data.status === 'active' && (!expiresAt || expiresAt > new Date())
 
-      return {
-        active: isActive,
-        status: isPending ? 'pending_verification' : (isActive ? 'active' : (data.status === 'revoked' ? 'revoked' : 'expired')),
-        plan: data.plan || 'monthly',
-        expiresAt,
-        isAdmin: false,
-        paymentId: data.paymentId || '',
-        utr: data.utr || '',
-        orderId: data.orderId || '',
-        revocationReason: data.revocationReason || '',
+        if (isActive || isPending) {
+          return {
+            active: isActive,
+            status: isPending ? 'pending_verification' : 'active',
+            plan: data.plan || 'monthly',
+            expiresAt,
+            isAdmin: false,
+            paymentId: data.paymentId || '',
+            utr: data.utr || '',
+            orderId: data.orderId || '',
+            revocationReason: data.revocationReason || '',
+          }
+        }
       }
     }
   } catch (err) {
-    console.warn('[subscription] Failed to fetch subscription status:', err?.message)
+    console.warn('[subscription] Failed to fetch subscription status by UID:', err?.message)
+  }
+
+  // 3. Fallback: Check doc by email address or query by email field
+  if (user.email) {
+    const cleanEmail = user.email.toLowerCase().trim()
+    try {
+      // Check document keyed by email
+      const emailSubRef = doc(db, 'subscriptions', cleanEmail)
+      const emailSnap = await getDoc(emailSubRef)
+      if (emailSnap.exists()) {
+        const data = emailSnap.data()
+        const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+        const isActive = data.status === 'active' && (!expiresAt || expiresAt > new Date())
+
+        if (isActive) {
+          if (user.uid) {
+            setDoc(doc(db, 'subscriptions', user.uid), { ...data, userId: user.uid }, { merge: true }).catch(() => {})
+          }
+          return {
+            active: true,
+            status: 'active',
+            plan: data.plan || 'monthly',
+            expiresAt,
+            isAdmin: false,
+            paymentId: data.paymentId || '',
+            utr: data.utr || '',
+            orderId: data.orderId || '',
+            revocationReason: data.revocationReason || '',
+          }
+        }
+      }
+
+      // Query collection where email == cleanEmail
+      const q = query(collection(db, 'subscriptions'), where('email', '==', cleanEmail))
+      const qSnap = await getDocs(q)
+      if (!qSnap.empty) {
+        for (const d of qSnap.docs) {
+          const data = d.data()
+          const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+          const isActive = data.status === 'active' && (!expiresAt || expiresAt > new Date())
+
+          if (isActive) {
+            if (user.uid) {
+              setDoc(doc(db, 'subscriptions', user.uid), { ...data, userId: user.uid }, { merge: true }).catch(() => {})
+            }
+            return {
+              active: true,
+              status: 'active',
+              plan: data.plan || 'monthly',
+              expiresAt,
+              isAdmin: false,
+              paymentId: data.paymentId || '',
+              utr: data.utr || '',
+              orderId: data.orderId || '',
+              revocationReason: data.revocationReason || '',
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[subscription] Failed to fetch subscription status by email fallback:', err?.message)
+    }
   }
 
   return {
@@ -260,27 +326,90 @@ export function createRazorpayOptions({ user, plan, amount, razorpayKey, onSucce
  * Real-time listener for a user's subscription status changes.
  * Fires callback whenever status changes.
  */
-export function listenSubscriptionStatus(uid, callback) {
-  if (!uid) return () => {}
-  const subRef = doc(db, 'subscriptions', uid)
-  return onSnapshot(subRef, (snap) => {
-    if (snap.exists()) {
-      const data = snap.data()
-      const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
-      const isActive = data.status === 'active' && expiresAt && expiresAt > new Date()
-      callback({
-        active: isActive,
-        status: data.status || 'inactive',
-        plan: data.plan || 'monthly',
-        expiresAt,
-        isAdmin: false,
-        paymentId: data.paymentId || '',
-        orderId: data.orderId || '',
-      })
+export function listenSubscriptionStatus(uidOrUser, secondArg, thirdArg) {
+  let uid = ''
+  let email = ''
+  let callback = null
+
+  if (typeof uidOrUser === 'object' && uidOrUser !== null) {
+    uid = uidOrUser.uid || ''
+    email = uidOrUser.email || ''
+    callback = typeof secondArg === 'function' ? secondArg : thirdArg
+  } else {
+    uid = String(uidOrUser || '')
+    if (typeof secondArg === 'function') {
+      callback = secondArg
+    } else {
+      email = String(secondArg || '')
+      callback = thirdArg
     }
-  }, (err) => {
-    console.warn('[subscription] Realtime listener error:', err?.message)
-  })
+  }
+
+  if (typeof callback !== 'function') return () => {}
+
+  let unsubUid = null
+  let unsubEmail = null
+
+  const notify = (sub) => {
+    callback(sub)
+  }
+
+  if (uid) {
+    const subRef = doc(db, 'subscriptions', uid)
+    unsubUid = onSnapshot(subRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data()
+        const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+        const isActive = data.status === 'active' && (!expiresAt || expiresAt > new Date())
+        notify({
+          active: isActive,
+          status: data.status || 'inactive',
+          plan: data.plan || 'monthly',
+          expiresAt,
+          isAdmin: false,
+          paymentId: data.paymentId || '',
+          orderId: data.orderId || '',
+        })
+      } else if (!email) {
+        notify({ active: false, status: 'inactive', plan: 'none', expiresAt: null, isAdmin: false })
+      }
+    }, (err) => {
+      console.warn('[subscription] UID realtime listener warning:', err?.message)
+    })
+  }
+
+  if (email && email.includes('@')) {
+    const cleanEmail = email.toLowerCase().trim()
+    const emailSubRef = doc(db, 'subscriptions', cleanEmail)
+    unsubEmail = onSnapshot(emailSubRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data()
+        const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null)
+        const isActive = data.status === 'active' && (!expiresAt || expiresAt > new Date())
+        if (isActive) {
+          if (uid) {
+            setDoc(doc(db, 'subscriptions', uid), { ...data, userId: uid }, { merge: true }).catch(() => {})
+          }
+          notify({
+            active: true,
+            status: 'active',
+            plan: data.plan || 'monthly',
+            expiresAt,
+            isAdmin: false,
+            paymentId: data.paymentId || '',
+            orderId: data.orderId || '',
+          })
+        }
+      }
+    }, (err) => {
+      console.warn('[subscription] Email realtime listener warning:', err?.message)
+    })
+  }
+
+  return () => {
+    unsubUid?.()
+    unsubEmail?.()
+  }
 }
 
 /**
@@ -405,17 +534,23 @@ export async function getAllSubscriptions() {
 }
 
 /**
- * Real-time listener for all subscriptions (Admin use)
+ * Real-time listener for all subscriptions (Admin use ONLY)
  * @param {function} callback
  * @returns {function} unsubscribe function
  */
 export function listenAllSubscriptions(callback) {
+  // Only admins are authorized to query the full subscriptions collection
+  const userEmail = auth?.currentUser?.email || ''
+  if (!isAdminEmail(userEmail)) {
+    if (typeof callback === 'function') callback([])
+    return () => {}
+  }
+
   const q = collection(db, 'subscriptions')
   return onSnapshot(q, (snap) => {
     const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     callback(subs)
   }, (err) => {
-    // Quietly fallback if non-admin user hits permission restrictions
     if (!err?.message?.includes('permission') && err?.code !== 'permission-denied') {
       console.warn('[subscription] Subscriptions listener warning:', err?.message)
     }
@@ -537,13 +672,16 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
   let matchingUids = [cleanInput]
   let targetEmail = cleanInput.includes('@') ? cleanInput.toLowerCase() : ''
 
-  // If email is passed, search in subscriptions collection to find ALL matching UIDs
+  // If email is passed, search in subscriptions collection to find ALL matching UIDs or email keys
   if (cleanInput.includes('@')) {
     try {
       const q = query(collection(db, 'subscriptions'), where('email', '==', targetEmail))
       const snap = await getDocs(q)
       if (!snap.empty) {
         matchingUids = snap.docs.map((d) => d.id)
+        if (!matchingUids.includes(targetEmail)) {
+          matchingUids.push(targetEmail)
+        }
       }
     } catch (err) {
       console.warn('[subscription] Search by email warning:', err?.message)

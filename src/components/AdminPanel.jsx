@@ -245,7 +245,8 @@ export default function AdminPanel({ auth, onClose }) {
       const ump = parseFloat(ultraMonthlyPrice) || 49
       const uyp = parseFloat(ultraYearlyPrice) || 399
       const td = parseInt(trialDays) || 0
-      const sl = parseInt(subscriberLimit) || 10
+      const parsedLimit = parseInt(subscriberLimit, 10)
+      const sl = isNaN(parsedLimit) ? 10 : Math.max(0, parsedLimit)
 
       if (mp <= 0 || yp <= 0 || ump <= 0 || uyp <= 0) {
         setError('Prices must be greater than 0')
@@ -253,6 +254,7 @@ export default function AdminPanel({ auth, onClose }) {
         return
       }
 
+      const counts = getSubscriberCounts(allSubscriptions)
       await updateAppConfig(auth?.email, {
         monthlyPrice: mp,
         yearlyPrice: yp,
@@ -263,6 +265,7 @@ export default function AdminPanel({ auth, onClose }) {
         hideUltraBanner,
         trialDays: td,
         subscriberLimit: sl,
+        activeSubscriberCount: counts.regularActiveCount,
         announcement,
         announcementType,
         maintenanceMode,
@@ -333,8 +336,9 @@ export default function AdminPanel({ auth, onClose }) {
 
   const { totalActive, adminActivatedCount, regularActiveCount } = getSubscriberCounts(allSubscriptions)
   const pendingSubsCount = uniqueSubscriptions.filter((s) => s.status === 'pending_verification').length
-  const revokedSubsCount = uniqueSubscriptions.filter((s) => s.status === 'revoked' || s.status === 'expired').length
-  const limitNum = parseInt(subscriberLimit) || config?.subscriberLimit || 10
+  const revokedSubsCount = uniqueSubscriptions.filter((s) => s.status === 'expired' || s.status === 'revoked').length
+  const parsedLimit = parseInt(subscriberLimit, 10)
+  const limitNum = isNaN(parsedLimit) ? (config?.subscriberLimit ?? 10) : Math.max(0, parsedLimit)
 
   return createPortal(
     <div className="modal-overlay" style={{ zIndex: 130 }}>
@@ -803,22 +807,41 @@ export default function AdminPanel({ auth, onClose }) {
                 <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>👥 Subscriber Limit Control</span>
                   <span style={{ fontSize: 8.5, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 6px', borderRadius: 4, textTransform: 'none', fontWeight: 700 }}>
-                    Admin-granted accounts exempt
+                    {limitNum <= 0 ? '♾️ Unlimited Allowed' : `Regular Active: ${regularActiveCount} / ${limitNum}`}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{ width: 110 }}>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Max Regular Subs</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={subscriberLimit}
-                      onChange={(e) => setSubscriberLimit(e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box' }}
-                    />
+                  <div style={{ width: 140 }}>
+                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Max Regular Subs (0 = Unlimited)</label>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        value={subscriberLimit}
+                        onChange={(e) => setSubscriberLimit(e.target.value)}
+                        style={{ width: 70, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSubscriberLimit(subscriberLimit === '0' ? '10' : '0')}
+                        style={{
+                          padding: '5px 8px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          borderRadius: 6,
+                          border: '1px solid #6366f1',
+                          background: subscriberLimit === '0' ? '#6366f1' : '#fff',
+                          color: subscriberLimit === '0' ? '#fff' : '#6366f1',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {subscriberLimit === '0' ? '♾️ Unlimited' : 'Set Unlimited'}
+                      </button>
+                    </div>
                   </div>
                   <div style={{ flex: 1, fontSize: 9, color: '#64748b', lineHeight: 1.35 }}>
-                    Controls maximum regular subscribers allowed (default: 10). Accounts activated directly by Admin from this portal will <strong>NOT</strong> be counted in this limit.
+                    Controls maximum regular online subscribers allowed (default: 10, enter <strong>0</strong> for Unlimited). Accounts activated directly by Admin are <strong>exempt</strong> from this limit.
                   </div>
                 </div>
               </div>

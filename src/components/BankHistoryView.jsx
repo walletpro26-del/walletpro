@@ -9,11 +9,14 @@ import BankLinkCard from './BankLinkCard'
  * BankHistoryView — Inline bank transaction list with live search,
  * bank filter chips, deletion capabilities, and instant mobile-first performance.
  */
-export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImport = true, subscription, appConfig, onOpenSubscriptionModal, onOpenImport, onOpenMerge }) {
+export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false, allowNonCsvImport = true, subscription, appConfig, onOpenSubscriptionModal, onOpenImport, onOpenMerge }) {
   const currentUid = uid || auth?.currentUser?.uid || ''
 
   // Instant cache state initialization (zero loading flash on tab switch)
   const [allRecords, setAllRecords] = useState(() => {
+    if (Array.isArray(bankRecords) && bankRecords.length > 0) {
+      return bankRecords.map((r) => ({ ...r, date: parseSafeDate(r.dateObj || r.date) }))
+    }
     const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
     if (cached && cached.length > 0) {
       return cached.map((r) => ({
@@ -32,6 +35,14 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
   const [showLlmGuideModal, setShowLlmGuideModal] = useState(false)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
 
+  // Sync state if bankRecords prop updates from parent
+  useEffect(() => {
+    if (Array.isArray(bankRecords) && bankRecords.length > 0) {
+      setAllRecords(bankRecords.map((r) => ({ ...r, date: parseSafeDate(r.dateObj || r.date) })))
+      setLoading(false)
+    }
+  }, [bankRecords])
+
   // Load records from local cache first, then Firestore
   async function loadData(forceRefresh = false) {
     if (forceRefresh) setRefreshing(true)
@@ -39,7 +50,7 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
 
     setError('')
     try {
-      const records = await fetchBankTransactionsFromFirestore(currentUid, isAdmin)
+      const records = await fetchBankTransactionsFromFirestore(currentUid, isAdmin, forceRefresh)
       if (records && records.length > 0) {
         setAllRecords(records)
       } else {
@@ -60,7 +71,10 @@ export default function BankHistoryView({ uid, isAdmin = false, allowNonCsvImpor
   }
 
   useEffect(() => {
-    loadData()
+    // Only load from Firestore if parent didn't pass bankRecords
+    if (!bankRecords || bankRecords.length === 0) {
+      loadData()
+    }
   }, [currentUid, isAdmin])
 
   // Extract unique bank names for filter pill bar
