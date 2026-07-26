@@ -528,15 +528,15 @@ export default function PersonMergeModal({
             <i className="fas fa-times" />
           </button>
           {/* Entity Type Selector Bar */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             <button
               type="button"
               onClick={() => setEntityType('person')}
               style={{
-                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
-                background: entityType === 'person' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'rgba(255,255,255,0.12)',
-                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                boxShadow: entityType === 'person' ? '0 2px 8px rgba(99,102,241,0.4)' : 'none', transition: 'all 0.2s'
+                flex: 1, padding: '5px 8px', borderRadius: 8, border: 'none',
+                background: entityType === 'person' ? '#6366f1' : 'rgba(255,255,255,0.1)',
+                color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                transition: 'all 0.15s'
               }}
             >
               👤 Person Names
@@ -545,10 +545,10 @@ export default function PersonMergeModal({
               type="button"
               onClick={() => setEntityType('category')}
               style={{
-                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
-                background: entityType === 'category' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.12)',
-                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                boxShadow: entityType === 'category' ? '0 2px 8px rgba(16,185,129,0.4)' : 'none', transition: 'all 0.2s'
+                flex: 1, padding: '5px 8px', borderRadius: 8, border: 'none',
+                background: entityType === 'category' ? '#10b981' : 'rgba(255,255,255,0.1)',
+                color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                transition: 'all 0.15s'
               }}
             >
               🏷️ Categories
@@ -557,41 +557,37 @@ export default function PersonMergeModal({
               type="button"
               onClick={() => setEntityType('bank')}
               style={{
-                flex: 1, padding: '5px 10px', borderRadius: 20, border: 'none',
-                background: entityType === 'bank' ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'rgba(255,255,255,0.12)',
-                color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                boxShadow: entityType === 'bank' ? '0 2px 8px rgba(2,132,199,0.4)' : 'none', transition: 'all 0.2s'
+                flex: 1, padding: '5px 8px', borderRadius: 8, border: 'none',
+                background: entityType === 'bank' ? '#0284c7' : 'rgba(255,255,255,0.1)',
+                color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                transition: 'all 0.15s'
               }}
             >
               🏦 Bank Names
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                background: entityType === 'bank' ? 'rgba(2,132,199,0.2)' : entityType === 'category' ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.2)',
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: 'rgba(255,255,255,0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 20,
+                fontSize: 15,
               }}
             >
               {entityType === 'bank' ? '🏦' : entityType === 'category' ? '🏷️' : '🔀'}
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900 }}>
-                {entityType === 'bank' ? 'Bank Name Normalization & Merge' : entityType === 'category' ? 'Category Normalization & Merge' : 'Person Name Normalization & Merge'}
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>
+                {entityType === 'bank' ? 'Bank Name Normalization' : entityType === 'category' ? 'Category Normalization' : 'Person Name Normalization'}
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: 10.5, color: '#a5b4fc' }}>
-                {entityType === 'bank'
-                  ? 'Unify duplicate bank variations (e.g. SBI, STATE BANK OF INDIA → SBI)'
-                  : entityType === 'category'
-                  ? 'Unify duplicate category variations (e.g. food, food_, dining → Food & Dining)'
-                  : 'Unify duplicate name variations (e.g. Father, father_, My father → Father)'}
+              <p style={{ margin: '1px 0 0', fontSize: 10, color: '#a5b4fc' }}>
+                Unify duplicate entries and consolidate database records seamlessly
               </p>
             </div>
           </div>
@@ -600,11 +596,11 @@ export default function PersonMergeModal({
           <div
             style={{
               display: 'flex',
-              gap: 4,
-              marginTop: 14,
+              gap: 3,
+              marginTop: 10,
               background: 'rgba(0,0,0,0.3)',
-              padding: 3,
-              borderRadius: 8,
+              padding: 2,
+              borderRadius: 6,
             }}
           >
             <button
@@ -612,12 +608,12 @@ export default function PersonMergeModal({
               onClick={() => setActiveTab('suggestions')}
               style={{
                 flex: 1,
-                padding: '6px 8px',
-                borderRadius: 6,
+                padding: '5px 6px',
+                borderRadius: 5,
                 border: 'none',
                 background: activeTab === 'suggestions' ? '#ffffff' : 'transparent',
                 color: activeTab === 'suggestions' ? '#312e81' : '#cbd5e1',
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: 800,
                 cursor: 'pointer',
               }}
@@ -629,12 +625,12 @@ export default function PersonMergeModal({
               onClick={() => setActiveTab('manual')}
               style={{
                 flex: 1,
-                padding: '6px 8px',
-                borderRadius: 6,
+                padding: '5px 6px',
+                borderRadius: 5,
                 border: 'none',
                 background: activeTab === 'manual' ? '#ffffff' : 'transparent',
                 color: activeTab === 'manual' ? '#312e81' : '#cbd5e1',
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: 800,
                 cursor: 'pointer',
               }}
@@ -646,12 +642,12 @@ export default function PersonMergeModal({
               onClick={() => setActiveTab('rules')}
               style={{
                 flex: 1,
-                padding: '6px 8px',
-                borderRadius: 6,
+                padding: '5px 6px',
+                borderRadius: 5,
                 border: 'none',
                 background: activeTab === 'rules' ? '#ffffff' : 'transparent',
                 color: activeTab === 'rules' ? '#312e81' : '#cbd5e1',
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: 800,
                 cursor: 'pointer',
               }}

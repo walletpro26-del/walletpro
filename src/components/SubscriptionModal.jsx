@@ -157,8 +157,8 @@ export default function SubscriptionModal({
       >
         {/* ── Compact Header ── */}
         <div style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
-          padding: '14px 16px',
+          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
+          padding: '8px 12px 6px',
           color: '#fff',
           position: 'relative',
           flexShrink: 0,
@@ -167,7 +167,7 @@ export default function SubscriptionModal({
           {!isBlocking || step === 'success' || step === 'pending' ? (
             <button
               className="modal-close"
-              style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 26, height: 26, fontSize: 11, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={onClose}
               aria-label="Close"
             >
@@ -176,21 +176,21 @@ export default function SubscriptionModal({
           ) : onLogout ? (
             <button
               onClick={() => { onClose?.(); onLogout() }}
-              style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '3px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
             >
               <i className="fas fa-sign-out-alt" /> Log Out
             </button>
           ) : null}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 70 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 60 }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
               {isAdmin ? '👑' : step === 'success' ? '🎉' : step === 'pending' ? '⏳' : '⚡'}
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, lineHeight: 1.2 }}>
+              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>
                 {isAdmin ? 'Admin Access' : step === 'success' ? 'Activated!' : step === 'pending' ? 'Pending Verification' : 'WalletVibe Pro'}
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: 10, color: '#a5b4fc', lineHeight: 1.2 }}>
+              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc', lineHeight: 1.1 }}>
                 {isAdmin ? 'Free lifetime admin access' : step === 'success' ? 'Your account is upgraded' : step === 'pending' ? 'Admin will verify your payment' : '0% Commission • UPI Activation'}
               </p>
             </div>

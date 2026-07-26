@@ -92,40 +92,54 @@ export async function addLending(data) {
   const currentUid = auth.currentUser?.uid || ''
   invalidateSnapshot('lending', currentUid)
   invalidateLendingInMemoryCache(currentUid)
+
+  const saveOffline = () => {
+    const tempId = addPending({
+      type: 'add',
+      collection: COL,
+      data: { ...data, _offline: true },
+    })
+    const snapshot = loadSnapshot('lending', currentUid) || []
+    const optimistic = {
+      id: tempId,
+      date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
+      dateObj: data.date ? new Date(data.date) : new Date(),
+      person: data.person || '',
+      type: data.type || 'LENT',
+      amount: parseFloat(data.amount) || 0,
+      remarks: data.remarks || '',
+      status: data.status || 'Pending',
+      phone: data.phone || '',
+      email: data.email || '',
+      fileName: data.fileName || '',
+      mimeType: data.mimeType || '',
+      hasAttachment: false,
+      hasChunkedAttachment: false,
+      _pending: true,
+    }
+    snapshot.unshift(optimistic)
+    saveSnapshot('lending', snapshot, currentUid)
+    _memLendingCacheMap.set(currentUid, snapshot)
+    _memLendingCacheTimeMap.set(currentUid, Date.now())
+    return { success: true, id: tempId, offline: true }
+  }
+
+  if (!navigator.onLine) {
+    return saveOffline()
+  }
+
   try {
-    const docRef = await addDoc(collection(db, COL), fsData)
+    const docRef = await Promise.race([
+      addDoc(collection(db, COL), fsData),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+    ])
     if (data.fileData) {
-      await saveAttachment(COL, docRef.id, data.fileData)
+      await saveAttachment(COL, docRef.id, data.fileData).catch(() => {})
     }
     return { success: true, id: docRef.id }
   } catch (err) {
-    if (!navigator.onLine || err?.code === 'unavailable') {
-      const tempId = addPending({
-        type: 'add',
-        collection: COL,
-        data: { ...data, _offline: true },
-      })
-      const snapshot = loadSnapshot('lending', currentUid) || []
-      const optimistic = {
-        id: tempId,
-        date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
-        dateObj: data.date ? new Date(data.date) : new Date(),
-        person: data.person || '',
-        type: data.type || 'LENT',
-        amount: parseFloat(data.amount) || 0,
-        remarks: data.remarks || '',
-        status: data.status || 'Pending',
-        phone: data.phone || '',
-        email: data.email || '',
-        fileName: data.fileName || '',
-        mimeType: data.mimeType || '',
-        hasAttachment: false,
-        hasChunkedAttachment: false,
-        _pending: true,
-      }
-      snapshot.unshift(optimistic)
-      saveSnapshot('lending', snapshot, currentUid)
-      return { success: true, id: tempId, offline: true }
+    if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
+      return saveOffline()
     }
     throw err
   }
@@ -138,17 +152,37 @@ export async function updateLending(id, data) {
   invalidateSnapshot('lending', currentUid)
   invalidateLendingInMemoryCache(currentUid)
   delete fsData.fileData
+
+  const saveOfflineUpdate = () => {
+    addPending({ type: 'update', collection: COL, id, data })
+    const snapshot = loadSnapshot('lending', currentUid) || []
+    const idx = snapshot.findIndex((l) => l.id === id)
+    if (idx !== -1) {
+      snapshot[idx] = { ...snapshot[idx], ...data, _pending: true }
+      saveSnapshot('lending', snapshot, currentUid)
+      _memLendingCacheMap.set(currentUid, snapshot)
+      _memLendingCacheTimeMap.set(currentUid, Date.now())
+    }
+    return { success: true, id, offline: true }
+  }
+
+  if (!navigator.onLine) {
+    return saveOfflineUpdate()
+  }
+
   try {
-    await updateDoc(ref, fsData)
+    await Promise.race([
+      updateDoc(ref, fsData),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+    ])
     if (data.fileData) {
-      await deleteAttachmentChunks(COL, id)
-      await saveAttachment(COL, id, data.fileData)
+      await deleteAttachmentChunks(COL, id).catch(() => {})
+      await saveAttachment(COL, id, data.fileData).catch(() => {})
     }
     return { success: true }
   } catch (err) {
-    if (!navigator.onLine || err?.code === 'unavailable') {
-      addPending({ type: 'update', collection: COL, id, data })
-      return { success: true, offline: true }
+    if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
+      return saveOfflineUpdate()
     }
     throw err
   }
@@ -187,6 +221,20 @@ export async function deleteLending(id, parentDocId = null) {
   invalidateSnapshot('lending', currentUid)
   invalidateLendingInMemoryCache(currentUid)
 
+  const saveOfflineDelete = () => {
+    addPending({ type: 'delete', collection: COL, id })
+    const snapshot = loadSnapshot('lending', currentUid) || []
+    const filtered = snapshot.filter((l) => l.id !== id)
+    saveSnapshot('lending', filtered, currentUid)
+    _memLendingCacheMap.set(currentUid, filtered)
+    _memLendingCacheTimeMap.set(currentUid, Date.now())
+    return { success: true, offline: true }
+  }
+
+  if (!navigator.onLine) {
+    return saveOfflineDelete()
+  }
+
   if (parentDocId) {
     try {
       const ref = doc(db, COL, parentDocId)
@@ -209,13 +257,15 @@ export async function deleteLending(id, parentDocId = null) {
   }
 
   try {
-    await deleteAttachmentChunks(COL, id)
-    await deleteDoc(doc(db, COL, id))
+    await Promise.race([
+      deleteDoc(doc(db, COL, id)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+    ])
+    await deleteAttachmentChunks(COL, id).catch(() => {})
     return { success: true }
   } catch (err) {
-    if (!navigator.onLine || err?.code === 'unavailable') {
-      addPending({ type: 'delete', collection: COL, id })
-      return { success: true, offline: true }
+    if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
+      return saveOfflineDelete()
     }
     throw err
   }
@@ -236,8 +286,8 @@ export async function getAllLending(forceRefresh = false) {
     return _memLendingCacheMap.get(currentUid)
   }
 
-  // 2. Check if local snapshot is fresh (15 min TTL)
-  if (!forceRefresh && isCacheFresh('lending', currentUid)) {
+  // 2. Check if offline or local snapshot is fresh (15 min TTL)
+  if (!navigator.onLine || (!forceRefresh && isCacheFresh('lending', currentUid))) {
     const cached = loadSnapshot('lending', currentUid)
     if (cached && cached.length > 0) {
       const sorted = cached.sort((a, b) => b.dateObj - a.dateObj)
@@ -248,9 +298,11 @@ export async function getAllLending(forceRefresh = false) {
   }
 
   try {
-    // Fetch user-scoped lending records
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
-    const snapScoped = await getDocs(qScoped)
+    const snapScoped = await Promise.race([
+      getDocs(qScoped),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+    ])
 
     let items = []
     snapScoped.docs.forEach((docSnap) => {
@@ -263,7 +315,7 @@ export async function getAllLending(forceRefresh = false) {
     _memLendingCacheTimeMap.set(currentUid, Date.now())
     return sorted
   } catch (err) {
-    console.warn('Lending fetch failed, using local cache:', err?.message)
+    console.warn('Lending fetch failed/offline, using local cache:', err?.message)
     const cached = loadSnapshot('lending', currentUid)
     if (cached) return cached.sort((a, b) => new Date(b.date) - new Date(a.date))
     return []

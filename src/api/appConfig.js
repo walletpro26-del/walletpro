@@ -28,6 +28,7 @@ const DEFAULTS = {
   subscriberLimit: 10,
   allowNonCsvImport: true,
   geminiApiKeys: '', // Admin-configured multiple Gemini AI API keys (comma or newline separated)
+  geminiModels: 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash,gemini-3.6-flash-lite,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash',
 }
 
 let _cachedConfig = null
@@ -40,6 +41,9 @@ function syncLocalConfigCache(cfg) {
       localStorage.setItem('wv_cached_app_config', JSON.stringify(cfg))
       if (cfg.geminiApiKeys) {
         localStorage.setItem('wv_admin_gemini_api_keys', String(cfg.geminiApiKeys))
+      }
+      if (cfg.geminiModels) {
+        localStorage.setItem('wv_admin_gemini_models', String(cfg.geminiModels))
       }
     }
   } catch (e) {}

@@ -786,7 +786,7 @@ export async function ensureUserProfile(user) {
   // If this is a BRAND NEW user registering for the first time, verify subscriber limit
   if (!isExistingUser && !isAdminEmail(cleanEmail)) {
     try {
-      const cfgSnap = await getDoc(doc(db, 'appConfig', 'global'))
+      const cfgSnap = await getDoc(doc(db, 'appConfig', 'settings'))
       if (cfgSnap.exists()) {
         const cfgData = cfgSnap.data()
         const limitNum = Number(cfgData.subscriberLimit ?? 10)
@@ -1045,45 +1045,96 @@ export async function purgeDuplicateSubscriptions(adminEmail) {
  * @param {string} adminEmail
  * @param {string} reason
  */
-export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan = 'monthly', adminEmail = '', reason = '') {
+export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan = 'monthly', adminEmail = '', reason = '', customDays = null) {
   const cleanInput = String(targetInput || '').trim()
   if (!cleanInput) throw new Error('User Email or UID is required')
 
-  let matchingUids = [cleanInput]
+  const matchingUidsSet = new Set([cleanInput])
   let targetEmail = cleanInput.includes('@') ? cleanInput.toLowerCase() : ''
 
-  // If email is passed, search in subscriptions collection to find ALL matching UIDs or email keys
+  // 1. Search in both subscriptions and userProfiles collections to gather all linked UIDs and email keys
   if (cleanInput.includes('@')) {
     try {
-      const q = query(collection(db, 'subscriptions'), where('email', '==', targetEmail))
-      const snap = await getDocs(q)
-      if (!snap.empty) {
-        matchingUids = snap.docs.map((d) => d.id)
-        if (!matchingUids.includes(targetEmail)) {
-          matchingUids.push(targetEmail)
-        }
-      }
+      const [subSnap, profSnap] = await Promise.all([
+        getDocs(query(collection(db, 'subscriptions'), where('email', '==', targetEmail))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, 'userProfiles'), where('email', '==', targetEmail))).catch(() => ({ docs: [] })),
+      ])
+
+      subSnap.docs.forEach((d) => {
+        matchingUidsSet.add(d.id)
+        if (d.data().userId) matchingUidsSet.add(d.data().userId)
+        if (d.data().uid) matchingUidsSet.add(d.data().uid)
+      })
+
+      profSnap.docs.forEach((d) => {
+        matchingUidsSet.add(d.id)
+        if (d.data().userId) matchingUidsSet.add(d.data().userId)
+        if (d.data().uid) matchingUidsSet.add(d.data().uid)
+      })
+
+      matchingUidsSet.add(targetEmail)
     } catch (err) {
       console.warn('[subscription] Search by email warning:', err?.message)
     }
+  } else {
+    // Input is UID — try to get email from profile/subscription doc
+    try {
+      const subSnap = await getDoc(doc(db, 'subscriptions', cleanInput)).catch(() => null)
+      if (subSnap && subSnap.exists() && subSnap.data().email) {
+        targetEmail = subSnap.data().email.toLowerCase().trim()
+        matchingUidsSet.add(targetEmail)
+      } else {
+        const profSnap = await getDoc(doc(db, 'userProfiles', cleanInput)).catch(() => null)
+        if (profSnap && profSnap.exists() && profSnap.data().email) {
+          targetEmail = profSnap.data().email.toLowerCase().trim()
+          matchingUidsSet.add(targetEmail)
+        }
+      }
+    } catch (e) {}
   }
 
+  const matchingUids = Array.from(matchingUidsSet)
   const now = new Date()
   const nowTs = Timestamp.now()
-  let expiresAt = new Date()
+
+  // 2. Check highest existing future expiration date across matching documents for date stacking
+  let highestExistingExpires = null
+  for (const uid of matchingUids) {
+    try {
+      const snap = await getDoc(doc(db, 'subscriptions', uid))
+      if (snap.exists()) {
+        const d = snap.data()
+        const exp = d.expiresAt?.toDate ? d.expiresAt.toDate() : (d.expiresAt ? new Date(d.expiresAt) : null)
+        if (d.status === 'active' && exp && exp > now) {
+          if (!highestExistingExpires || exp > highestExistingExpires) {
+            highestExistingExpires = exp
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  const baseDate = (highestExistingExpires && highestExistingExpires > now) ? highestExistingExpires : now
+  let expiresAt = new Date(baseDate.getTime())
 
   if (status === 'active') {
-    if (plan === 'yearly') {
-      expiresAt.setFullYear(now.getFullYear() + 1)
+    const numDays = customDays !== null && !isNaN(Number(customDays))
+      ? Number(customDays)
+      : (!isNaN(Number(plan)) ? Number(plan) : null)
+
+    if (numDays !== null && numDays > 0) {
+      expiresAt.setDate(expiresAt.getDate() + numDays)
+    } else if (plan === 'yearly' || plan === 'ultra_yearly') {
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1)
     } else {
-      expiresAt.setDate(now.getDate() + 30)
+      expiresAt.setDate(expiresAt.getDate() + 30) // Default 30 days
     }
   } else {
     // Set expired/revoked timestamp to now
     expiresAt = now
   }
 
-  // Update ALL matching documents for this email/UID
+  // 3. Update ALL matching documents for this email/UID synchronously
   for (const uid of matchingUids) {
     const subRef = doc(db, 'subscriptions', uid)
 
@@ -1107,7 +1158,7 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
 
     const payload = {
       userId: uid,
-      email: targetEmail || uid,
+      email: targetEmail || (cleanInput.includes('@') ? cleanInput : ''),
       status,
       plan: status === 'active' ? plan : 'none',
       updatedAt: nowTs,
@@ -1115,7 +1166,7 @@ export async function adminSetSubscriptionByEmailOrUid(targetInput, status, plan
       updatedByAdmin: adminEmail || 'admin',
       gateway: status === 'active' ? 'admin_granted' : 'none',
       adminActivated: status === 'active',
-      adminNote: reason || (status === 'active' ? 'Manually activated/exempted by Admin' : 'Deactivated by Admin'),
+      adminNote: reason || (status === 'active' ? 'Manually activated/extended by Admin' : 'Deactivated by Admin'),
       ...existingPaidData,
     }
     await setDoc(subRef, payload, { merge: true })

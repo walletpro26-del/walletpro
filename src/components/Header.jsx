@@ -277,14 +277,12 @@ export default function Header({
                     position: 'fixed',
                     top: menuPos.top + 4,
                     right: Math.max(12, menuPos.right),
-                    width: 200,
-                    background: 'rgba(15, 23, 42, 0.95)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: 14,
-                    padding: '6px 4px',
-                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)',
+                    width: 180,
+                    background: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-color, #cbd5e1)',
+                    borderRadius: 8,
+                    padding: '4px',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
                     zIndex: 999999,
                     display: 'flex',
                     flexDirection: 'column',
@@ -293,9 +291,9 @@ export default function Header({
                 >
                   {/* User email info */}
                   {auth?.email && (
-                    <div style={{ padding: '6px 10px 6px', fontSize: 10, color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: 3 }}>
-                      <div style={{ fontSize: 8.5, textTransform: 'uppercase', color: '#64748b', fontWeight: 800, letterSpacing: 0.5 }}>Signed in as</div>
-                      <div style={{ color: '#f8fafc', fontWeight: 700, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                    <div style={{ padding: '6px 8px 5px', borderBottom: '1px solid var(--border-color, #e2e8f0)', marginBottom: 2 }}>
+                      <div style={{ fontSize: 8, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', fontWeight: 700, letterSpacing: 0.3 }}>Signed in as</div>
+                      <div style={{ color: 'var(--text-primary, #0f172a)', fontWeight: 700, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                         {auth.email}
                       </div>
                     </div>
@@ -308,15 +306,15 @@ export default function Header({
                       onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       onClick={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                        background: 'transparent', border: 'none', color: '#c4b5fd', borderRadius: 8,
-                        fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                        transition: 'all 0.15s ease',
+                        display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                        background: 'transparent', border: 'none', color: '#7c3aed', borderRadius: 6,
+                        fontSize: 10, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                        transition: 'background 0.1s ease',
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                      <i className="fas fa-crown" style={{ color: '#fbbf24', width: 16, textAlign: 'center', fontSize: 11 }} />
+                      <i className="fas fa-crown" style={{ color: '#d97706', width: 14, textAlign: 'center', fontSize: 10 }} />
                       Admin Panel
                     </button>
                   )}
@@ -327,16 +325,16 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                      background: 'transparent', border: 'none', color: '#818cf8', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
+                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-file-import" style={{ color: '#818cf8', width: 16, textAlign: 'center', fontSize: 11 }} />
-                    Import Data ({allowNonCsvImport ? 'CSV/PDF' : 'CSV'})
+                    <i className="fas fa-file-import" style={{ color: '#4f46e5', width: 14, textAlign: 'center', fontSize: 10 }} />
+                    Import ({allowNonCsvImport ? 'CSV/PDF' : 'CSV'})
                   </button>
 
                   {/* App Settings item */}
@@ -345,16 +343,16 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
+                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-cog" style={{ color: '#fbbf24', width: 16, textAlign: 'center', fontSize: 11 }} />
-                    App Settings
+                    <i className="fas fa-cog" style={{ color: '#64748b', width: 14, textAlign: 'center', fontSize: 10 }} />
+                    Settings
                   </button>
 
                   {/* Rate & Review App item */}
@@ -363,15 +361,15 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                      background: 'transparent', border: 'none', color: '#fbbf24', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
+                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-star" style={{ color: '#f59e0b', width: 16, textAlign: 'center', fontSize: 11 }} />
+                    <i className="fas fa-star" style={{ color: '#d97706', width: 14, textAlign: 'center', fontSize: 10 }} />
                     Rate &amp; Review
                   </button>
 
@@ -381,19 +379,19 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                      background: 'transparent', border: 'none', color: '#e2e8f0', borderRadius: 8,
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
+                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-sync-alt" style={{ color: '#34d399', width: 16, textAlign: 'center', fontSize: 11 }} />
-                    Refresh Data
+                    <i className="fas fa-sync-alt" style={{ color: '#059669', width: 14, textAlign: 'center', fontSize: 10 }} />
+                    Refresh
                   </button>
 
-                  <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '3px 4px' }} />
+                  <div style={{ height: 1, background: 'var(--border-color, #e2e8f0)', margin: '2px 2px' }} />
 
                   {/* Logout item */}
                   <button
@@ -401,15 +399,15 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px',
-                      background: 'transparent', border: 'none', color: '#fca5a5',
-                      borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
+                      background: 'transparent', border: 'none', color: '#dc2626',
+                      borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+                      transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 16, textAlign: 'center', fontSize: 11 }} />
+                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 14, textAlign: 'center', fontSize: 10 }} />
                     Log Out
                   </button>
                 </div>

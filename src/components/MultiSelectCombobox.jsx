@@ -209,14 +209,14 @@ export default function MultiSelectCombobox({
 
       {/* Selected tags in multi mode */}
       {!open && selected.length > 1 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, padding: '2px 14px 6px', marginTop: -8 }}>
+        <div className="custom-scrollbar" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 14px 6px', marginTop: -6, maxHeight: 52, overflowY: 'auto' }}>
           {selected.map((s, i) => (
             <span key={i} className="selected-tag">
-              {s}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s}</span>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); toggleMultiSelect(s); if (!open) onChange(selected.filter(x => x !== s).join(SEPARATOR)) }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 2, color: 'inherit', fontSize: 9, padding: 0 }}
+                title={`Remove ${s}`}
               >✕</button>
             </span>
           ))}

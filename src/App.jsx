@@ -234,6 +234,7 @@ export default function App() {
   }, [])
 
   const lastModalRef = useRef(null)
+  const isProgrammaticBackRef = useRef(false)
 
   // Push synthetic history state when any modal opens so phone back button closes modal instead of exiting app
   useEffect(() => {
@@ -242,6 +243,7 @@ export default function App() {
       lastModalRef.current = activeModalName
     } else if (!activeModalName && lastModalRef.current) {
       if (window.history.state?.wvModalOpen) {
+        isProgrammaticBackRef.current = true
         window.history.back()
       }
       lastModalRef.current = null
@@ -253,7 +255,12 @@ export default function App() {
   // Mobile / Android Phone Back Button Handler — works for ALL modals & tabs across app
   useEffect(() => {
     function handlePopState(e) {
-      if (activeModalName) {
+      if (isProgrammaticBackRef.current) {
+        isProgrammaticBackRef.current = false
+        return
+      }
+
+      if (activeModalName || lastModalRef.current) {
         closeAllModals()
         lastModalRef.current = null
       } else if (activeTab !== 'expense') {
@@ -409,9 +416,12 @@ export default function App() {
   // Edit from modal
   function handleEdit(item) {
     setSelectedTxn(null)
-    if (item.sheet === 'bank' || item.bank) {
+    const isLend = Boolean(item.sheet === 'lending' || item.isLend || item.person || item.formType === 'lending')
+    const isBank = Boolean(item.sheet === 'bank' || item.bank)
+
+    if (isBank) {
       switchTab('bank')
-    } else if (item.sheet === 'lending' || item.isLend) {
+    } else if (isLend) {
       setEditLending(item)
       switchTab('lending')
     } else {
@@ -424,10 +434,13 @@ export default function App() {
   async function handleDelete(item) {
     setSelectedTxn(null)
     setLoading(true)
+    const isLend = Boolean(item.sheet === 'lending' || item.isLend || item.person || item.formType === 'lending')
+    const isBank = Boolean(item.sheet === 'bank' || item.bank)
+
     try {
-      if (item.sheet === 'bank' || item.bank) {
+      if (isBank) {
         await deleteBankTransaction(item.id)
-      } else if (item.sheet === 'lending' || item.isLend) {
+      } else if (isLend) {
         await deleteLending(item.id)
       } else {
         await deleteExpense(item.id)

@@ -138,11 +138,19 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
     setSuccessInfo(null)
 
     const name = file.name.toLowerCase()
+    const allowedExtensions = ['.pdf', '.csv', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.png', '.jpg', '.jpeg', '.webp', '.heic']
+    const hasAllowedExt = allowedExtensions.some((ext) => name.endsWith(ext))
+
+    if (!hasAllowedExt) {
+      setError('⚠️ Unsupported file format. Please upload standard document formats only (PDF, Word, Excel, CSV, Text, or Image). Audio and non-document formats are not supported.')
+      return
+    }
+
     const isPureCsv = (name.endsWith('.csv') || file.type === 'text/csv') && !name.endsWith('.xlsx') && !name.endsWith('.xls')
 
     if (!isPureCsv) {
       if (!allowNonCsvImport) {
-        setError('⚠️ Non-CSV (PDF/Excel/Image) import feature is disabled by Admin. Only CSV file imports are currently permitted.')
+        setError('⚠️ Non-CSV (PDF/Word/Excel/Image) import feature is disabled by Admin. Only CSV file imports are currently permitted.')
         return
       }
 
@@ -231,6 +239,36 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
           details,
           paymentMode: row.paymentMode || 'Cash',
           remarks: row.remarks || '',
+        })
+      })
+    } else if (mode === 'bank') {
+      rawList.forEach((row, idx) => {
+        const debit = parseFloat(row.debit || 0) || 0
+        const credit = parseFloat(row.credit || 0) || 0
+        const rawAmt = parseFloat(row.amount || debit || credit || 0)
+
+        let dateStr = new Date().toISOString().split('T')[0]
+        if (row.date) {
+          const parsed = new Date(row.date)
+          if (!isNaN(parsed.getTime())) {
+            dateStr = parsed.toISOString().split('T')[0]
+          }
+        }
+
+        const bank = row.bank || 'Bank'
+        const description = row.description || row.narration || row.particulars || 'Bank Transaction'
+
+        items.push({
+          id: 'import_bank_' + idx + '_' + Date.now(),
+          selected: true,
+          isDuplicate: false,
+          date: dateStr,
+          bank,
+          description,
+          debit,
+          credit,
+          amount: rawAmt,
+          balance: parseFloat(row.balance || 0) || 0,
         })
       })
     } else {
@@ -331,7 +369,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
     const dateIdx = findCol(headers, ['date', 'txn date', 'transaction date', 'time', 'day'])
     const amountIdx = findCol(headers, ['amount', 'price', 'cost', 'rupees', 'rs', 'sum', 'val', 'debit', 'credit'])
 
-    if (amountIdx === -1) {
+    if (amountIdx === -1 && mode !== 'bank') {
       throw new Error('Could not detect "Amount" column in CSV file.')
     }
 
@@ -388,6 +426,45 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
           details,
           paymentMode: modeIdx !== -1 ? (row[modeIdx] || 'Cash') : 'Cash',
           remarks: remarksIdx !== -1 ? (row[remarksIdx] || '') : '',
+        })
+      })
+    } else if (mode === 'bank') {
+      const bankIdx = findCol(headers, ['bank', 'bankname', 'account', 'institution'])
+      const descIdx = findCol(headers, ['description', 'desc', 'particulars', 'narration', 'details', 'memo', 'title'])
+      const debitIdx = findCol(headers, ['debit', 'withdrawal', 'out', 'dr', 'debitamount'])
+      const creditIdx = findCol(headers, ['credit', 'deposit', 'in', 'cr', 'creditamount'])
+      const balanceIdx = findCol(headers, ['balance', 'bal', 'closingbalance', 'total'])
+      const amtIdx = findCol(headers, ['amount', 'price', 'sum', 'val'])
+
+      rows.forEach((row, idx) => {
+        const debit = debitIdx !== -1 ? parseFloat((row[debitIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
+        const credit = creditIdx !== -1 ? parseFloat((row[creditIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
+        let rawAmt = amtIdx !== -1 ? parseFloat((row[amtIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : (debit || credit)
+        if (!rawAmt && !debit && !credit) return
+
+        let dateStr = new Date().toISOString().split('T')[0]
+        if (dateIdx !== -1 && row[dateIdx]) {
+          const parsed = new Date(row[dateIdx])
+          if (!isNaN(parsed.getTime())) {
+            dateStr = parsed.toISOString().split('T')[0]
+          }
+        }
+
+        const bank = bankIdx !== -1 ? (row[bankIdx] || 'Bank') : 'Bank'
+        const description = descIdx !== -1 ? (row[descIdx] || 'Bank Transaction') : 'Bank Transaction'
+        const balance = balanceIdx !== -1 ? parseFloat((row[balanceIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
+
+        items.push({
+          id: 'import_bank_' + idx + '_' + Date.now(),
+          selected: true,
+          isDuplicate: false,
+          date: dateStr,
+          bank,
+          description,
+          debit,
+          credit,
+          amount: rawAmt,
+          balance,
         })
       })
     } else {
@@ -603,19 +680,19 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
         }}
       >
         {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)', padding: '14px 16px', color: '#fff', position: 'relative' }}>
-          <button className="modal-close" style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', width: 26, height: 26, fontSize: 11, borderRadius: '50%', border: 'none', cursor: 'pointer' }} onClick={onClose}>
+        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '8px 12px 6px', color: '#fff', position: 'relative' }}>
+          <button className="modal-close" style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.15)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer' }} onClick={onClose}>
             <i className="fas fa-times" />
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
               📥
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>
+              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>
                 {csvPreviewData ? 'CSV Import Preview' : 'Import CSV Data'}
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: 10, color: '#a5b4fc' }}>
+              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc' }}>
                 Bulk import entries with duplicate detection & 1-click Undo
               </p>
             </div>
@@ -623,15 +700,15 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
 
           {/* Mode Switcher */}
           {!csvPreviewData && (
-            <div style={{ display: 'flex', gap: 4, marginTop: 12, background: 'rgba(0,0,0,0.3)', padding: 3, borderRadius: 8 }}>
+            <div style={{ display: 'flex', gap: 3, marginTop: 6, background: 'rgba(0,0,0,0.3)', padding: 2, borderRadius: 6 }}>
               <button
                 type="button"
                 onClick={() => setMode('expense')}
                 style={{
-                  flex: 1, padding: '6px 6px', borderRadius: 6, border: 'none',
+                  flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
                   background: mode === 'expense' ? '#ffffff' : 'transparent',
                   color: mode === 'expense' ? '#312e81' : '#cbd5e1',
-                  fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                  fontSize: 9.5, fontWeight: 700, cursor: 'pointer',
                 }}
               >
                 💸 Expenses
@@ -640,10 +717,10 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                 type="button"
                 onClick={() => setMode('lending')}
                 style={{
-                  flex: 1, padding: '6px 6px', borderRadius: 6, border: 'none',
+                  flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
                   background: mode === 'lending' ? '#ffffff' : 'transparent',
                   color: mode === 'lending' ? '#312e81' : '#cbd5e1',
-                  fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                  fontSize: 9.5, fontWeight: 700, cursor: 'pointer',
                 }}
               >
                 🤝 Lend/Borrow
@@ -729,20 +806,20 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 10 }}>
-                      <i className="fas fa-file-csv" style={{ fontSize: 32, color: '#6366f1' }} />
-                      <span style={{ fontSize: 16, color: '#94a3b8', fontWeight: 800 }}>/</span>
-                      <i className="fas fa-file-pdf" style={{ fontSize: 32, color: '#ef4444' }} />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                      <i className="fas fa-file-csv" style={{ fontSize: 22, color: '#6366f1' }} />
+                      <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 800 }}>/</span>
+                      <i className="fas fa-file-pdf" style={{ fontSize: 22, color: '#ef4444' }} />
                     </div>
-                    <h4 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                      Select {mode === 'expense' ? 'Expenses' : (mode === 'lending' ? 'Lend/Borrow' : 'Bank')} Document, Receipt, PDF, Audio or CSV
+                    <h4 style={{ margin: '0 0 3px', fontSize: 12, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                      Select {mode === 'expense' ? 'Expenses' : (mode === 'lending' ? 'Lend/Borrow' : 'Bank')} Document, Receipt, PDF, Word, Excel, Text or CSV
                     </h4>
-                    <p style={{ margin: '0 0 10px', fontSize: 11, color: '#64748b' }}>
-                      Upload any PDF statement, Receipt Image, Voice Note, CSV or Excel spreadsheet (Max 10 MB limit)
+                    <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b' }}>
+                      Upload any PDF statement, Word document, Excel spreadsheet, Text file, Receipt Image, or CSV (Max 10 MB limit)
                     </p>
 
                     {/* CSV Import Limit Info Badge */}
-                    <div style={{ margin: '0 auto 14px', padding: '6px 12px', borderRadius: 8, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 10.5, fontWeight: 700, color: isAdmin ? '#6366f1' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
+                    <div style={{ margin: '0 auto 10px', padding: '4px 8px', borderRadius: 6, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 9.5, fontWeight: 700, color: isAdmin ? '#6366f1' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
                       {isAdmin ? (
                         <>👑 <strong>Admin Mode:</strong> Unlimited CSV Imports</>
                       ) : (
@@ -750,14 +827,14 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         onClick={() => downloadCsvTemplate()}
                         style={{
-                          padding: '8px 14px', background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                          border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, fontSize: 11,
-                          fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
+                          padding: '6px 10px', background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                          border: '1px solid rgba(99,102,241,0.3)', borderRadius: 6, fontSize: 10,
+                          fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
                         }}
                       >
                         <i className="fas fa-download" /> Download Template
@@ -765,14 +842,13 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
 
                       <label
                         style={{
-                          padding: '8px 16px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                          color: '#fff', borderRadius: 8, fontSize: 11, fontWeight: 800,
-                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                          boxShadow: '0 2px 8px rgba(99,102,241,0.3)'
+                          padding: '6px 12px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
                         }}
                       >
                         <i className="fas fa-file-upload" /> Upload File / Document (Max 10MB)
-                        <input type="file" accept=".pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.heic,.mp3,.wav,.m4a,application/pdf,text/csv,text/plain,image/*,audio/*" style={{ display: 'none' }} onChange={handleFileSelect} />
+                        <input type="file" accept=".pdf,.csv,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,.heic,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,image/*" style={{ display: 'none' }} onChange={handleFileSelect} />
                       </label>
                     </div>
                   </>
@@ -941,22 +1017,31 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                     />
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           <span style={{ fontSize: 9, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
                             Sl. {idx + 1}
                           </span>
-                          {mode === 'expense' ? item.category : item.person}
+                          {mode === 'expense' ? item.category : mode === 'bank' ? (item.bank || 'Bank') : item.person}
                           {item.isDuplicate && (
                             <span style={{ fontSize: 8.5, fontWeight: 800, color: '#d97706', background: 'rgba(245,158,11,0.15)', padding: '2px 6px', borderRadius: 99, border: '1px solid rgba(245,158,11,0.3)' }}>
                               ⚠️ Duplicate (Unchecked)
                             </span>
                           )}
                         </span>
-                        <span>₹{item.amount}</span>
+                        <span>₹{item.amount || item.debit || item.credit || 0}</span>
                       </div>
-                      <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2, display: 'flex', gap: 8 }}>
+                      <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <span>📅 {item.date}</span>
-                        <span>{mode === 'expense' ? `👤 ${item.forWhom}` : `🔄 ${item.type}`}</span>
+                        {mode === 'expense' && <span>👤 {item.forWhom}</span>}
+                        {mode === 'lending' && <span>🔄 {item.type}</span>}
+                        {mode === 'bank' && (
+                          <>
+                            {item.description && <span>📝 {item.description}</span>}
+                            {item.debit > 0 && <span style={{ color: '#ef4444' }}>🔻 Debit: ₹{item.debit}</span>}
+                            {item.credit > 0 && <span style={{ color: '#10b981' }}>🟢 Credit: ₹{item.credit}</span>}
+                            {item.balance > 0 && <span>🏦 Bal: ₹{item.balance}</span>}
+                          </>
+                        )}
                         {item.remarks && <span>💬 {item.remarks}</span>}
                       </div>
                     </div>

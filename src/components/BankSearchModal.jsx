@@ -654,7 +654,7 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
                     {aiParsing ? 'Processing…' : (isAdmin || allowNonCsvImport ? 'Import' : 'Import CSV')}
                     <input
                       type="file"
-                      accept={isAdmin || allowNonCsvImport ? '.pdf,.csv,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.webp,application/pdf,text/csv,text/plain,image/*' : '.csv,text/csv'}
+                      accept={isAdmin || allowNonCsvImport ? '.pdf,.csv,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,image/*' : '.csv,text/csv'}
                       disabled={aiParsing}
                       style={{ display: 'none' }}
                       onChange={handleCsvFileSelect}

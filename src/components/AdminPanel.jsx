@@ -70,6 +70,7 @@ export default function AdminPanel({ auth, onClose }) {
   const [cashfreeAppId, setCashfreeAppId] = useState('')
   const [allowNonCsvImport, setAllowNonCsvImport] = useState(true)
   const [geminiApiKeys, setGeminiApiKeys] = useState('')
+  const [geminiModels, setGeminiModels] = useState('gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash,gemini-3.6-flash-lite,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
 
   // Sync/Backfill Firebase Auth Users State
   const [syncEmails, setSyncEmails] = useState('')
@@ -116,6 +117,7 @@ export default function AdminPanel({ auth, onClose }) {
       setCashfreeAppId(cfg.cashfreeAppId || '')
       setAllowNonCsvImport(cfg.allowNonCsvImport !== false)
       setGeminiApiKeys(cfg.geminiApiKeys || '')
+      setGeminiModels(cfg.geminiModels || 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash,gemini-3.6-flash-lite,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
     } catch (err) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
@@ -292,6 +294,7 @@ export default function AdminPanel({ auth, onClose }) {
         cashfreeAppId,
         allowNonCsvImport,
         geminiApiKeys,
+        geminiModels,
       })
 
       showToast('✅ Configuration & AI API Keys saved successfully!')
@@ -438,12 +441,11 @@ export default function AdminPanel({ auth, onClose }) {
           boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
         }}
       >
-        {/* ── Header ── */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
-            padding: '12px 16px',
+            background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
             color: '#fff',
+            padding: '8px 12px 6px',
             position: 'relative',
             flexShrink: 0,
           }}
@@ -451,9 +453,9 @@ export default function AdminPanel({ auth, onClose }) {
           <button
             className="modal-close"
             style={{
-              position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)',
-              color: '#fff', width: 32, height: 32, borderRadius: '50%', border: 'none',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
+              position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.15)',
+              color: '#fff', width: 24, height: 24, borderRadius: '50%', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
             }}
             onClick={onClose}
             aria-label="Close"
@@ -461,26 +463,26 @@ export default function AdminPanel({ auth, onClose }) {
             <i className="fas fa-times" />
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 40 }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 32 }}>
+            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
               👑
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, lineHeight: 1.2 }}>Admin Control Panel</h3>
-              <p style={{ margin: '2px 0 0', fontSize: 10, color: '#a5b4fc' }}>
+              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>Admin Control Panel</h3>
+              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc' }}>
                 LoggedIn: <strong style={{ color: '#fff' }}>{auth?.email}</strong>
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 12, background: 'rgba(0,0,0,0.3)', padding: 3, borderRadius: 8 }}>
+          <div style={{ display: 'flex', gap: 3, marginTop: 6, background: 'rgba(0,0,0,0.3)', padding: 2, borderRadius: 6 }}>
             <button
               type="button"
               onClick={() => { setActiveTab('users'); setFilterTab('all'); }}
               style={{
-                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
                 background: activeTab === 'users' ? '#ffffff' : 'transparent',
                 color: activeTab === 'users' ? '#312e81' : '#cbd5e1',
-                fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 transition: 'all 0.15s',
               }}
             >
@@ -491,10 +493,10 @@ export default function AdminPanel({ auth, onClose }) {
               type="button"
               onClick={() => setActiveTab('settings')}
               style={{
-                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
                 background: activeTab === 'settings' ? '#ffffff' : 'transparent',
                 color: activeTab === 'settings' ? '#312e81' : '#cbd5e1',
-                fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 transition: 'all 0.15s',
               }}
             >
@@ -505,10 +507,10 @@ export default function AdminPanel({ auth, onClose }) {
               type="button"
               onClick={() => setActiveTab('storage')}
               style={{
-                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
                 background: activeTab === 'storage' ? '#ffffff' : 'transparent',
                 color: activeTab === 'storage' ? '#312e81' : '#cbd5e1',
-                fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 transition: 'all 0.15s',
               }}
             >
@@ -669,8 +671,13 @@ export default function AdminPanel({ auth, onClose }) {
                       onChange={(e) => setManualPlan(e.target.value)}
                       style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10, fontWeight: 700, background: '#fff', color: '#1e293b' }}
                     >
-                      <option value="monthly">Pro Monthly Pass</option>
-                      <option value="yearly">Pro Yearly Saver</option>
+                      <option value="monthly">Pro 30 Days (1 Month)</option>
+                      <option value="yearly">Pro 365 Days (1 Year)</option>
+                      <option value="7">⚡ 7 Days Pass</option>
+                      <option value="15">⚡ 15 Days Pass</option>
+                      <option value="60">📅 60 Days (2 Months)</option>
+                      <option value="90">📅 90 Days (3 Months)</option>
+                      <option value="180">📅 180 Days (6 Months)</option>
                       <option value="ultra_monthly">👑 Ultra Monthly</option>
                       <option value="ultra_yearly">👑 Ultra Yearly</option>
                     </select>
@@ -908,8 +915,22 @@ export default function AdminPanel({ auth, onClose }) {
                                   type="button"
                                   onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
                                   style={{ padding: '3px 8px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  title="Add 30 days to current active expiration date"
                                 >
-                                  ➕ +30 Days
+                                  ➕ +30D
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const inputDays = window.prompt(`Extend subscription for ${sub.email || sub.userId}? Enter number of days to add:`, '30')
+                                    if (inputDays && !isNaN(Number(inputDays)) && Number(inputDays) > 0) {
+                                      handleManualSet('active', sub.email || sub.userId, String(Number(inputDays)))
+                                    }
+                                  }}
+                                  style={{ padding: '3px 8px', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  title="Add custom number of days (e.g. 7, 15, 60, 90, 365)"
+                                >
+                                  ➕ +Days
                                 </button>
                                 {!isSuperAdmin && (
                                   <button
@@ -1296,6 +1317,34 @@ export default function AdminPanel({ auth, onClose }) {
                   value={geminiApiKeys}
                   onChange={(e) => setGeminiApiKeys(e.target.value)}
                   placeholder="Paste multiple Google AI Studio keys here (e.g. AIzaSyA123..., AIzaSyB456..., AIzaSyC789...)"
+                  style={{
+                    width: '100%', padding: '8px 10px', fontSize: 11, fontFamily: 'monospace',
+                    borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)',
+                    background: 'var(--bg-card, #ffffff)', color: 'var(--text-primary, #1e293b)',
+                    boxSizing: 'border-box', resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              {/* Gemini AI Model Preference Order Setup */}
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-microchip" style={{ color: '#10b981' }} />
+                    <span>⚡ Gemini AI Models (Preference Order &amp; Fallback)</span>
+                  </div>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(16,185,129,0.12)', color: '#10b981', padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.3)' }}>
+                    🟢 {geminiModels.split(/[\n,;]+/).filter((m) => m.trim()).length} Models Listed
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
+                  List AI models in preference order (comma or newline separated). Latest Gemini 3.6, 3.5, 3.1 models are prioritized first:
+                </p>
+                <textarea
+                  rows={2}
+                  value={geminiModels}
+                  onChange={(e) => setGeminiModels(e.target.value)}
+                  placeholder="gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-flash, gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash"
                   style={{
                     width: '100%', padding: '8px 10px', fontSize: 11, fontFamily: 'monospace',
                     borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)',

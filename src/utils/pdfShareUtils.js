@@ -5,7 +5,7 @@ import { cleanPhoneNumber, generateLendingMessage, generatePersonSummaryMessage 
 /**
  * Generate a PDF document for a single transaction (Expense or Lend/Borrow)
  */
-export function generateSingleTxnPDF(item) {
+export function generateSingleTxnPDF(item, returnDocObj = false) {
   const doc = new jsPDF()
   const isLend = item.isLend || item.sheet === 'lending'
   const personOrCategory = isLend ? (item.person || 'Person') : (item.category || 'Expense')

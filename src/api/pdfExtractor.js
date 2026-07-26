@@ -5,13 +5,39 @@
  * multi-key API rotation, automatic rate-limit retry, and flexible data normalization.
  */
 
-// Supported official active Gemini AI Studio models
-const FLASH_MODELS = [
+export const DEFAULT_FLASH_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.1-flash',
+  'gemini-3.6-flash-lite',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash-8b',
 ]
+
+/**
+ * Get configured Gemini AI models in order of preference
+ */
+export function getGeminiModels() {
+  try {
+    const custom = localStorage.getItem('wv_admin_gemini_models')
+    if (custom) {
+      const parsed = custom.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
+      if (parsed.length > 0) return parsed
+    }
+    const cachedConfigStr = localStorage.getItem('wv_cached_app_config') || '{}'
+    const cachedConfig = JSON.parse(cachedConfigStr)
+    if (cachedConfig?.geminiModels) {
+      const parsed = String(cachedConfig.geminiModels).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
+      if (parsed.length > 0) return parsed
+    }
+  } catch (e) {}
+  return DEFAULT_FLASH_MODELS
+}
+
+export const FLASH_MODELS = DEFAULT_FLASH_MODELS
 
 export const MAX_PDF_SIZE_MB = 10
 export const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024
@@ -427,7 +453,7 @@ Return ONLY raw JSON without markdown or markdown code fences.`
   let keyIndex = 0
   for (const apiKey of apiKeys) {
     keyIndex++
-    for (const modelName of FLASH_MODELS) {
+    for (const modelName of getGeminiModels()) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
 
       onProgress?.(`AI Extraction via Key #${keyIndex} of ${apiKeys.length} (${modelName})...`, 55)

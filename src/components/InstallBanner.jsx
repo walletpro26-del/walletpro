@@ -40,7 +40,7 @@ export default function InstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isStandalone, setIsStandalone] = useState(checkIsStandaloneMode)
   const [isInstalled, setIsInstalled] = useState(checkIsPwaInstalled)
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('wv_install_banner_dismissed') === 'true')
+  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     const handleBeforeInstall = (e) => {
@@ -97,10 +97,7 @@ export default function InstallBanner() {
         </div>
         <button
           type="button"
-          onClick={() => {
-            setDismissed(true)
-            localStorage.setItem('wv_install_banner_dismissed', 'true')
-          }}
+          onClick={() => setDismissed(true)}
           style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer', padding: '4px 6px' }}
           title="Dismiss status banner"
         >
@@ -128,10 +125,7 @@ export default function InstallBanner() {
         </div>
         <button
           type="button"
-          onClick={() => {
-            setDismissed(true)
-            localStorage.setItem('wv_install_banner_dismissed', 'true')
-          }}
+          onClick={() => setDismissed(true)}
           style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
         >
           ✕
@@ -157,10 +151,7 @@ export default function InstallBanner() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setDismissed(true)
-              localStorage.setItem('wv_install_banner_dismissed', 'true')
-            }}
+            onClick={() => setDismissed(true)}
             style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer' }}
           >
             ✕
@@ -217,10 +208,7 @@ export default function InstallBanner() {
         </button>
         <button
           type="button"
-          onClick={() => {
-            setDismissed(true)
-            localStorage.setItem('wv_install_banner_dismissed', 'true')
-          }}
+          onClick={() => setDismissed(true)}
           style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 13, cursor: 'pointer', padding: 4 }}
           title="Dismiss install banner"
         >

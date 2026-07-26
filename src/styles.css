@@ -441,13 +441,13 @@ body {
 .tab-btn {
   flex: 1;
   min-width: 0;
-  padding: 7px 4px;
-  font-size: 11px;
-  font-weight: 700;
+  padding: 6px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   color: var(--text-secondary);
   background: transparent;
   white-space: nowrap;
@@ -462,17 +462,17 @@ body {
   color: var(--text-primary);
 }
 .tab-btn.active {
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  background: #4f46e5;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: none;
 }
 [data-theme="dark"] .tab-btn.active,
 [data-theme="midnight"] .tab-btn.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: #6366f1;
   color: #ffffff;
 }
 [data-theme="forest"] .tab-btn.active {
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  background: #059669;
   color: #ffffff;
 }
 
@@ -688,28 +688,28 @@ select.float-input { padding-right: 32px; }
 /* --- Primary Buttons --- */
 .btn-primary {
   width: 100%;
-  padding: 14px;
-  min-height: 48px;
+  padding: 10px 14px;
+  min-height: 40px;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--accent-gradient);
+  background: var(--accent-600, #4f46e5);
   color: #fff;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   font-family: var(--font-body);
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: var(--shadow-accent);
+  transition: all 0.15s ease;
+  box-shadow: none;
   margin-top: 6px;
   position: relative;
   z-index: 10;
   touch-action: manipulation;
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px -4px rgba(99,102,241,0.4); }
-.btn-primary:active { transform: translateY(0) scale(0.98); }
-.btn-primary.emerald { background: var(--emerald-gradient); box-shadow: 0 8px 24px -4px rgba(16,185,129,0.3); }
-.btn-primary.emerald:hover { box-shadow: 0 12px 28px -4px rgba(16,185,129,0.4); }
-.btn-primary.danger { background: var(--danger-gradient); box-shadow: 0 8px 24px -4px rgba(239,68,68,0.3); }
+.btn-primary:hover { background: var(--accent-700, #4338ca); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary.emerald { background: #059669; box-shadow: none; }
+.btn-primary.emerald:hover { background: #047857; }
+.btn-primary.danger { background: #dc2626; box-shadow: none; }
 
 .btn-outline {
   padding: 8px 14px;
@@ -2581,3 +2581,38 @@ html, body {
   overflow-x: hidden;
   max-width: 100vw;
 }
+
+/* --- Multi-Select Combobox Chips --- */
+.selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.15s ease;
+}
+.selected-tag button {
+  border: none;
+  background: transparent;
+  color: #6366f1;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.selected-tag button:hover {
+  color: #ef4444;
+}
+

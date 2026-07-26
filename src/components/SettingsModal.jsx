@@ -89,48 +89,47 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
       <div className="modal-backdrop" onClick={onClose}></div>
       <div className="modal-container" style={{ maxWidth: 420, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         {/* Compact Header */}
-        <div className="modal-header" style={{ padding: '12px 16px' }}>
+        <div className="modal-header" style={{ padding: '8px 12px' }}>
           <div className="modal-header-info">
-            <div className="modal-header-icon" style={{ width: 32, height: 32, fontSize: 14, background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
+            <div className="modal-header-icon" style={{ width: 26, height: 26, fontSize: 12, background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
               <i className="fas fa-cog"></i>
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>Settings &amp; Preferences</h3>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>WalletVibe Account &amp; App Config</div>
+              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>Settings &amp; Preferences</h3>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>WalletVibe Account &amp; App Config</div>
             </div>
           </div>
-          <button className="modal-close" onClick={onClose} style={{ width: 26, height: 26, fontSize: 11 }}>
+          <button className="modal-close" onClick={onClose} style={{ width: 24, height: 24, fontSize: 10 }}>
             <i className="fas fa-times"></i>
           </button>
         </div>
 
         {/* Compact Body */}
-        <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 16px', overflowY: 'auto', flex: 1 }}>
+        <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', overflowY: 'auto', flex: 1 }}>
           {/* User Account & Subscription Card */}
           <div style={{
             background: 'var(--bg-subtle, #f8fafc)',
-            borderRadius: 12,
+            borderRadius: 8,
             border: '1px solid var(--border-color, #e2e8f0)',
-            padding: '10px 12px',
+            padding: '6px 10px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 10
+            gap: 8
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
               <div style={{
-                width: 36,
-                height: 36,
+                width: 26,
+                height: 26,
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                 color: '#fff',
                 fontWeight: 800,
-                fontSize: 14,
+                fontSize: 11,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
-                boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
               }}>
                 {userInitial}
               </div>
