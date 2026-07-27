@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { auth } from '../firebase'
 import { addExpense, deleteExpense, getAllExpenses, saveExpensesBatch } from '../api/expenses'
 import { addLending, deleteLending, getAllLending, saveLendingBatch } from '../api/lending'
-import { saveBankTransactionsBatch } from '../api/bankTransactions'
+import { saveBankTransactionsBatch, fetchBankTransactionsFromFirestore } from '../api/bankTransactions'
 import { loadSnapshot } from '../api/localCache'
 import { importTaskQueue } from '../api/importTaskQueue'
 import {
@@ -12,6 +12,7 @@ import {
 } from '../api/pdfExtractor'
 import { checkCsvRateLimit, recordCsvImportSuccess, getCsvImportStats } from '../api/csvRateLimit'
 import { normalizePersonName } from '../api/entityNormalizer'
+import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 
 export default function CsvImportModal({ type = 'expense', isAdmin = false, allowNonCsvImport = true, onClose, onImportComplete }) {
   const [mode, setMode] = useState(type) // 'expense' | 'lending'
@@ -27,6 +28,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
   // Existing user transactions for intelligent duplicate detection
   const [existingExpenses, setExistingExpenses] = useState([])
   const [existingLending, setExistingLending] = useState([])
+  const [existingBank, setExistingBank] = useState([])
   
   // Import History & Undo State
   const [showHistory, setShowHistory] = useState(false)
@@ -36,7 +38,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
   // Subscribe to background importTaskQueue for real-time updates across modal closes
   useEffect(() => {
     const unsubscribe = importTaskQueue.subscribe((task) => {
-      if (task && (task.mode === mode || task.mode === 'expense' || task.mode === 'lending')) {
+      if (task && (task.mode === mode || task.mode === 'expense' || task.mode === 'lending' || task.mode === 'bank')) {
         if (task.type === 'commit') {
           setImporting(!task.isComplete)
           if (task.error) setError('Import Commit Error: ' + task.error)
@@ -57,7 +59,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       }
     })
     return () => unsubscribe()
-  }, [mode])
+  }, [mode, existingExpenses, existingLending, existingBank])
 
   // Restore saved preview draft if user previously closed modal
   useEffect(() => {
@@ -73,14 +75,19 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       try {
         const cachedExp = loadSnapshot('expenses') || []
         const cachedLend = loadSnapshot('lending') || []
+        const cachedBank = loadSnapshot('bank') || []
         setExistingExpenses(cachedExp)
         setExistingLending(cachedLend)
+        setExistingBank(cachedBank)
 
         const exps = await getAllExpenses()
         if (exps?.length) setExistingExpenses(exps)
 
         const lends = await getAllLending()
         if (lends?.length) setExistingLending(lends)
+
+        const bankTxns = await fetchBankTransactionsFromFirestore(auth?.currentUser?.uid || '')
+        if (bankTxns?.length) setExistingBank(bankTxns)
       } catch (e) {
         // quiet fallback
       }
@@ -189,43 +196,168 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
     reader.readAsText(file)
   }
 
-  function processExtractedItems(rawList) {
+function toLocalYMD(d) {
+  if (!d) return ''
+  if (typeof d === 'string') {
+    const s = d.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    const parsed = new Date(s)
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear()
+      const m = String(parsed.getMonth() + 1).padStart(2, '0')
+      const day = String(parsed.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+  }
+  const dt = d instanceof Date ? d : (typeof d?.toDate === 'function' ? d.toDate() : new Date(d))
+  if (isNaN(dt.getTime())) return ''
+  const y = dt.getFullYear()
+  const m = String(dt.getMonth() + 1).padStart(2, '0')
+  const day = String(dt.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function extractRefNumbers(str) {
+  if (!str) return []
+  return (String(str).match(/\b\d{5,18}\b/g) || [])
+}
+
+function extractTxnId(obj) {
+  if (!obj) return ''
+  if (obj.txnId) return String(obj.txnId).trim()
+  if (obj.transactionId) return String(obj.transactionId).trim()
+  if (obj.refNo) return String(obj.refNo).trim()
+  if (obj.referenceNo) return String(obj.referenceNo).trim()
+  return ''
+}
+
+/**
+ * Exact Bank Duplicate Decision Engine
+ * 1. DR/CR & Amount MUST match (different amount = 100% UNIQUE!).
+ * 2. Date MUST match or be within 1 day max.
+ * 3. If Transaction ID / Reference Number / RRN exists on both records:
+ *    - If they match -> DUPLICATE (true)
+ *    - If DIFFERENT -> 100% UNIQUE / DIFFERENT (false)
+ * 4. Merchant comparison.
+ */
+function isBankDuplicateCheck(cand, existing) {
+  // Step 1: DR / CR match check
+  const cDebit = parseFloat(cand.debit || 0) || 0
+  const cCredit = parseFloat(cand.credit || 0) || 0
+  const cAmt = parseFloat(cand.amount || cDebit || cCredit || 0) || 0
+  const cIsDebit = cDebit > 0 || (cand.type && String(cand.type).toLowerCase().includes('debit'))
+
+  const eDebit = parseFloat(existing.debit || 0) || 0
+  const eCredit = parseFloat(existing.credit || 0) || 0
+  const eAmt = parseFloat(existing.amount || eDebit || eCredit || 0) || 0
+  const eIsDebit = eDebit > 0 || (existing.type && String(existing.type).toLowerCase().includes('debit'))
+
+  if (cIsDebit !== eIsDebit) return false
+
+  // Step 2: Amount MUST match (different amount = 100% UNIQUE!)
+  if (Math.abs(cAmt - eAmt) >= 0.01) return false
+
+  // Step 3: Date MUST match (or within 1 day max)
+  const cDateStr = toLocalYMD(cand.date || cand.dateObj)
+  const eDateStr = toLocalYMD(existing.date || existing.dateObj)
+  if (!cDateStr || !eDateStr) return false
+
+  const cDateObj = new Date(cDateStr)
+  const eDateObj = new Date(eDateStr)
+  if (isNaN(cDateObj.getTime()) || isNaN(eDateObj.getTime())) return false
+
+  const diffDays = Math.abs(cDateObj - eDateObj) / (1000 * 60 * 60 * 24)
+  if (diffDays > 1) return false
+
+  // Normalize descriptions & extract identifiers
+  const normCand = normalizeBankDescription(cand.description || cand.narration, cAmt, cDateStr)
+  const normExist = normalizeBankDescription(existing.description || existing.narration, eAmt, eDateStr)
+
+  // Step 4: Transaction ID / Reference Number / RRN Rule
+  // If BOTH transactions have a Txn ID or Ref Number:
+  // - If they match -> DUPLICATE!
+  // - If DIFFERENT -> 100% UNIQUE / DIFFERENT (return false)!
+  const candId = extractTxnId(cand) || cand.refNo || cand.rrn || normCand.reference
+  const existId = extractTxnId(existing) || existing.refNo || existing.rrn || normExist.reference
+
+  if (candId && existId) {
+    if (candId !== existId) return false // Different Txn ID/Ref -> 100% UNIQUE!
+    return true // Same Txn ID/Ref -> DUPLICATE!
+  }
+
+  // Step 5: Merchant comparison
+  if (normCand.merchant && normExist.merchant) {
+    const cWords = normCand.merchant.split(/\s+/).filter((w) => w.length > 2)
+    const eWords = normExist.merchant.split(/\s+/).filter((w) => w.length > 2)
+    if (cWords.length > 0 && eWords.length > 0) {
+      const match = cWords.some((w) => eWords.includes(w))
+      if (!match) return false
+    }
+  }
+
+  return true
+}
+
+function isExpenseDuplicateCheck(cand, existing) {
+  const cDate = toLocalYMD(cand.date)
+  const cAmt = parseFloat(cand.amount || 0) || 0
+  const cCat = (cand.category || '').toLowerCase().trim()
+  const cWhom = (cand.forWhom || '').toLowerCase().trim()
+
+  const eDate = toLocalYMD(existing.dateObj || existing.date)
+  const eAmt = parseFloat(existing.amount || 0) || 0
+  const eCat = (existing.category || '').toLowerCase().trim()
+  const eWhom = (existing.forWhom || '').toLowerCase().trim()
+
+  if (Math.abs(cAmt - eAmt) >= 0.01) return false
+  if (cDate !== eDate) return false
+  if (!cCat || !eCat || cCat === eCat || cWhom === eWhom) return true
+
+  return true
+}
+
+function isLendingDuplicateCheck(cand, existing) {
+  const cDate = toLocalYMD(cand.date)
+  const cAmt = parseFloat(cand.amount || 0) || 0
+  const cPerson = (cand.person || '').toLowerCase().trim()
+
+  const eDate = toLocalYMD(existing.dateObj || existing.date)
+  const eAmt = parseFloat(existing.amount || 0) || 0
+  const ePerson = (existing.person || '').toLowerCase().trim()
+
+  if (Math.abs(cAmt - eAmt) >= 0.01) return false
+  if (cDate !== eDate) return false
+  if (cPerson === ePerson) return true
+
+  return false
+}
+
+  function processExtractedItems(rawList, targetMode = null) {
     if (!Array.isArray(rawList) || rawList.length === 0) {
       throw new Error('No valid transactions found in statement.')
     }
 
+    const activeMode = targetMode || mode
     const items = []
     let duplicateCount = 0
+    const seenKeys = new Set()
 
-    if (mode === 'expense') {
+    if (activeMode === 'expense') {
       rawList.forEach((row, idx) => {
         const rawAmt = parseFloat(row.amount || 0)
         if (!rawAmt || isNaN(rawAmt)) return
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (row.date) {
-          const parsed = new Date(row.date)
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(row.date) || new Date().toISOString().split('T')[0]
         const category = row.category || 'General'
         const forWhom = normalizePersonName(row.forWhom || 'Self')
         const details = row.details || 'Expense Item'
 
-        const isDup = existingExpenses.some((e) => {
-          const eDate = (e.date || '').split('T')[0]
-          const eAmt = parseFloat(e.amount) || 0
-          const eCat = (e.category || '').toLowerCase().trim()
-          const eWhom = (e.forWhom || '').toLowerCase().trim()
-          return (
-            eDate === dateStr &&
-            Math.abs(eAmt - rawAmt) < 0.01 &&
-            (eCat === category.toLowerCase().trim() || eWhom === forWhom.toLowerCase().trim())
-          )
-        })
+        const rowKey = `${dateStr}_${rawAmt}_${category.toLowerCase().trim()}_${forWhom.toLowerCase().trim()}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
 
+        const isDbDup = existingExpenses.some((e) => isExpenseDuplicateCheck({ date: dateStr, amount: rawAmt, category, forWhom, details }, e))
+        const isDup = isIntraDup || isDbDup
         if (isDup) duplicateCount++
 
         items.push({
@@ -241,27 +373,31 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
           remarks: row.remarks || '',
         })
       })
-    } else if (mode === 'bank') {
+    } else if (activeMode === 'bank') {
       rawList.forEach((row, idx) => {
         const debit = parseFloat(row.debit || 0) || 0
         const credit = parseFloat(row.credit || 0) || 0
         const rawAmt = parseFloat(row.amount || debit || credit || 0)
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (row.date) {
-          const parsed = new Date(row.date)
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(row.date) || new Date().toISOString().split('T')[0]
         const bank = row.bank || 'Bank'
         const description = row.description || row.narration || row.particulars || 'Bank Transaction'
 
+        const refNums = extractRefNumbers(description)
+        const refKey = refNums.length > 0 ? refNums.join('_') : description.toLowerCase().trim()
+        const rowKey = `${dateStr}_${rawAmt}_${debit}_${credit}_${refKey}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
+
+        const cand = { date: dateStr, amount: rawAmt, debit, credit, description, bank }
+        const isDbDup = existingBank.some((b) => isBankDuplicateCheck(cand, b))
+        const isDup = isIntraDup || isDbDup
+        if (isDup) duplicateCount++
+
         items.push({
           id: 'import_bank_' + idx + '_' + Date.now(),
-          selected: true,
-          isDuplicate: false,
+          selected: !isDup,
+          isDuplicate: isDup,
           date: dateStr,
           bank,
           description,
@@ -277,29 +413,18 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
         const rawAmt = parseFloat(row.amount || 0)
         if (!rawAmt || isNaN(rawAmt)) return
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (row.date) {
-          const parsed = new Date(row.date)
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(row.date) || new Date().toISOString().split('T')[0]
         const person = normalizePersonName(row.person || 'Person')
         const type = (row.type || '').toLowerCase().includes('borrow') ? 'Borrowed' : 'Lent'
         const isSettled = Boolean(row.isSettled)
 
-        const isDup = existingLending.some((l) => {
-          const lDate = (l.date || '').split('T')[0]
-          const lAmt = parseFloat(l.amount) || 0
-          const lPerson = (l.person || '').toLowerCase().trim()
-          return (
-            lDate === dateStr &&
-            Math.abs(lAmt - rawAmt) < 0.01 &&
-            lPerson === person.toLowerCase().trim()
-          )
-        })
+        const rowKey = `${dateStr}_${rawAmt}_${person.toLowerCase().trim()}_${type}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
 
+        const cand = { date: dateStr, amount: rawAmt, person, type }
+        const isDbDup = existingLending.some((l) => isLendingDuplicateCheck(cand, l))
+        const isDup = isIntraDup || isDbDup
         if (isDup) duplicateCount++
 
         items.push({
@@ -383,41 +508,28 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       const modeIdx = findCol(headers, ['paymentmode', 'mode', 'payment mode', 'method', 'via'])
       const remarksIdx = findCol(headers, ['remarks', 'remark', 'note', 'comment'])
 
+      const seenKeys = new Set()
+
       rows.forEach((row, idx) => {
         const rawAmt = parseFloat((row[amountIdx] || '0').replace(/[^0-9.]/g, ''))
         if (!rawAmt || isNaN(rawAmt)) return
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (dateIdx !== -1 && row[dateIdx]) {
-          const parsed = new Date(row[dateIdx])
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(dateIdx !== -1 ? row[dateIdx] : null) || new Date().toISOString().split('T')[0]
         const category = catIdx !== -1 ? (row[catIdx] || 'General') : 'General'
         const forWhom = normalizePersonName(whomIdx !== -1 ? (row[whomIdx] || 'Self') : 'Self')
         const details = detailsIdx !== -1 ? (row[detailsIdx] || 'Expense Item') : 'Expense Item'
 
-        // Check if matching duplicate exists in existing user expenses
-        const isDup = existingExpenses.some((e) => {
-          const eDate = (e.date || '').split('T')[0]
-          const eAmt = parseFloat(e.amount) || 0
-          const eCat = (e.category || '').toLowerCase().trim()
-          const eWhom = (e.forWhom || '').toLowerCase().trim()
+        const rowKey = `${dateStr}_${rawAmt}_${category.toLowerCase().trim()}_${forWhom.toLowerCase().trim()}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
 
-          return (
-            eDate === dateStr &&
-            Math.abs(eAmt - rawAmt) < 0.01 &&
-            (eCat === category.toLowerCase().trim() || eWhom === forWhom.toLowerCase().trim())
-          )
-        })
-
+        const isDbDup = existingExpenses.some((e) => isExpenseDuplicateCheck({ date: dateStr, amount: rawAmt, category, forWhom, details }, e))
+        const isDup = isIntraDup || isDbDup
         if (isDup) duplicateCount++
 
         items.push({
           id: 'import_' + idx + '_' + Date.now(),
-          selected: !isDup, // Auto-uncheck duplicates by default!
+          selected: !isDup,
           isDuplicate: isDup,
           date: dateStr,
           amount: rawAmt,
@@ -436,28 +548,34 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       const balanceIdx = findCol(headers, ['balance', 'bal', 'closingbalance', 'total'])
       const amtIdx = findCol(headers, ['amount', 'price', 'sum', 'val'])
 
+      const seenKeys = new Set()
+
       rows.forEach((row, idx) => {
         const debit = debitIdx !== -1 ? parseFloat((row[debitIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
         const credit = creditIdx !== -1 ? parseFloat((row[creditIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
         let rawAmt = amtIdx !== -1 ? parseFloat((row[amtIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : (debit || credit)
         if (!rawAmt && !debit && !credit) return
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (dateIdx !== -1 && row[dateIdx]) {
-          const parsed = new Date(row[dateIdx])
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(dateIdx !== -1 ? row[dateIdx] : null) || new Date().toISOString().split('T')[0]
         const bank = bankIdx !== -1 ? (row[bankIdx] || 'Bank') : 'Bank'
         const description = descIdx !== -1 ? (row[descIdx] || 'Bank Transaction') : 'Bank Transaction'
         const balance = balanceIdx !== -1 ? parseFloat((row[balanceIdx] || '0').replace(/[^0-9.]/g, '')) || 0 : 0
 
+        const refNums = extractRefNumbers(description)
+        const refKey = refNums.length > 0 ? refNums.join('_') : description.toLowerCase().trim()
+        const rowKey = `${dateStr}_${rawAmt}_${debit}_${credit}_${refKey}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
+
+        const cand = { date: dateStr, amount: rawAmt, debit, credit, description, bank }
+        const isDbDup = existingBank.some((b) => isBankDuplicateCheck(cand, b))
+        const isDup = isIntraDup || isDbDup
+        if (isDup) duplicateCount++
+
         items.push({
           id: 'import_bank_' + idx + '_' + Date.now(),
-          selected: true,
-          isDuplicate: false,
+          selected: !isDup,
+          isDuplicate: isDup,
           date: dateStr,
           bank,
           description,
@@ -474,42 +592,31 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
       const remarksIdx = findCol(headers, ['remarks', 'remark', 'note', 'details', 'comment', 'description'])
       const statusIdx = findCol(headers, ['status', 'state', 'settled', 'issettled'])
 
+      const seenKeys = new Set()
+
       rows.forEach((row, idx) => {
         const rawAmt = parseFloat((row[amountIdx] || '0').replace(/[^0-9.]/g, ''))
         if (!rawAmt || isNaN(rawAmt)) return
 
-        let dateStr = new Date().toISOString().split('T')[0]
-        if (dateIdx !== -1 && row[dateIdx]) {
-          const parsed = new Date(row[dateIdx])
-          if (!isNaN(parsed.getTime())) {
-            dateStr = parsed.toISOString().split('T')[0]
-          }
-        }
-
+        let dateStr = toLocalYMD(dateIdx !== -1 ? row[dateIdx] : null) || new Date().toISOString().split('T')[0]
         const person = normalizePersonName(personIdx !== -1 ? (row[personIdx] || 'Person') : 'Person')
         const rawType = typeIdx !== -1 ? (row[typeIdx] || '').toLowerCase() : ''
         const type = (rawType.includes('borrow') || rawType.includes('took') || rawType.includes('get')) ? 'Borrowed' : 'Lent'
         const rawStatus = statusIdx !== -1 ? (row[statusIdx] || '').toLowerCase() : ''
         const isSettled = rawStatus.includes('settle') || rawStatus.includes('done') || rawStatus.includes('paid')
 
-        // Check duplicate
-        const isDup = existingLending.some((l) => {
-          const lDate = (l.date || '').split('T')[0]
-          const lAmt = parseFloat(l.amount) || 0
-          const lPerson = (l.person || '').toLowerCase().trim()
+        const rowKey = `${dateStr}_${rawAmt}_${person.toLowerCase().trim()}_${type}`
+        const isIntraDup = seenKeys.has(rowKey)
+        seenKeys.add(rowKey)
 
-          return (
-            lDate === dateStr &&
-            Math.abs(lAmt - rawAmt) < 0.01 &&
-            lPerson === person.toLowerCase().trim()
-          )
-        })
-
+        const cand = { date: dateStr, amount: rawAmt, person, type }
+        const isDbDup = existingLending.some((l) => isLendingDuplicateCheck(cand, l))
+        const isDup = isIntraDup || isDbDup
         if (isDup) duplicateCount++
 
         items.push({
           id: 'import_lend_' + idx + '_' + Date.now(),
-          selected: !isDup, // Auto-uncheck duplicates by default!
+          selected: !isDup,
           isDuplicate: isDup,
           date: dateStr,
           amount: rawAmt,
@@ -530,9 +637,13 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
 
   function toggleSelectAll(val) {
     if (!csvPreviewData) return
+    const hasNonDuplicates = csvPreviewData.items.some((i) => !i.isDuplicate)
     setCsvPreviewData({
       ...csvPreviewData,
-      items: csvPreviewData.items.map((i) => ({ ...i, selected: val })),
+      items: csvPreviewData.items.map((i) => ({
+        ...i,
+        selected: val ? (hasNonDuplicates ? !i.isDuplicate : true) : false,
+      })),
     })
   }
 
@@ -617,6 +728,7 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
         })
 
         setCsvPreviewData(null)
+        importTaskQueue.clearDraftPreview(mode)
         onImportComplete?.()
         return createdDocIds
       },
@@ -680,35 +792,36 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
         }}
       >
         {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '8px 12px 6px', color: '#fff', position: 'relative' }}>
-          <button className="modal-close" style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.15)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer' }} onClick={onClose}>
+        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '10px 14px 8px', color: '#fff', position: 'relative' }}>
+          <button className="modal-close" style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
             <i className="fas fa-times" />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
               📥
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>
-                {csvPreviewData ? 'CSV Import Preview' : 'Import CSV Data'}
+              <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: -0.2 }}>
+                {csvPreviewData ? 'CSV Import Preview' : 'Import Statement Data'}
               </h3>
-              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc' }}>
-                Bulk import entries with duplicate detection & 1-click Undo
+              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#c7d2fe', fontWeight: 500 }}>
+                Bulk import entries with duplicate detection &amp; 1-click Undo
               </p>
             </div>
           </div>
 
           {/* Mode Switcher */}
           {!csvPreviewData && (
-            <div style={{ display: 'flex', gap: 3, marginTop: 6, background: 'rgba(0,0,0,0.3)', padding: 2, borderRadius: 6 }}>
+            <div style={{ display: 'flex', gap: 4, marginTop: 8, background: 'rgba(0,0,0,0.25)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }}>
               <button
                 type="button"
                 onClick={() => setMode('expense')}
                 style={{
-                  flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
+                  flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'expense' ? '#ffffff' : 'transparent',
                   color: mode === 'expense' ? '#312e81' : '#cbd5e1',
-                  fontSize: 9.5, fontWeight: 700, cursor: 'pointer',
+                  fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
+                  boxShadow: mode === 'expense' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
                 💸 Expenses
@@ -717,10 +830,11 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                 type="button"
                 onClick={() => setMode('lending')}
                 style={{
-                  flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
+                  flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'lending' ? '#ffffff' : 'transparent',
                   color: mode === 'lending' ? '#312e81' : '#cbd5e1',
-                  fontSize: 9.5, fontWeight: 700, cursor: 'pointer',
+                  fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
+                  boxShadow: mode === 'lending' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
                 🤝 Lend/Borrow
@@ -729,67 +843,68 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                 type="button"
                 onClick={() => setMode('bank')}
                 style={{
-                  flex: 1, padding: '6px 6px', borderRadius: 6, border: 'none',
+                  flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'bank' ? '#ffffff' : 'transparent',
                   color: mode === 'bank' ? '#312e81' : '#cbd5e1',
-                  fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                  fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
+                  boxShadow: mode === 'bank' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
-                🏦 Bank PDF/CSV
+                🏦 Bank Statement
               </button>
             </div>
           )}
         </div>
 
         {/* Body */}
-        <div style={{ padding: 14, flex: 1 }}>
+        <div style={{ padding: 12, flex: 1 }}>
           {error && (
-            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 11, fontWeight: 700, marginBottom: 12 }}>
+            <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 10.5, fontWeight: 700, marginBottom: 10 }}>
               <i className="fas fa-exclamation-circle" style={{ marginRight: 6 }} /> {error}
             </div>
           )}
 
           {/* Success Banner + Immediate Undo Option */}
           {successInfo && (
-            <div style={{ padding: '14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#10b981', marginBottom: 4 }}>
+            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#10b981', marginBottom: 2 }}>
                 {successInfo.message}
               </div>
-              <p style={{ margin: '0 0 10px', fontSize: 10.5, color: '#64748b' }}>
-                All records have been saved to your cloud database. If you imported by mistake, you can undo this batch now:
+              <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b' }}>
+                All records have been saved to your cloud database. You can undo this import anytime:
               </p>
               <button
                 type="button"
                 onClick={() => handleUndoBatch(successInfo)}
                 disabled={undoingBatchId === successInfo.batchId}
                 style={{
-                  padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.4)',
-                  background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 11, fontWeight: 800,
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
+                  padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.4)',
+                  background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 10, fontWeight: 800,
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5
                 }}
               >
-                {undoingBatchId === successInfo.batchId ? <><i className="fas fa-spinner fa-spin" /> Undoing...</> : <><i className="fas fa-undo" /> ↩️ Undo This Import Batch</>}
+                {undoingBatchId === successInfo.batchId ? <><i className="fas fa-spinner fa-spin" /> Undoing...</> : <><i className="fas fa-undo" /> ↩️ Undo Import Batch</>}
               </button>
             </div>
           )}
 
           {!csvPreviewData ? (
-            <div>
-              <div style={{ textAlign: 'center', padding: '18px 14px', background: 'var(--bg-subtle, #f8fafc)', border: '1.5px dashed var(--border-color, #cbd5e1)', borderRadius: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Dropzone Card */}
+              <div style={{ textAlign: 'center', padding: '14px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1.5px dashed var(--border-color, #cbd5e1)', borderRadius: 10 }}>
                 {aiParsing ? (
-                  <div style={{ padding: '16px 10px' }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 20 }}>
+                  <div style={{ padding: '10px 6px' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontSize: 16 }}>
                       <i className="fas fa-brain fa-spin" />
                     </div>
-                    <h4 style={{ margin: '0 0 6px', fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                      {aiProgress.status || 'Analyzing PDF Statement with Gemini AI...'}
+                    <h4 style={{ margin: '0 0 4px', fontSize: 12.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                      {aiProgress.status || 'Analyzing Statement with Gemini AI...'}
                     </h4>
-                    <p style={{ margin: '0 0 14px', fontSize: 10.5, color: '#64748b' }}>
-                      Extracting transactions, dates, and amounts from your PDF document
+                    <p style={{ margin: '0 0 10px', fontSize: 10, color: '#64748b' }}>
+                      Extracting transactions, dates, and amounts from your document
                     </p>
 
-                    {/* Animated Progress Bar */}
-                    <div style={{ width: '82%', height: 7, background: '#e2e8f0', borderRadius: 99, margin: '0 auto', overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ width: '85%', height: 6, background: '#e2e8f0', borderRadius: 99, margin: '0 auto', overflow: 'hidden' }}>
                       <div
                         style={{
                           height: '100%',
@@ -800,54 +915,55 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                         }}
                       />
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', marginTop: 6 }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 800, color: '#6366f1', marginTop: 4 }}>
                       {aiProgress.percent || 15}% Completed
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
-                      <i className="fas fa-file-csv" style={{ fontSize: 22, color: '#6366f1' }} />
-                      <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 800 }}>/</span>
-                      <i className="fas fa-file-pdf" style={{ fontSize: 22, color: '#ef4444' }} />
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+                      <i className="fas fa-file-csv" style={{ fontSize: 18, color: '#6366f1' }} />
+                      <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800 }}>/</span>
+                      <i className="fas fa-file-pdf" style={{ fontSize: 18, color: '#ef4444' }} />
                     </div>
-                    <h4 style={{ margin: '0 0 3px', fontSize: 12, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                      Select {mode === 'expense' ? 'Expenses' : (mode === 'lending' ? 'Lend/Borrow' : 'Bank')} Document, Receipt, PDF, Word, Excel, Text or CSV
+                    <h4 style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                      Upload {mode === 'expense' ? 'Expenses' : (mode === 'lending' ? 'Lend/Borrow' : 'Bank')} Document or CSV
                     </h4>
-                    <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b' }}>
-                      Upload any PDF statement, Word document, Excel spreadsheet, Text file, Receipt Image, or CSV (Max 10 MB limit)
+                    <p style={{ margin: '0 0 6px', fontSize: 9.5, color: '#64748b' }}>
+                      Supports PDF, CSV, Excel, Word, Text &amp; Images (Max 10 MB limit)
                     </p>
 
-                    {/* CSV Import Limit Info Badge */}
-                    <div style={{ margin: '0 auto 10px', padding: '4px 8px', borderRadius: 6, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 9.5, fontWeight: 700, color: isAdmin ? '#6366f1' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
+                    {/* Limit Info Badge */}
+                    <div style={{ margin: '0 auto 8px', padding: '2px 8px', borderRadius: 4, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 9, fontWeight: 700, color: isAdmin ? '#6366f1' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
                       {isAdmin ? (
-                        <>👑 <strong>Admin Mode:</strong> Unlimited CSV Imports</>
+                        <>👑 <strong>Admin:</strong> Unlimited Imports</>
                       ) : (
-                        <>📊 <strong>CSV Limit:</strong> 3/day & 3/month (Used <strong>{csvStats.todayCount}/3</strong> today • <strong>{csvStats.monthCount}/3</strong> this month)</>
+                        <>📊 <strong>Limit:</strong> 3/day (Used <strong>{csvStats.todayCount}/3</strong> today)</>
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
                       <button
                         type="button"
                         onClick={() => downloadCsvTemplate()}
                         style={{
-                          padding: '6px 10px', background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-                          border: '1px solid rgba(99,102,241,0.3)', borderRadius: 6, fontSize: 10,
+                          padding: '5px 10px', background: 'rgba(99,102,241,0.08)', color: '#6366f1',
+                          border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, fontSize: 9.5,
                           fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
                         }}
                       >
-                        <i className="fas fa-download" /> Download Template
+                        <i className="fas fa-download" style={{ fontSize: 9 }} /> Template
                       </button>
 
                       <label
                         style={{
-                          padding: '6px 12px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                          color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                          padding: '5px 12px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          color: '#fff', borderRadius: 6, fontSize: 9.5, fontWeight: 800,
                           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                          boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
                         }}
                       >
-                        <i className="fas fa-file-upload" /> Upload File / Document (Max 10MB)
+                        <i className="fas fa-file-upload" style={{ fontSize: 9 }} /> Upload File (10MB)
                         <input type="file" accept=".pdf,.csv,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,.heic,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,image/*" style={{ display: 'none' }} onChange={handleFileSelect} />
                       </label>
                     </div>
@@ -857,58 +973,64 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
 
               {/* Previously AI-Converted Statements (Local Device Cache) */}
               {cachedStatements && cachedStatements.length > 0 && (
-                <div style={{ marginTop: 12, background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>📋 Previously AI-Converted Statements</span>
-                      <span style={{ fontSize: 9.5, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: '8px 10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span>📋 AI Statement Cache</span>
+                      <span style={{ fontSize: 9, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>
                         {cachedStatements.length} saved
                       </span>
                     </div>
-                    <div style={{ fontSize: 9.5, color: '#64748b' }}>
-                      Zero AI credits &amp; zero Firebase usage
+                    <div style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
+                      ⚡ Zero AI credits used
                     </div>
                   </div>
 
-                  <div className="custom-scrollbar" style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="custom-scrollbar" style={{ maxHeight: 110, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {cachedStatements.map((c) => (
-                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-card, #ffffff)', borderRadius: 8, border: '1px solid var(--border-color, #e2e8f0)' }}>
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary, #1e293b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div key={c.id || c.fileName} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'var(--bg-card, #ffffff)', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary, #1e293b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             📄 {c.fileName}
                           </div>
-                          <div style={{ fontSize: 9.5, color: '#64748b' }}>
-                            {new Date(c.convertedDate).toLocaleDateString('en-IN')} • {c.recordCount} records ({c.mode})
+                          <div style={{ fontSize: 9, color: '#64748b' }}>
+                            {new Date(c.convertedDate).toLocaleDateString('en-IN')} • {c.recordCount} records ({c.mode || mode})
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
                           <button
                             type="button"
                             onClick={() => downloadConvertedCsv(c.items, c.fileName, c.mode || mode)}
-                            style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #10b981', background: '#ecfdf5', color: '#059669', fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                            title="Download CSV file to phone"
+                            style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid #10b981', background: '#ecfdf5', color: '#059669', fontSize: 9, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
+                            title="Download CSV"
                           >
-                            <i className="fas fa-download" style={{ fontSize: 9 }} /> CSV
+                            <i className="fas fa-download" style={{ fontSize: 8 }} /> CSV
                           </button>
                           <button
                             type="button"
                             onClick={() => {
                               try {
-                                processExtractedItems(c.items)
+                                const targetMode = c.mode || mode
+                                setMode(targetMode)
+                                processExtractedItems(c.items, targetMode)
                               } catch (err) {
-                                setError('Failed to load cached statement: ' + err?.message)
+                                setError('Failed to load statement: ' + err?.message)
                               }
                             }}
-                            style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: '#6366f1', color: '#fff', fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                            title="Instantly re-import transactions without AI"
+                            style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: '#6366f1', color: '#fff', fontSize: 9, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
+                            title="Instantly re-import without AI"
                           >
-                            <i className="fas fa-bolt" style={{ fontSize: 9 }} /> Re-Import
+                            <i className="fas fa-bolt" style={{ fontSize: 8 }} /> Re-Import
                           </button>
                           <button
                             type="button"
-                            onClick={() => setCachedStatements(deleteCachedConvertedStatement(c.id))}
-                            style={{ padding: '3px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}
-                            title="Remove from local device cache"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const updated = deleteCachedConvertedStatement(c)
+                              setCachedStatements([...updated])
+                            }}
+                            style={{ padding: '2px 5px', borderRadius: 4, border: 'none', background: 'transparent', color: '#ef4444', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+                            title="Remove item"
                           >
                             ✕
                           </button>
@@ -918,47 +1040,47 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                   </div>
                 </div>
               )}
+
               {importHistory.length > 0 && (
-                <div style={{ marginTop: 14, borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: 12 }}>
+                <div style={{ borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: 8 }}>
                   <div
                     onClick={() => setShowHistory((s) => !s)}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}
                   >
-                    <span><i className="fas fa-history" style={{ color: '#6366f1', marginRight: 6 }} /> Recent CSV Imports ({importHistory.length})</span>
-                    <i className={`fas fa-chevron-${showHistory ? 'up' : 'down'}`} style={{ color: '#94a3b8', fontSize: 10 }} />
+                    <span><i className="fas fa-history" style={{ color: '#6366f1', marginRight: 5 }} /> Recent CSV Imports ({importHistory.length})</span>
+                    <i className={`fas fa-chevron-${showHistory ? 'up' : 'down'}`} style={{ color: '#94a3b8', fontSize: 9 }} />
                   </div>
 
                   {showHistory && (
-                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }} className="custom-scrollbar">
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 140, overflowY: 'auto' }} className="custom-scrollbar">
                       {importHistory.map((batch) => (
                         <div
                           key={batch.batchId}
                           style={{
-                            padding: '8px 10px', borderRadius: 8, background: 'var(--bg-subtle, #f8fafc)',
+                            padding: '6px 8px', borderRadius: 6, background: 'var(--bg-subtle, #f8fafc)',
                             border: '1px solid var(--border-color, #e2e8f0)', display: 'flex',
-                            justifyContent: 'space-between', alignItems: 'center', fontSize: 10.5
+                            justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5
                           }}
                         >
                           <div>
-                            <div style={{ fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                              {batch.mode === 'expense' ? '💸 Expenses' : '🤝 Lend/Borrow'} Batch ({batch.count} records)
-                            </div>
-                            <div style={{ fontSize: 9.5, color: '#64748b' }}>
-                              {new Date(batch.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </div>
+                            <span style={{ fontWeight: 700, color: '#334155' }}>
+                              {batch.recordCount} records ({batch.mode})
+                            </span>
+                            <span style={{ color: '#94a3b8', marginLeft: 6 }}>
+                              {new Date(batch.importedAt).toLocaleDateString('en-IN')}
+                            </span>
                           </div>
-
                           <button
                             type="button"
                             onClick={() => handleUndoBatch(batch)}
                             disabled={undoingBatchId === batch.batchId}
                             style={{
-                              padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)',
-                              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 10, fontWeight: 800,
-                              cursor: undoingBatchId === batch.batchId ? 'not-allowed' : 'pointer'
+                              padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(239,68,68,0.3)',
+                              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 9, fontWeight: 800,
+                              cursor: 'pointer'
                             }}
                           >
-                            {undoingBatchId === batch.batchId ? 'Undoing...' : '↩️ Undo Import'}
+                            {undoingBatchId === batch.batchId ? 'Undoing...' : 'Undo'}
                           </button>
                         </div>
                       ))}
@@ -969,6 +1091,21 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
             </div>
           ) : (
             <div>
+              {/* Restored Draft Informational Banner */}
+              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', color: '#4338ca', fontSize: 10, fontWeight: 700, marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>📂 Restored previous import preview draft.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    importTaskQueue.clearDraftPreview(mode)
+                    setCsvPreviewData(null)
+                  }}
+                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #6366f1', background: '#ffffff', color: '#4338ca', fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  📁 Select New File
+                </button>
+              </div>
+
               {/* Intelligent Duplicate Warning Banner */}
               {csvPreviewData.duplicateCount > 0 && (
                 <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: '#d97706', fontSize: 10.5, fontWeight: 700, marginBottom: 10 }}>
@@ -989,10 +1126,13 @@ export default function CsvImportModal({ type = 'expense', isAdmin = false, allo
                 </label>
                 <button
                   type="button"
-                  onClick={() => setCsvPreviewData(null)}
-                  style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => {
+                    importTaskQueue.clearDraftPreview(mode)
+                    setCsvPreviewData(null)
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                 >
-                  ✕ Change File
+                  ✕ Change / Pick New File
                 </button>
               </div>
 

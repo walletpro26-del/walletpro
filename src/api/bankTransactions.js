@@ -249,3 +249,62 @@ export async function deleteBankTransaction(id, parentDocId = null) {
 
   await deleteDoc(doc(db, 'bankTransactions', id))
 }
+
+/**
+ * Bulk delete bank transactions (handles single Firestore documents and batched sub-items).
+ */
+export async function deleteBankTransactionsBulk(recordsToDelete, currentUid = '') {
+  if (!Array.isArray(recordsToDelete) || recordsToDelete.length === 0) return 0
+
+  invalidateSnapshot('bank', currentUid)
+  invalidateBankInMemoryCache(currentUid)
+
+  const parentUpdatesMap = new Map()
+  const singleDocIds = new Set()
+
+  recordsToDelete.forEach((r) => {
+    if (r.parentDocId) {
+      if (!parentUpdatesMap.has(r.parentDocId)) {
+        parentUpdatesMap.set(r.parentDocId, new Set())
+      }
+      parentUpdatesMap.get(r.parentDocId).add(r.id)
+    } else if (r.id) {
+      singleDocIds.add(r.id)
+    }
+  })
+
+  // 1. Delete single documents
+  for (const docId of singleDocIds) {
+    try {
+      await deleteDoc(doc(db, 'bankTransactions', docId))
+    } catch (err) {
+      console.warn('[bankTransactions] Single doc delete error:', docId, err?.message)
+    }
+  }
+
+  // 2. Update batched array documents
+  for (const [parentDocId, itemIdsToRemove] of parentUpdatesMap.entries()) {
+    try {
+      const ref = doc(db, 'bankTransactions', parentDocId)
+      const snap = await safeGetDocs(ref)
+      if (snap && snap.exists()) {
+        const data = snap.data()
+        if (Array.isArray(data.items)) {
+          const updatedItems = data.items.filter((item, idx) => {
+            const itemId = item.id || `${parentDocId}_idx_${idx}`
+            return !itemIdsToRemove.has(itemId) && !itemIdsToRemove.has(item.id)
+          })
+          if (updatedItems.length === 0) {
+            await deleteDoc(ref)
+          } else {
+            await updateDoc(ref, { items: updatedItems, count: updatedItems.length, updatedAt: Timestamp.now() })
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[bankTransactions] Parent doc batch update error:', parentDocId, err?.message)
+    }
+  }
+
+  return recordsToDelete.length
+}

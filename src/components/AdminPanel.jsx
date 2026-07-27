@@ -70,7 +70,7 @@ export default function AdminPanel({ auth, onClose }) {
   const [cashfreeAppId, setCashfreeAppId] = useState('')
   const [allowNonCsvImport, setAllowNonCsvImport] = useState(true)
   const [geminiApiKeys, setGeminiApiKeys] = useState('')
-  const [geminiModels, setGeminiModels] = useState('gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash,gemini-3.6-flash-lite,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
+  const [geminiModels, setGeminiModels] = useState('gemini-2.0-flash,gemini-1.5-flash,gemini-1.5-pro')
 
   // Sync/Backfill Firebase Auth Users State
   const [syncEmails, setSyncEmails] = useState('')
@@ -117,7 +117,7 @@ export default function AdminPanel({ auth, onClose }) {
       setCashfreeAppId(cfg.cashfreeAppId || '')
       setAllowNonCsvImport(cfg.allowNonCsvImport !== false)
       setGeminiApiKeys(cfg.geminiApiKeys || '')
-      setGeminiModels(cfg.geminiModels || 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash,gemini-3.6-flash-lite,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash')
+      setGeminiModels(cfg.geminiModels || 'gemini-2.0-flash,gemini-1.5-flash,gemini-1.5-pro')
     } catch (err) {
       console.warn('[AdminPanel] loadConfig warning:', err?.message)
     }
@@ -1338,13 +1338,13 @@ export default function AdminPanel({ auth, onClose }) {
                   </span>
                 </div>
                 <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
-                  List AI models in preference order (comma or newline separated). Latest Gemini 3.6, 3.5, 3.1 models are prioritized first:
+                  List supported Google Gemini AI models in preference order (comma or newline separated):
                 </p>
                 <textarea
                   rows={2}
                   value={geminiModels}
                   onChange={(e) => setGeminiModels(e.target.value)}
-                  placeholder="gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-flash, gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash"
+                  placeholder="gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro"
                   style={{
                     width: '100%', padding: '8px 10px', fontSize: 11, fontFamily: 'monospace',
                     borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)',

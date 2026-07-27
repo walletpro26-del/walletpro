@@ -6,15 +6,9 @@
  */
 
 export const DEFAULT_FLASH_MODELS = [
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-3.1-flash',
-  'gemini-3.6-flash-lite',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+  'gemini-1.5-pro',
 ]
 
 /**
@@ -50,8 +44,9 @@ export const PDF_RATE_LIMIT_HOURS = 24
 export function extractValidGeminiKeys(input) {
   if (!input) return []
   const str = Array.isArray(input) ? input.join('\n') : String(input)
-  const matches = str.match(/AIzaSy[A-Za-z0-9_-]{33}/g) || []
-  return Array.from(new Set(matches))
+  // Match both legacy 'AIzaSy...' keys and new Google AI Studio 'AQ....' keys
+  const matches = str.match(/(?:AIzaSy[A-Za-z0-9_-]{33}|AQ\.[A-Za-z0-9_-]{30,120})/g) || []
+  return Array.from(new Set(matches.map((k) => k.trim()).filter(Boolean)))
 }
 
 /**
@@ -84,6 +79,12 @@ export function getGeminiApiKeys() {
   const envKeys2 = import.meta.env.VITE_GEMINI_API_KEY
   extractValidGeminiKeys(envKeys1).forEach((k) => keysSet.add(k))
   extractValidGeminiKeys(envKeys2).forEach((k) => keysSet.add(k))
+
+  // Security: Never use Firebase API key for Gemini AI API calls
+  const firebaseKey = import.meta.env.VITE_FIREBASE_API_KEY
+  if (firebaseKey) {
+    keysSet.delete(firebaseKey)
+  }
 
   return Array.from(keysSet)
 }
@@ -243,9 +244,19 @@ export function getCachedConvertedStatements() {
   }
 }
 
-export function deleteCachedConvertedStatement(id) {
+export function deleteCachedConvertedStatement(target) {
   try {
-    const list = getCachedConvertedStatements().filter(c => c.id !== id)
+    const list = getCachedConvertedStatements().filter((c) => {
+      if (!c) return false
+      if (typeof target === 'object' && target !== null) {
+        if (target.id && c.id === target.id) return false
+        if (target.fileName && c.fileName === target.fileName) return false
+      }
+      if (c.id && c.id === target) return false
+      if (c.fileName && c.fileName === target) return false
+      if (c.convertedDate && c.convertedDate === target) return false
+      return true
+    })
     localStorage.setItem('wv_cached_ai_converted_statements', JSON.stringify(list))
     return list
   } catch {
@@ -446,6 +457,7 @@ Return ONLY raw JSON without markdown or markdown code fences.`
 
   let lastError = null
   let rateLimitErrorOccurred = false
+  let invalidKeyOccurred = false
 
   onProgress?.(`Step 2/3: Rotating across ${apiKeys.length} Gemini AI API key(s)...`, 35)
 
@@ -453,7 +465,11 @@ Return ONLY raw JSON without markdown or markdown code fences.`
   let keyIndex = 0
   for (const apiKey of apiKeys) {
     keyIndex++
+    let keyFailedWithInvalid = false
+
     for (const modelName of getGeminiModels()) {
+      if (keyFailedWithInvalid) break
+
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
 
       onProgress?.(`AI Extraction via Key #${keyIndex} of ${apiKeys.length} (${modelName})...`, 55)
@@ -474,6 +490,12 @@ Return ONLY raw JSON without markdown or markdown code fences.`
                 await delay(1500)
                 continue
               }
+            }
+            if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid'))) {
+              invalidKeyOccurred = true
+              keyFailedWithInvalid = true
+              lastError = new Error('🔑 Invalid Gemini AI API Key. Please get a free API Key from Google AI Studio (https://aistudio.google.com/app/apikey) and enter it in Settings ⚙️ or Admin Panel.')
+              break
             }
             lastError = new Error(`Gemini AI (${modelName}) [${response.status}]: ${errText || response.statusText}`)
             break
@@ -517,6 +539,10 @@ Return ONLY raw JSON without markdown or markdown code fences.`
         }
       }
     }
+  }
+
+  if (invalidKeyOccurred && (apiKeys.length === 1 || !lastError || lastError.message.includes('Invalid Gemini AI API Key'))) {
+    throw new Error('🔑 Invalid Gemini AI API Key. Please get a free API Key from Google AI Studio (https://aistudio.google.com/app/apikey) and update it in Settings ⚙️ or Admin Panel.')
   }
 
   if (rateLimitErrorOccurred) {

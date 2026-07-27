@@ -1,9 +1,108 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { auth } from '../firebase'
 import { loadSnapshot } from '../api/localCache'
-import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from '../api/bankTransactions'
+import { fetchBankTransactionsFromFirestore, deleteBankTransaction, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
 import { downloadBankCsvTemplate } from '../utils/csvTemplate'
+import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 import BankLinkCard from './BankLinkCard'
+
+function toLocalYMD(d) {
+  if (!d) return ''
+  if (typeof d === 'string') {
+    const s = d.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    const parsed = new Date(s)
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear()
+      const m = String(parsed.getMonth() + 1).padStart(2, '0')
+      const day = String(parsed.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+  }
+  const dt = d instanceof Date ? d : (typeof d?.toDate === 'function' ? d.toDate() : new Date(d))
+  if (isNaN(dt.getTime())) return ''
+  const y = dt.getFullYear()
+  const m = String(dt.getMonth() + 1).padStart(2, '0')
+  const day = String(dt.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function extractTxnId(obj) {
+  if (!obj) return ''
+  if (obj.txnId) return String(obj.txnId).trim()
+  if (obj.transactionId) return String(obj.transactionId).trim()
+  if (obj.refNo) return String(obj.refNo).trim()
+  if (obj.referenceNo) return String(obj.referenceNo).trim()
+  return ''
+}
+
+/**
+ * Exact Bank Duplicate Decision Engine
+ * 1. DR/CR & Amount MUST match (different amount = 100% UNIQUE!).
+ * 2. Date MUST match or be within 1 day max.
+ * 3. If Transaction ID / Reference Number / RRN exists on both records:
+ *    - If they match -> DUPLICATE (true)
+ *    - If DIFFERENT -> 100% UNIQUE / DIFFERENT (false)
+ * 4. Merchant comparison.
+ */
+function isBankDuplicateCheck(cand, existing) {
+  // Step 1: DR / CR match check
+  const cDebit = parseFloat(cand.debit || 0) || 0
+  const cCredit = parseFloat(cand.credit || 0) || 0
+  const cAmt = parseFloat(cand.amount || cDebit || cCredit || 0) || 0
+  const cIsDebit = cDebit > 0 || (cand.type && String(cand.type).toLowerCase().includes('debit'))
+
+  const eDebit = parseFloat(existing.debit || 0) || 0
+  const eCredit = parseFloat(existing.credit || 0) || 0
+  const eAmt = parseFloat(existing.amount || eDebit || eCredit || 0) || 0
+  const eIsDebit = eDebit > 0 || (existing.type && String(existing.type).toLowerCase().includes('debit'))
+
+  if (cIsDebit !== eIsDebit) return false
+
+  // Step 2: Amount MUST match (different amount = 100% UNIQUE!)
+  if (Math.abs(cAmt - eAmt) >= 0.01) return false
+
+  // Step 3: Date MUST match (or within 1 day max)
+  const cDateStr = toLocalYMD(cand.date || cand.dateObj)
+  const eDateStr = toLocalYMD(existing.date || existing.dateObj)
+  if (!cDateStr || !eDateStr) return false
+
+  const cDateObj = new Date(cDateStr)
+  const eDateObj = new Date(eDateStr)
+  if (isNaN(cDateObj.getTime()) || isNaN(eDateObj.getTime())) return false
+
+  const diffDays = Math.abs(cDateObj - eDateObj) / (1000 * 60 * 60 * 24)
+  if (diffDays > 1) return false
+
+  // Normalize descriptions & extract identifiers
+  const normCand = normalizeBankDescription(cand.description || cand.narration, cAmt, cDateStr)
+  const normExist = normalizeBankDescription(existing.description || existing.narration, eAmt, eDateStr)
+
+  // Step 4: Transaction ID / Reference Number / RRN Rule
+  // If BOTH transactions have a Txn ID or Ref Number:
+  // - If they match -> DUPLICATE!
+  // - If DIFFERENT -> 100% UNIQUE / DIFFERENT (return false)!
+  const candId = extractTxnId(cand) || cand.refNo || cand.rrn || normCand.reference
+  const existId = extractTxnId(existing) || existing.refNo || existing.rrn || normExist.reference
+
+  if (candId && existId) {
+    if (candId !== existId) return false // Different Txn ID/Ref -> 100% UNIQUE!
+    return true // Same Txn ID/Ref -> DUPLICATE!
+  }
+
+  // Step 5: Merchant comparison
+  if (normCand.merchant && normExist.merchant) {
+    const cWords = normCand.merchant.split(/\s+/).filter((w) => w.length > 2)
+    const eWords = normExist.merchant.split(/\s+/).filter((w) => w.length > 2)
+    if (cWords.length > 0 && eWords.length > 0) {
+      const match = cWords.some((w) => eWords.includes(w))
+      if (!match) return false
+    }
+  }
+
+  return true
+}
 
 /**
  * BankHistoryView — Inline bank transaction list with live search,
@@ -34,6 +133,128 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
   const [error, setError] = useState('')
   const [showLlmGuideModal, setShowLlmGuideModal] = useState(false)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
+
+  // Duplicate Scanner State
+  const [showDupScanner, setShowDupScanner] = useState(false)
+  const [dupClusters, setDupClusters] = useState([])
+  const [dupPreviewLimit, setDupPreviewLimit] = useState(30)
+  const [scanningDups, setScanningDups] = useState(false)
+  const [deletingDups, setDeletingDups] = useState(false)
+  const [cleanSuccessMsg, setCleanSuccessMsg] = useState('')
+
+  function scanForBankDuplicates() {
+    if (!allRecords || allRecords.length < 2) {
+      setError('Not enough bank transactions loaded to scan for duplicates.')
+      return
+    }
+    setScanningDups(true)
+    setError('')
+    setCleanSuccessMsg('')
+    setDupPreviewLimit(30)
+
+    setTimeout(() => {
+      const clusters = []
+      const processed = new Set()
+
+      const sorted = [...allRecords].sort((a, b) => {
+        const dA = parseSafeDate(a.dateObj || a.date).getTime()
+        const dB = parseSafeDate(b.dateObj || b.date).getTime()
+        return dA - dB
+      })
+
+      for (let i = 0; i < sorted.length; i++) {
+        const seed = sorted[i]
+        if (!seed.id || processed.has(seed.id)) continue
+
+        const matches = []
+        for (let j = i + 1; j < sorted.length; j++) {
+          const candidate = sorted[j]
+          if (!candidate.id || processed.has(candidate.id)) continue
+
+          if (isBankDuplicateCheck(seed, candidate)) {
+            matches.push({ ...candidate, selected: true })
+            processed.add(candidate.id)
+          }
+        }
+
+        if (matches.length > 0) {
+          processed.add(seed.id)
+          clusters.push({
+            id: `cluster_${seed.id}`,
+            original: seed,
+            duplicates: matches,
+          })
+        }
+      }
+
+      setDupClusters(clusters)
+      setShowDupScanner(true)
+      setScanningDups(false)
+
+      if (clusters.length === 0) {
+        setCleanSuccessMsg('✨ Clean! No duplicate bank transactions found in your history.')
+      }
+    }, 120)
+  }
+
+  function toggleDuplicateItem(clusterIdx, dupIdx) {
+    setDupClusters((prev) => {
+      const next = [...prev]
+      const targetCluster = { ...next[clusterIdx] }
+      const nextDups = [...targetCluster.duplicates]
+      nextDups[dupIdx] = { ...nextDups[dupIdx], selected: !nextDups[dupIdx].selected }
+      targetCluster.duplicates = nextDups
+      next[clusterIdx] = targetCluster
+      return next
+    })
+  }
+
+  function toggleSelectAllDuplicates(val) {
+    setDupClusters((prev) =>
+      prev.map((cluster) => ({
+        ...cluster,
+        duplicates: cluster.duplicates.map((d) => ({ ...d, selected: val })),
+      }))
+    )
+  }
+
+  async function handleDeleteDuplicates() {
+    const recordsToDelete = []
+    dupClusters.forEach((cluster) => {
+      cluster.duplicates.forEach((d) => {
+        if (d.selected) recordsToDelete.push(d)
+      })
+    })
+
+    if (recordsToDelete.length === 0) {
+      setError('Please select at least 1 duplicate transaction to delete.')
+      return
+    }
+
+    if (!window.confirm(`Are you sure you want to permanently delete ${recordsToDelete.length} selected duplicate transaction(s)?`)) {
+      return
+    }
+
+    setDeletingDups(true)
+    setError('')
+    try {
+      await deleteBankTransactionsBulk(recordsToDelete, currentUid)
+
+      const deletedIds = new Set(recordsToDelete.map((r) => r.id))
+      const updatedAll = (allRecords || []).filter((r) => !deletedIds.has(r.id))
+
+      setAllRecords(updatedAll)
+      saveSnapshot('bank', updatedAll, currentUid)
+
+      setShowDupScanner(false)
+      setDupClusters([])
+      setCleanSuccessMsg(`🎉 Successfully cleaned up ${recordsToDelete.length} duplicate transaction(s) from your Bank History!`)
+    } catch (err) {
+      setError('Failed to delete duplicates: ' + (err?.message || err))
+    } finally {
+      setDeletingDups(false)
+    }
+  }
 
   // Sync state if bankRecords prop updates from parent
   useEffect(() => {
@@ -171,38 +392,95 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
 
       {/* Header & Controls Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>🏦 Bank History</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, maxWidth: '100%' }}>
+          <div className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)' }}>🏦 Bank History</span>
             {allRecords.length > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent-50)', color: 'var(--accent-600)', padding: '2px 8px', borderRadius: 12, border: '1px solid var(--accent-200)' }}>
-                {allRecords.length}
+              <span style={{ fontSize: 9.5, fontWeight: 800, background: 'var(--accent-50, #e0e7ff)', color: 'var(--accent-600, #4f46e5)', padding: '1px 6px', borderRadius: 10, border: '1px solid var(--accent-200, #c7d2fe)' }}>
+                {allRecords.length.toLocaleString('en-IN')}
               </span>
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, maxWidth: '100%', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {onOpenImport && (
+              <button
+                type="button"
+                onClick={onOpenImport}
+                title="Import PDF/CSV Bank Statement"
+                style={{
+                  height: 27,
+                  padding: '0 9px',
+                  borderRadius: 14,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  color: '#ffffff',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 5px rgba(99,102,241,0.25)',
+                }}
+              >
+                <i className="fas fa-file-import" style={{ fontSize: 9 }} />
+                <span>Import</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={scanForBankDuplicates}
+              disabled={scanningDups}
+              title="Scan and clean duplicate bank transactions"
+              style={{
+                height: 27,
+                padding: '0 9px',
+                borderRadius: 14,
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: scanningDups ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
+                color: '#ef4444',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: scanningDups ? 'wait' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              <i className={`fas ${scanningDups ? 'fa-spinner fa-spin' : 'fa-copy'}`} style={{ fontSize: 9 }} />
+              <span>{scanningDups ? 'Scanning…' : 'Clean Dups'}</span>
+            </button>
+
             {onOpenMerge && (
               <button
                 type="button"
                 onClick={() => onOpenMerge('bank')}
                 title="Merge duplicate bank names"
                 style={{
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 20,
-                  padding: '5px 10px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
+                  height: 27,
+                  padding: '0 9px',
+                  borderRadius: 14,
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-secondary, #475569)',
+                  fontSize: 10,
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 3,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
-                <i className="fas fa-random" style={{ fontSize: 10, color: '#0284c7' }} />
-                <span>Merge Banks</span>
+                <i className="fas fa-random" style={{ fontSize: 9, color: '#0284c7' }} />
+                <span>Merge</span>
               </button>
             )}
 
@@ -212,24 +490,274 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
               disabled={refreshing}
               title="Refresh Bank Transactions"
               style={{
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 20,
-                padding: '5px 10px',
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
+                height: 27,
+                width: 27,
+                padding: 0,
+                borderRadius: 14,
+                border: '1px solid var(--border-color, #e2e8f0)',
+                background: 'var(--bg-subtle, #f8fafc)',
+                color: 'var(--text-secondary, #475569)',
+                fontSize: 10,
+                fontWeight: 700,
                 cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
-              <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ fontSize: 10 }} />
-              <span className="hidden-xs">{refreshing ? 'Syncing...' : 'Sync'}</span>
+              <i className={`fas ${refreshing ? 'fa-spin' : ''} fa-sync-alt`} style={{ fontSize: 9 }} />
             </button>
           </div>
         </div>
+
+        {cleanSuccessMsg && (
+          <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', fontSize: 11, fontWeight: 700 }}>
+            {cleanSuccessMsg}
+          </div>
+        )}
+
+        {showDupScanner && createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              zIndex: 999999,
+              background: 'rgba(15, 23, 42, 0.75)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px 12px',
+            }}
+            onClick={() => setShowDupScanner(false)}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 600,
+                maxHeight: '88vh',
+                background: 'var(--bg-card, #ffffff)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+                overflow: 'hidden',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div
+                style={{
+                  padding: '14px 16px',
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-copy" style={{ color: '#ef4444' }} />
+                    <span>Duplicate Bank Transactions Preview</span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted, #64748b)', fontWeight: 600, marginTop: 2 }}>
+                    Found {dupClusters.length} duplicate group(s). Review copies below before deleting or cancel anytime.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      border: '1px solid #d97706',
+                      background: '#fef3c7',
+                      color: '#b45309',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => toggleSelectAllDuplicates(dupClusters.some((c) => c.duplicates.some((d) => !d.selected)))}
+                  >
+                    {dupClusters.every((c) => c.duplicates.every((d) => d.selected)) ? 'Deselect All' : 'Select All'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDupScanner(false)}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: 'rgba(239,68,68,0.1)',
+                      color: '#ef4444',
+                      fontWeight: 800,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Cancel Operation"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Preview Body */}
+              <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {dupClusters.slice(0, dupPreviewLimit).map((cluster, cIdx) => (
+                  <div key={cluster.id} style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: '12px', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Group #{cIdx + 1} • {cluster.original.bank}</span>
+                      <span>₹{(cluster.original.debit || cluster.original.credit || cluster.original.amount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+
+                    {/* Original Record (Keep) */}
+                    <div style={{ padding: '8px 10px', background: '#ecfdf5', border: '1px solid #10b981', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: '#047857', background: '#d1fae5', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>
+                          KEEP (ORIGINAL)
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#065f46', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {toLocalYMD(cluster.original.dateObj || cluster.original.date)} • {cluster.original.description || 'Transaction'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#047857', flexShrink: 0, marginLeft: 8 }}>
+                        {cluster.original.debit > 0 ? `-₹${cluster.original.debit.toLocaleString('en-IN')}` : `+₹${cluster.original.credit.toLocaleString('en-IN')}`}
+                      </div>
+                    </div>
+
+                    {/* Redundant Duplicates (Selected for deletion) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 8, borderLeft: '2px dashed #f59e0b' }}>
+                      {cluster.duplicates.map((dup, dIdx) => (
+                        <div
+                          key={dup.id || dIdx}
+                          onClick={() => toggleDuplicateItem(cIdx, dIdx)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px',
+                            background: dup.selected ? '#fff1f2' : 'var(--bg-card, #ffffff)',
+                            border: dup.selected ? '1px solid #fda4af' : '1px solid #e2e8f0',
+                            borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={dup.selected}
+                              onChange={() => {}}
+                              style={{ accentColor: '#ef4444', width: 15, height: 15, cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: 9, fontWeight: 800, color: '#b91c1c', background: '#ffe4e6', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>
+                              DUPLICATE COPY
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary, #1e293b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {toLocalYMD(dup.dateObj || dup.date)} • {dup.description || 'Transaction'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: '#b91c1c', flexShrink: 0, marginLeft: 8 }}>
+                            {dup.debit > 0 ? `-₹${dup.debit.toLocaleString('en-IN')}` : `+₹${dup.credit.toLocaleString('en-IN')}`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {dupClusters.length > dupPreviewLimit && (
+                  <button
+                    type="button"
+                    onClick={() => setDupPreviewLimit((prev) => prev + 40)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #6366f1',
+                      background: 'rgba(99,102,241,0.08)',
+                      color: '#6366f1',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      margin: '8px auto',
+                      display: 'block',
+                    }}
+                  >
+                    Load More Groups ({dupClusters.length - dupPreviewLimit} remaining)...
+                  </button>
+                )}
+              </div>
+
+              {/* Modal Footer / Full Control Action Bar */}
+              <div
+                style={{
+                  padding: '12px 16px',
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  borderTop: '1px solid var(--border-color, #e2e8f0)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                  {dupClusters.reduce((sum, c) => sum + c.duplicates.filter((d) => d.selected).length, 0)} of {dupClusters.reduce((sum, c) => sum + c.duplicates.length, 0)} duplicate copies selected
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDupScanner(false)}
+                    style={{
+                      padding: '7px 14px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      borderRadius: 8,
+                      border: '1px solid var(--border-color, #cbd5e1)',
+                      background: 'var(--bg-card, #ffffff)',
+                      color: 'var(--text-secondary, #475569)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel Operation
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={deletingDups || dupClusters.every((c) => c.duplicates.every((d) => !d.selected))}
+                    onClick={handleDeleteDuplicates}
+                    style={{
+                      padding: '7px 16px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: deletingDups ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      boxShadow: '0 2px 8px rgba(239,68,68,0.3)',
+                    }}
+                  >
+                    {deletingDups ? (
+                      <><i className="fas fa-spinner fa-spin"></i> Deleting...</>
+                    ) : (
+                      <><i className="fas fa-trash-alt"></i> Delete Selected ({dupClusters.reduce((sum, c) => sum + c.duplicates.filter((d) => d.selected).length, 0)})</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* Search & Actions Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -342,54 +870,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
         )}
       </div>
 
-      {/* Import Action & Template Bar */}
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          onClick={onOpenImport}
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
-            border: '1.5px dashed var(--accent-300)',
-            borderRadius: 12, color: 'var(--accent-600)',
-            fontSize: 12, fontWeight: 700, cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}
-        >
-          <i className="fas fa-file-import" style={{ fontSize: 13 }} />
-          {allowNonCsvImport ? 'Import Statement (PDF/CSV)' : 'Import Statement (CSV Only)'}
-        </button>
 
-        <button
-          type="button"
-          onClick={downloadBankCsvTemplate}
-          style={{
-            height: 38,
-            padding: '0 11px',
-            borderRadius: 10,
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            background: 'rgba(16, 185, 129, 0.1)',
-            color: '#059669',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 5,
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-            transition: 'all 0.2s ease',
-          }}
-          title="Download Standard CSV Template"
-        >
-          <i className="fas fa-download" style={{ fontSize: 10, color: '#059669' }} />
-          Template CSV
-        </button>
-      </div>
 
       {/* Error Alert */}
       {error && (

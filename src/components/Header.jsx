@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import WalletVibeLogo from './WalletVibeLogo'
 import { isAdminEmail } from '../api/subscription'
@@ -58,85 +58,81 @@ export default function Header({
     s3 = { label: 'Net', value: `₹${lendNet.toLocaleString('en-IN')}` }
   }
 
-  function formatSearchItemDate(item) {
-    const d = item.dateObj || (item.date ? new Date(item.date) : null)
-    if (!d || isNaN(d.getTime())) return ''
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-  }
+  // Pre-index items once when searchIndex changes (eliminates thousands of Date & string operations per keystroke)
+  const preparedSearchIndex = useMemo(() => {
+    if (!searchIndex || !searchIndex.length) return []
+    return searchIndex.map((t) => {
+      const d = t.dateObj || (t.date ? new Date(t.date) : null)
+      const time = d && !isNaN(d.getTime()) ? d.getTime() : 0
+      const dStr = d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.description || ''} ${t.bank || ''} ${t.amount || ''} ${dStr}`.toLowerCase()
+      const primaryFields = [t.category, t.person, t.forWhom, t.bank].filter(Boolean).map((f) => String(f).toLowerCase())
+      const amtStr = String(t.amount || '')
+      return { item: t, str, primaryFields, amtStr, time }
+    })
+  }, [searchIndex])
 
   function handleSearch(term) {
     setSearchTerm(term)
-    if (!term.trim() || !searchIndex?.length) {
+    if (!term.trim() || !preparedSearchIndex.length) {
       setSearchResults([])
       setShowDropdown(false)
       return
     }
+
     const lc = term.toLowerCase().trim()
-    const terms = lc.split(/\s+/)
-    
-    const scoredResults = searchIndex.map(t => {
-      const formattedDateStr = formatSearchItemDate(t)
-      const str = `${t.category || ''} ${t.details || ''} ${t.person || ''} ${t.forWhom || ''} ${t.remarks || ''} ${t.description || ''} ${t.bank || ''} ${t.amount || ''} ${formattedDateStr}`.toLowerCase()
-      
+    const terms = lc.split(/\s+/).filter(Boolean)
+    const scoredResults = []
+
+    for (let i = 0; i < preparedSearchIndex.length; i++) {
+      const entry = preparedSearchIndex[i]
+      const { str, amtStr, primaryFields, time, item } = entry
+
       let match = true
       let score = 0
-      
-      for (const keyword of terms) {
-        if (!str.includes(keyword)) {
+
+      for (let j = 0; j < terms.length; j++) {
+        const kw = terms[j]
+        if (!str.includes(kw)) {
           match = false
           break
         }
-        
-        // Exact match of a word
-        if (str.includes(` ${keyword} `) || str.startsWith(`${keyword} `) || str.endsWith(` ${keyword}`) || str === keyword) {
+        if (str.includes(` ${kw} `) || str.startsWith(`${kw} `) || str.endsWith(` ${kw}`) || str === kw) {
           score += 2
         } else {
           score += 1
         }
       }
-      
-      if (!match) return null
-      
-      // Bonus points for full exact string match
-      if (str.includes(lc)) {
-        score += 5
-      }
-      
-      // Bonus points if it's matching the amount exactly
-      if (terms.includes(String(t.amount))) {
-        score += 3
-      }
-      
-      // Bonus points if exact match on primary entity fields (category, person, forWhom, bank)
-      const primaryFields = [t.category, t.person, t.forWhom, t.bank].filter(Boolean).map(f => String(f).toLowerCase())
-      if (primaryFields.some(f => f === lc)) {
-        score += 10
-      } else if (primaryFields.some(f => f.includes(lc))) {
-        score += 4
+
+      if (!match) continue
+
+      if (str.includes(lc)) score += 5
+      if (terms.includes(amtStr)) score += 3
+
+      for (let p = 0; p < primaryFields.length; p++) {
+        const pf = primaryFields[p]
+        if (pf === lc) score += 10
+        else if (pf.includes(lc)) score += 4
       }
 
-      return { item: t, score }
-    }).filter(Boolean)
-    
-    // Sort primarily by match score (highest score first).
-    // If match scores are equal, tie-break by newest date down to oldest date (timeB - timeA).
+      scoredResults.push({ item, score, time })
+    }
+
     scoredResults.sort((a, b) => {
-      if (b.score !== a.score) {
-        return b.score - a.score
-      }
-      const getTime = (it) => {
-        const d = it.dateObj || (it.date ? new Date(it.date) : null)
-        return d && !isNaN(d.getTime()) ? d.getTime() : 0
-      }
-      const timeA = getTime(a.item)
-      const timeB = getTime(b.item)
-      return timeB - timeA
+      if (b.score !== a.score) return b.score - a.score
+      return b.time - a.time
     })
 
-    const results = scoredResults.slice(0, 50).map(r => r.item)
-    
+    const results = scoredResults.slice(0, 50).map((r) => r.item)
+
     setSearchResults(results)
     setShowDropdown(results.length > 0)
+  }
+
+  function formatSearchItemDate(item) {
+    const d = item.dateObj || (item.date ? new Date(item.date) : null)
+    if (!d || isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   function handleResultClick(item) {

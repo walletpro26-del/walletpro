@@ -186,7 +186,7 @@ export default function PersonMergeModal({
       setError(`Please select or type a target canonical ${entityType === 'category' ? 'category' : 'name'}.`)
       return
     }
-    if (src.toLowerCase() === tgt.toLowerCase()) {
+    if (src === tgt) {
       setError(`Source and target ${entityType === 'category' ? 'categories' : 'names'} cannot be identical.`)
       return
     }
@@ -444,7 +444,11 @@ export default function PersonMergeModal({
   // Merge full suggested cluster
   async function handleClusterMerge(cluster) {
     const target = cluster.canonical
-    const sourcesToMerge = cluster.names.filter((n) => n.toLowerCase() !== target.toLowerCase())
+    let sourcesToMerge = cluster.names.filter((n) => n !== target)
+
+    if (sourcesToMerge.length === 0) {
+      sourcesToMerge = cluster.names.filter((n) => n.toLowerCase() !== target.toLowerCase())
+    }
 
     if (sourcesToMerge.length === 0) return
 
@@ -454,7 +458,8 @@ export default function PersonMergeModal({
 
     try {
       for (const src of sourcesToMerge) {
-        if (entityType === 'category') saveCategoryAlias(src, target)
+        if (entityType === 'bank') saveBankAlias(src, target)
+        else if (entityType === 'category') saveCategoryAlias(src, target)
         else savePersonAlias(src, target)
       }
       refreshAliasRules()
