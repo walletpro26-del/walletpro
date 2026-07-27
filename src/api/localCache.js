@@ -129,6 +129,7 @@ export function loadSnapshot(type, uid = '') {
       }
       return {
         ...item,
+        amount: item.amount !== undefined && item.amount !== null ? (parseFloat(item.amount) || 0) : item.amount,
         dateObj,
       }
     })

@@ -57,7 +57,7 @@ function fromFirestore(docSnap) {
     type: d.type || '',
     label,
     person: d.person || '',
-    amount: d.amount || 0,
+    amount: parseFloat(d.amount) || 0,
     remarks: d.remarks || '',
     mobileNo: d.mobileNo || '',
     email: d.email || '',
@@ -379,12 +379,13 @@ export function computeLendingStatsLocally(all) {
   let receivable = 0, payable = 0
 
   for (const t of all) {
+    const amt = parseFloat(t.amount) || 0
     const norm = normalizeLendingType(t.type)
-    if (norm === 'LEND') receivable += t.amount
-    else if (norm === 'BORROW') payable += t.amount
-    else if (norm === 'THEY_RETURN') receivable -= t.amount
-    else if (norm === 'I_RETURN') payable -= t.amount
-    else if (norm === 'FORGIVE') receivable -= t.amount
+    if (norm === 'LEND') receivable += amt
+    else if (norm === 'BORROW') payable += amt
+    else if (norm === 'THEY_RETURN') receivable -= amt
+    else if (norm === 'I_RETURN') payable -= amt
+    else if (norm === 'FORGIVE') receivable -= amt
   }
 
   return { receivable, payable, net: receivable - payable }

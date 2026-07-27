@@ -38,7 +38,7 @@ function fromFirestore(docSnap) {
     forWhom: d.forWhom || '',
     category: d.category || '',
     details: d.details || '',
-    amount: d.amount || 0,
+    amount: parseFloat(d.amount) || 0,
     paymentMode: d.paymentMode || 'Cash',
     remarks: d.remarks || '',
     fileName: d.fileName || '',
@@ -362,11 +362,12 @@ export function computeExpenseStatsLocally(all) {
 
   let today = 0, month = 0, total = 0
   for (const e of all) {
+    const amt = parseFloat(e.amount) || 0
     const d = e.dateObj || new Date(e.date)
-    total += e.amount
+    total += amt
     if (d.getFullYear() === currY && d.getMonth() === currM) {
-      month += e.amount
-      if (d.getDate() === currD) today += e.amount
+      month += amt
+      if (d.getDate() === currD) today += amt
     }
   }
 

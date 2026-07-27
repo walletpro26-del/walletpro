@@ -40,14 +40,22 @@ export default function Header({
   })
 
   // Determine stat labels & values based on active tab
-  let s1 = { label: 'Today', value: `₹${(stats?.expense?.today || 0).toLocaleString('en-IN')}` }
-  let s2 = { label: 'Month', value: `₹${(stats?.expense?.month || 0).toLocaleString('en-IN')}` }
-  let s3 = { label: 'Total', value: `₹${(stats?.expense?.total || 0).toLocaleString('en-IN')}` }
+  const expToday = parseFloat(stats?.expense?.today) || 0
+  const expMonth = parseFloat(stats?.expense?.month) || 0
+  const expTotal = parseFloat(stats?.expense?.total) || 0
+
+  let s1 = { label: 'Today', value: `₹${expToday.toLocaleString('en-IN')}` }
+  let s2 = { label: 'Month', value: `₹${expMonth.toLocaleString('en-IN')}` }
+  let s3 = { label: 'Total', value: `₹${expTotal.toLocaleString('en-IN')}` }
 
   if (activeTab === 'lending') {
-    s1 = { label: 'Receivable', value: `₹${(stats?.lending?.receivable || 0).toLocaleString('en-IN')}` }
-    s2 = { label: 'Payable', value: `₹${(stats?.lending?.payable || 0).toLocaleString('en-IN')}` }
-    s3 = { label: 'Net', value: `₹${(stats?.lending?.net || 0).toLocaleString('en-IN')}` }
+    const lendRec = parseFloat(stats?.lending?.receivable) || 0
+    const lendPay = parseFloat(stats?.lending?.payable) || 0
+    const lendNet = parseFloat(stats?.lending?.net) || 0
+
+    s1 = { label: 'Receivable', value: `₹${lendRec.toLocaleString('en-IN')}` }
+    s2 = { label: 'Payable', value: `₹${lendPay.toLocaleString('en-IN')}` }
+    s3 = { label: 'Net', value: `₹${lendNet.toLocaleString('en-IN')}` }
   }
 
   function formatSearchItemDate(item) {
