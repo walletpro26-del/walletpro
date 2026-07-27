@@ -1,0 +1,4 @@
+#Mon Jul 27 23:19:48 IST 2026
+base.0=D\:\\Shk_Gulfam\\Projects\\walletvibe\\walletpro-react\\app\\build\\intermediates\\dex\\release\\minifyReleaseWithR8\\classes.dex
+renamed.0=classes.dex
+path.0=classes.dex

@@ -3,7 +3,9 @@
   "host": "walletvibe.netlify.app",
   "name": "WalletVibe",
   "launcherName": "WalletVibe",
+  "display": "standalone",
   "themeColor": "#4F46E5",
+  "themeColorDark": "#000000",
   "navigationColor": "#4F46E5",
   "navigationColorDark": "#0F172A",
   "navigationDividerColor": "#4F46E5",
@@ -13,12 +15,13 @@
   "startUrl": "/",
   "iconUrl": "https://walletvibe.netlify.app/icon-512.png",
   "maskableIconUrl": "https://walletvibe.netlify.app/icon-512.png",
-  "appVersionName": "1.0.0",
-  "appVersionCode": 100,
   "signingKey": {
     "path": "./android.keystore",
     "alias": "walletvibe"
   },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 101,
+  "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://walletvibe.netlify.app/manifest.json",
   "fallbackType": "customtabs",
@@ -32,5 +35,15 @@
   },
   "alphaDependencies": {
     "enabled": false
-  }
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
 }
