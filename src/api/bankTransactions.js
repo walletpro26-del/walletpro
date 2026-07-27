@@ -4,7 +4,7 @@
  */
 
 import { db } from '../firebase'
-import { collection, getDocs, getDocsFromCache, query, where, deleteDoc, doc, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, getDocsFromCache, getDoc, getDocFromCache, query, where, deleteDoc, doc, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot, isCacheFresh, invalidateSnapshot } from './localCache'
 
 export function parseSafeDate(d) {
@@ -33,6 +33,21 @@ async function safeGetDocs(q) {
   } catch (err) {
     try {
       return await getDocsFromCache(q)
+    } catch (cacheErr) {
+      return null
+    }
+  }
+}
+
+/**
+ * Try getDoc for single document reference from server first; on error, fall back to getDocFromCache.
+ */
+async function safeGetDoc(docRef) {
+  try {
+    return await getDoc(docRef)
+  } catch (err) {
+    try {
+      return await getDocFromCache(docRef)
     } catch (cacheErr) {
       return null
     }
@@ -229,11 +244,14 @@ export async function deleteBankTransaction(id, parentDocId = null) {
     try {
       const ref = doc(db, 'bankTransactions', parentDocId)
       // Check if doc exists and filter out item from array
-      const snap = await safeGetDocs(ref)
+      const snap = await safeGetDoc(ref)
       if (snap && snap.exists()) {
         const data = snap.data()
         if (Array.isArray(data.items)) {
-          const updatedItems = data.items.filter((item) => item.id !== id && `${parentDocId}_idx_` !== id)
+          const updatedItems = data.items.filter((item, idx) => {
+            const itemId = item.id || `${parentDocId}_idx_${idx}`
+            return itemId !== id && item.id !== id
+          })
           if (updatedItems.length === 0) {
             await deleteDoc(ref)
           } else {
@@ -263,30 +281,34 @@ export async function deleteBankTransactionsBulk(recordsToDelete, currentUid = '
   const singleDocIds = new Set()
 
   recordsToDelete.forEach((r) => {
-    if (r.parentDocId) {
-      if (!parentUpdatesMap.has(r.parentDocId)) {
-        parentUpdatesMap.set(r.parentDocId, new Set())
+    const parentId = r.parentDocId || (typeof r.id === 'string' && r.id.includes('_idx_') ? r.id.split('_idx_')[0] : null)
+    if (parentId) {
+      if (!parentUpdatesMap.has(parentId)) {
+        parentUpdatesMap.set(parentId, new Set())
       }
-      parentUpdatesMap.get(r.parentDocId).add(r.id)
+      parentUpdatesMap.get(parentId).add(r.id)
     } else if (r.id) {
       singleDocIds.add(r.id)
     }
   })
 
-  // 1. Delete single documents
-  for (const docId of singleDocIds) {
-    try {
-      await deleteDoc(doc(db, 'bankTransactions', docId))
-    } catch (err) {
-      console.warn('[bankTransactions] Single doc delete error:', docId, err?.message)
-    }
+  // 1. Delete single documents instantly using Firestore writeBatch (1 network roundtrip!)
+  const singleIdsArray = Array.from(singleDocIds)
+  const BATCH_LIMIT = 400
+  for (let i = 0; i < singleIdsArray.length; i += BATCH_LIMIT) {
+    const chunk = singleIdsArray.slice(i, i + BATCH_LIMIT)
+    const batch = writeBatch(db)
+    chunk.forEach((docId) => {
+      batch.delete(doc(db, 'bankTransactions', docId))
+    })
+    await batch.commit().catch((err) => console.warn('[bankTransactions] Batch delete error:', err?.message))
   }
 
   // 2. Update batched array documents
   for (const [parentDocId, itemIdsToRemove] of parentUpdatesMap.entries()) {
     try {
       const ref = doc(db, 'bankTransactions', parentDocId)
-      const snap = await safeGetDocs(ref)
+      const snap = await safeGetDoc(ref)
       if (snap && snap.exists()) {
         const data = snap.data()
         if (Array.isArray(data.items)) {

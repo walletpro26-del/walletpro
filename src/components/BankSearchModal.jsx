@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { db, auth } from '../firebase'
 import { collection, getDocs, query, where, writeBatch, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot } from '../api/localCache'
+import { showConfirm } from './CustomDialogModal'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
 
 import {
@@ -214,9 +215,15 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
       return
     }
 
-    if (!window.confirm(`Are you sure you want to permanently delete ${recordsToDelete.length} selected duplicate transaction(s)?`)) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Clean Duplicate Transactions',
+      message: `Are you sure you want to permanently delete ${recordsToDelete.length} selected duplicate transaction(s)?`,
+      confirmText: `Delete ${recordsToDelete.length} Duplicates`,
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🗑️',
+    })
+    if (!confirmed) return
 
     setDeletingDups(true)
     setError('')
@@ -673,7 +680,15 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
 
   async function handleDeleteRecord(id) {
     if (!id) return
-    if (!window.confirm('Are you sure you want to delete this bank record?')) return
+    const confirmed = await showConfirm({
+      title: 'Delete Bank Record',
+      message: 'Are you sure you want to delete this bank record?',
+      confirmText: 'Delete Record',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🗑️',
+    })
+    if (!confirmed) return
 
     try {
       await deleteDoc(doc(db, 'bankTransactions', id))

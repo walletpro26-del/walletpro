@@ -20,6 +20,7 @@ import {
   findDuplicateBankCandidates,
 } from '../api/entityNormalizer'
 import { loadSnapshot, saveSnapshot, invalidateSnapshot } from '../api/localCache'
+import { formatUserFriendlyError } from '../utils/userFriendlyError'
 
 export default function PersonMergeModal({
   allExpenses = [],
@@ -435,7 +436,7 @@ export default function PersonMergeModal({
       setTargetName('')
       onMergeComplete?.()
     } catch (err) {
-      setError('Merge failed: ' + (err?.message || 'Error executing batch update'))
+      setError(formatUserFriendlyError(err, 'Could not complete merge operation. Please try again.'))
     } finally {
       setMerging(false)
     }
@@ -468,7 +469,7 @@ export default function PersonMergeModal({
         await executeMerge(src, target)
       }
     } catch (err) {
-      setError('Cluster merge error: ' + (err?.message || 'Error'))
+      setError(formatUserFriendlyError(err, 'Could not complete cluster merge. Please try again.'))
     } finally {
       setMerging(false)
     }

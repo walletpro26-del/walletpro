@@ -40,7 +40,20 @@ export default function InstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isStandalone, setIsStandalone] = useState(checkIsStandaloneMode)
   const [isInstalled, setIsInstalled] = useState(checkIsPwaInstalled)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('wv_standalone_banner_shown') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const dismissBannerPermanently = () => {
+    setDismissed(true)
+    try {
+      localStorage.setItem('wv_standalone_banner_shown', 'true')
+    } catch (e) {}
+  }
 
   useEffect(() => {
     const handleBeforeInstall = (e) => {
@@ -75,6 +88,18 @@ export default function InstallBanner() {
     }
   }, [])
 
+  // Auto-mark standalone success banner as seen once so it doesn't reappear on subsequent app opens
+  useEffect(() => {
+    if ((isStandalone || isInstalled) && !dismissed) {
+      const timer = setTimeout(() => {
+        try {
+          localStorage.setItem('wv_standalone_banner_shown', 'true')
+        } catch (e) {}
+      }, 5000) // Automatically dismiss after 5s or on click
+      return () => clearTimeout(timer)
+    }
+  }, [isStandalone, isInstalled, dismissed])
+
   // Case 1: App is installed and running in standalone native app mode
   if (isStandalone) {
     if (dismissed) return null
@@ -97,7 +122,7 @@ export default function InstallBanner() {
         </div>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={dismissBannerPermanently}
           style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer', padding: '4px 6px' }}
           title="Dismiss status banner"
         >
@@ -125,7 +150,7 @@ export default function InstallBanner() {
         </div>
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={dismissBannerPermanently}
           style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
         >
           ✕

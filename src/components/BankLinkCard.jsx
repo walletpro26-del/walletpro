@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createBankConsent, confirmBankConsent, revokeBankConsent, getBankSyncStatus, triggerManualBankSync } from '../api/bankLink'
 import { hasUltraAccess } from '../api/subscription'
+import { showConfirm } from './CustomDialogModal'
 
 export default function BankLinkCard({ subscription, appConfig, onOpenSubscriptionModal, onSyncComplete }) {
   const [status, setStatus] = useState({ linked: false, status: 'CHECKING', bankName: '', lastSyncedAt: null })
@@ -93,7 +94,15 @@ export default function BankLinkCard({ subscription, appConfig, onOpenSubscripti
   }
 
   async function handleUnlinkBank() {
-    if (!window.confirm('Are you sure you want to disconnect automatic bank transaction sync?')) return
+    const confirmed = await showConfirm({
+      title: 'Disconnect Bank Sync',
+      message: 'Are you sure you want to disconnect automatic bank transaction sync?',
+      confirmText: 'Disconnect Sync',
+      cancelText: 'Cancel',
+      variant: 'warning',
+      icon: '🔌',
+    })
+    if (!confirmed) return
     setError('')
     setUnlinking(true)
     try {

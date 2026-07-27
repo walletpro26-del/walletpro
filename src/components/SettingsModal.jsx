@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { isAdminEmail } from '../api/subscription'
 import { extractValidGeminiKeys } from '../api/pdfExtractor'
 import { checkIsPwaInstalled } from './InstallBanner'
+import { showConfirm, showAlert } from './CustomDialogModal'
 
 export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription, onOpenRatingModal }) {
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
@@ -36,8 +37,16 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
     onClose()
   }
 
-  function handleClearCache() {
-    if (!window.confirm('Clear all local app cache and reload? Your cloud data will re-sync.')) return
+  async function handleClearCache() {
+    const confirmed = await showConfirm({
+      title: 'Clear Local Cache',
+      message: 'Clear all local app cache and reload? Your cloud data will automatically re-sync.',
+      confirmText: 'Clear Cache & Reload',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🧹',
+    })
+    if (!confirmed) return
     localStorage.clear()
     location.reload()
   }
@@ -281,9 +290,16 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       localStorage.removeItem('wv_install_banner_dismissed')
-                      alert('💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or tap browser menu -> "Add to Home Screen".')
+                      localStorage.removeItem('wv_standalone_banner_shown')
+                      await showAlert({
+                        title: 'Install App Guidance',
+                        message: '💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or open your browser menu -> "Add to Home Screen".',
+                        buttonText: 'Got it!',
+                        variant: 'primary',
+                        icon: '📲',
+                      })
                       onClose?.()
                     }}
                     style={{ fontSize: 10, fontWeight: 800, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', flexShrink: 0 }}

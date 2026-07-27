@@ -4,6 +4,7 @@ import { getAttachment } from '../api/attachments'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
 import { findMatchingBankProof } from '../api/bankProofMatcher'
+import { showConfirm } from './CustomDialogModal'
 
 export default function TransactionModal({ item, onClose, onEdit, onDelete, onShare, onPrev, onNext }) {
   const [attachmentData, setAttachmentData] = useState(null)
@@ -386,7 +387,22 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
             <button className="btn-outline" onClick={() => onEdit?.(item)} style={{ flex: 1 }}>
               <i className="fas fa-edit"></i> Edit
             </button>
-            <button className="btn-outline" style={{ color: 'var(--red-500)', borderColor: '#fecaca', flex: 1 }} onClick={() => { if (confirm('Delete this transaction?')) onDelete?.(item) }}>
+
+            <button
+              className="btn-outline"
+              style={{ color: 'var(--red-500)', borderColor: '#fecaca', flex: 1 }}
+              onClick={async () => {
+                const confirmed = await showConfirm({
+                  title: 'Delete Transaction',
+                  message: `Are you sure you want to permanently delete this transaction (${item.category || item.person || 'Record'} - ₹${item.amount})?`,
+                  confirmText: 'Delete Entry',
+                  cancelText: 'Cancel',
+                  variant: 'danger',
+                  icon: '🗑️',
+                })
+                if (confirmed) onDelete?.(item)
+              }}
+            >
               <i className="fas fa-trash-alt"></i> Delete
             </button>
 

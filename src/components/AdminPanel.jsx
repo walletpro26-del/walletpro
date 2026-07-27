@@ -4,6 +4,7 @@ import { extractValidGeminiKeys } from '../api/pdfExtractor'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
 import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
+import { showConfirm } from './CustomDialogModal'
 import {
   isAdminEmail,
   ADMIN_EMAILS,
@@ -324,7 +325,15 @@ export default function AdminPanel({ auth, onClose }) {
   }
 
   async function handlePurgeDuplicates() {
-    if (!window.confirm('Scan Firestore and permanently delete duplicate subscription documents for the same email?')) return
+    const confirmed = await showConfirm({
+      title: 'Purge Duplicate Subscriptions',
+      message: 'Scan Firestore and permanently delete duplicate subscription documents for the same email?',
+      confirmText: 'Purge Duplicates',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🧹',
+    })
+    if (!confirmed) return
     setPurging(true)
     setError('')
     try {
@@ -345,9 +354,15 @@ export default function AdminPanel({ auth, onClose }) {
   async function handleDeleteAccount(targetEmailOrUid) {
     const target = String(targetEmailOrUid || '').trim()
     if (!target) return
-    if (!window.confirm(`⚠️ Permanently delete account "${target}" from Firestore?\n\nThis will remove both subscriptions and userProfiles documents associated with this email/UID.`)) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Delete Account',
+      message: `⚠️ Permanently delete account "${target}" from Firestore?\n\nThis will remove both subscriptions and userProfiles documents associated with this email/UID.`,
+      confirmText: 'Permanently Delete',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '⚠️',
+    })
+    if (!confirmed) return
     setPurging(true)
     setError('')
     try {

@@ -6,6 +6,8 @@ import { fetchBankTransactionsFromFirestore, deleteBankTransaction, deleteBankTr
 import { downloadBankCsvTemplate } from '../utils/csvTemplate'
 import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 import BankLinkCard from './BankLinkCard'
+import { showConfirm, showAlert } from './CustomDialogModal'
+import { formatUserFriendlyError } from '../utils/userFriendlyError'
 
 function toLocalYMD(d) {
   if (!d) return ''
@@ -75,30 +77,47 @@ function isBankDuplicateCheck(cand, existing) {
   const diffDays = Math.abs(cDateObj - eDateObj) / (1000 * 60 * 60 * 24)
   if (diffDays > 1) return false
 
-  // Normalize descriptions & extract identifiers
-  const normCand = normalizeBankDescription(cand.description || cand.narration, cAmt, cDateStr)
-  const normExist = normalizeBankDescription(existing.description || existing.narration, eAmt, eDateStr)
+  // Step 4: Descriptions & Transaction ID / Reference Number / RRN Rule
+  const candRawDesc = String(cand.description || cand.narration || cand.details || '').trim()
+  const existRawDesc = String(existing.description || existing.narration || existing.details || '').trim()
 
-  // Step 4: Transaction ID / Reference Number / RRN Rule
-  // If BOTH transactions have a Txn ID or Ref Number:
-  // - If they match -> DUPLICATE!
-  // - If DIFFERENT -> 100% UNIQUE / DIFFERENT (return false)!
+  const normCand = normalizeBankDescription(candRawDesc, cAmt, cDateStr)
+  const normExist = normalizeBankDescription(existRawDesc, eAmt, eDateStr)
+
   const candId = extractTxnId(cand) || cand.refNo || cand.rrn || normCand.reference
   const existId = extractTxnId(existing) || existing.refNo || existing.rrn || normExist.reference
 
+  // 4a. If BOTH have a Transaction ID / Ref Number / RRN:
   if (candId && existId) {
-    if (candId !== existId) return false // Different Txn ID/Ref -> 100% UNIQUE!
-    return true // Same Txn ID/Ref -> DUPLICATE!
+    if (candId !== existId) return false // Different Txn ID/RRN -> 100% UNIQUE!
+    return true // Same Txn ID/RRN -> DUPLICATE!
   }
 
-  // Step 5: Merchant comparison
-  if (normCand.merchant && normExist.merchant) {
-    const cWords = normCand.merchant.split(/\s+/).filter((w) => w.length > 2)
-    const eWords = normExist.merchant.split(/\s+/).filter((w) => w.length > 2)
-    if (cWords.length > 0 && eWords.length > 0) {
-      const match = cWords.some((w) => eWords.includes(w))
-      if (!match) return false
+  // 4b. If ONE has a specific Txn ID / RRN and the other does not (e.g. UPI/619536337209 vs "Transaction"):
+  if ((candId && !existId) || (!candId && existId)) {
+    // If descriptions differ, they are 100% UNIQUE!
+    if (candRawDesc.toLowerCase() !== existRawDesc.toLowerCase()) {
+      return false
     }
+  }
+
+  // Step 5: Description & Merchant comparison
+  const cMerchant = (normCand.merchant || candRawDesc).toLowerCase().trim()
+  const eMerchant = (normExist.merchant || existRawDesc).toLowerCase().trim()
+
+  if (cMerchant && eMerchant) {
+    if (cMerchant !== eMerchant) {
+      const cWords = cMerchant.split(/\s+/).filter((w) => w.length > 2)
+      const eWords = eMerchant.split(/\s+/).filter((w) => w.length > 2)
+      if (cWords.length > 0 && eWords.length > 0) {
+        const match = cWords.some((w) => eWords.includes(w))
+        if (!match) return false // Completely different merchant names -> 100% UNIQUE!
+      } else {
+        return false // Different descriptions -> 100% UNIQUE!
+      }
+    }
+  } else if (candRawDesc.toLowerCase() !== existRawDesc.toLowerCase()) {
+    return false // Different raw descriptions -> 100% UNIQUE!
   }
 
   return true
@@ -231,9 +250,15 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
       return
     }
 
-    if (!window.confirm(`Are you sure you want to permanently delete ${recordsToDelete.length} selected duplicate transaction(s)?`)) {
-      return
-    }
+    const confirmed = await showConfirm({
+      title: 'Clean Duplicate Transactions',
+      message: `Are you sure you want to permanently delete ${recordsToDelete.length} selected duplicate transaction(s)?`,
+      confirmText: `Delete ${recordsToDelete.length} Duplicates`,
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🗑️',
+    })
+    if (!confirmed) return
 
     setDeletingDups(true)
     setError('')
@@ -361,7 +386,15 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
 
   async function handleDelete(r) {
     if (!r || !r.id) return
-    if (!window.confirm(`Delete bank entry "${r.description || 'Transaction'}"?`)) return
+    const confirmed = await showConfirm({
+      title: 'Delete Bank Entry',
+      message: `Are you sure you want to delete bank transaction "${r.description || 'Entry'}"?`,
+      confirmText: 'Delete Record',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      icon: '🗑️',
+    })
+    if (!confirmed) return
 
     setDeletingId(r.id)
     try {
@@ -369,7 +402,12 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
       const updated = allRecords.filter((item) => item.id !== r.id)
       setAllRecords(updated)
     } catch (err) {
-      alert('Failed to delete transaction: ' + (err?.message || 'Unknown error'))
+      await showAlert({
+        title: 'Delete Failed',
+        message: formatUserFriendlyError(err, 'Could not delete transaction. Please try again.'),
+        variant: 'warning',
+        icon: '⚠️',
+      })
     } finally {
       setDeletingId(null)
     }

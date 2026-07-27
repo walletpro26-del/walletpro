@@ -254,8 +254,8 @@ export async function getRecentExpenses(n = 20) {
   return all.slice(0, n)
 }
 
-export async function getAllExpenses(forceRefresh = false) {
-  const currentUid = auth.currentUser?.uid || ''
+export async function getAllExpenses(forceRefresh = false, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
   if (!currentUid) return []
 
   // 1. In-memory runtime cache (0 Firestore reads)
@@ -276,17 +276,44 @@ export async function getAllExpenses(forceRefresh = false) {
   }
 
   try {
-    // Fetch user-scoped expenses with 2.5s network timeout
+    // Fetch user-scoped expenses with 3.5s network timeout
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await Promise.race([
       getDocs(qScoped),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 3500))
     ])
 
     let items = []
-    snapScoped.docs.forEach((docSnap) => {
-      items.push(...unpackExpenseDoc(docSnap))
-    })
+    const seenIds = new Set()
+
+    if (snapScoped && !snapScoped.empty) {
+      snapScoped.docs.forEach((docSnap) => {
+        const unpacked = unpackExpenseDoc(docSnap)
+        unpacked.forEach((item) => {
+          if (!seenIds.has(item.id)) {
+            items.push(item)
+            seenIds.add(item.id)
+          }
+        })
+      })
+    }
+
+    // Fallback: Query by legacy 'uid' field if userId query returned 0 items
+    if (items.length === 0) {
+      const qUid = query(collection(db, COL), where('uid', '==', currentUid))
+      const snapUid = await getDocs(qUid).catch(() => null)
+      if (snapUid && !snapUid.empty) {
+        snapUid.docs.forEach((docSnap) => {
+          const unpacked = unpackExpenseDoc(docSnap)
+          unpacked.forEach((item) => {
+            if (!seenIds.has(item.id)) {
+              items.push(item)
+              seenIds.add(item.id)
+            }
+          })
+        })
+      }
+    }
 
     const sorted = items.sort((a, b) => b.dateObj - a.dateObj)
     saveSnapshot('expenses', sorted, currentUid)

@@ -13,6 +13,7 @@ import { getSubscriptionStatus, listenSubscriptionStatus, isAdminEmail, ensureUs
 import { getAppConfig, listenAppConfig } from './api/appConfig'
 import { loadSnapshot } from './api/localCache'
 import { fetchBankTransactionsFromFirestore, deleteBankTransaction, parseSafeDate } from './api/bankTransactions'
+import { formatUserFriendlyError } from './utils/userFriendlyError'
 import SubscriptionModal from './components/SubscriptionModal'
 import AdminPanel from './components/AdminPanel'
 
@@ -36,6 +37,7 @@ import WalletVibeLogo from './components/WalletVibeLogo'
 import LegalModal from './components/LegalModal'
 import RatingModal from './components/RatingModal'
 import AboutModal from './components/AboutModal'
+import CustomDialogModal from './components/CustomDialogModal'
 
 // Record when the app opened (for update banner age check)
 window.__wv_open_time = Date.now()
@@ -317,10 +319,11 @@ export default function App() {
     setLoading(true)
     setError('')
     try {
+      const activeUid = authState.uid || auth?.currentUser?.uid || ''
       const [allExp, allL, bankRaw] = await Promise.all([
-        getAllExpenses(),
-        getAllLending(),
-        fetchBankTransactionsFromFirestore(authState.uid, subscriptionState?.isAdmin || isAdminEmail(authState?.email)).catch(() => []),
+        getAllExpenses(false, activeUid),
+        getAllLending(false, activeUid),
+        fetchBankTransactionsFromFirestore(activeUid, subscriptionState?.isAdmin || isAdminEmail(authState?.email)).catch(() => []),
       ])
       const expStats = computeExpenseStatsLocally(allExp)
       const lendStats = computeLendingStatsLocally(allL)
@@ -333,25 +336,23 @@ export default function App() {
       setAllExpenses(allExp)
       setAllLending(allL)
 
-      if (Array.isArray(bankRaw) && bankRaw.length > 0) {
-        setBankRecords(
-          bankRaw.map((b) => ({
-            ...b,
-            sheet: 'bank',
-            isLend: false,
-            amount: parseFloat(b.debit || b.credit || 0),
-            category: b.bank || 'Bank',
-            details: b.description || b.narration || '',
-            dateObj: parseSafeDate(b.dateObj || b.date),
-          }))
-        )
-      }
+      setBankRecords(
+        (Array.isArray(bankRaw) ? bankRaw : []).map((b) => ({
+          ...b,
+          sheet: 'bank',
+          isLend: false,
+          amount: parseFloat(b.debit || b.credit || 0),
+          category: b.bank || 'Bank',
+          details: b.description || b.narration || '',
+          dateObj: parseSafeDate(b.dateObj || b.date),
+        }))
+      )
     } catch (err) {
-      setError(err?.message || 'Failed to load data')
+      setError(formatUserFriendlyError(err, 'Failed to load transaction data. Please refresh.'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [authState.uid, authState.email, subscriptionState?.isAdmin])
 
   function showToast(msg, isOffline = false) {
     setToast({ msg, isOffline })
@@ -866,6 +867,9 @@ export default function App() {
           onClose={closeLegalModal}
         />
       )}
+
+      {/* Global Custom Popup Dialog */}
+      <CustomDialogModal />
 
       {/* Toast */}
       {toast && (
