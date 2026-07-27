@@ -1,0 +1,36 @@
+{
+  "packageId": "app.netlify.walletvibe.twa",
+  "host": "walletvibe.netlify.app",
+  "name": "WalletVibe",
+  "launcherName": "WalletVibe",
+  "themeColor": "#4F46E5",
+  "navigationColor": "#4F46E5",
+  "navigationColorDark": "#0F172A",
+  "navigationDividerColor": "#4F46E5",
+  "navigationDividerColorDark": "#0F172A",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://walletvibe.netlify.app/icon-512.png",
+  "maskableIconUrl": "https://walletvibe.netlify.app/icon-512.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 100,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "walletvibe"
+  },
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://walletvibe.netlify.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  }
+}
