@@ -100,63 +100,9 @@ export default function InstallBanner() {
     }
   }, [isStandalone, isInstalled, dismissed])
 
-  // Case 1: App is installed and running in standalone native app mode
-  if (isStandalone) {
-    if (dismissed) return null
-    return (
-      <div style={{
-        padding: '10px 14px', margin: '12px 14px 4px', borderRadius: 12,
-        background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(5,150,105,0.15))',
-        border: '1px solid rgba(16,185,129,0.3)', color: 'var(--text-primary, #1e293b)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-        boxShadow: '0 2px 8px rgba(16,185,129,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700 }}>
-          <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
-            ✓
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, color: '#047857' }}>📱 Installed &amp; Running as Home Screen App</div>
-            <div style={{ fontSize: 10, color: '#065f46', opacity: 0.9 }}>WalletVibe is ready on your device with full offline local cache support</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={dismissBannerPermanently}
-          style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer', padding: '4px 6px' }}
-          title="Dismiss status banner"
-        >
-          ✕
-        </button>
-      </div>
-    )
-  }
-
-  // Case 2: App is installed on device (Recognized from prior install)
-  if (isInstalled) {
-    if (dismissed) return null
-    return (
-      <div style={{
-        padding: '10px 14px', margin: '12px 14px 4px', borderRadius: 12,
-        background: '#ecfdf5', border: '1px solid #6ee7b7', color: '#065f46',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700 }}>
-          <span style={{ fontSize: 14 }}>🎉</span>
-          <div>
-            <div><strong>WalletVibe App Installed &amp; Recognized!</strong></div>
-            <div style={{ fontSize: 10, opacity: 0.9 }}>Launch directly from your phone app icon for full offline PWA experience.</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={dismissBannerPermanently}
-          style={{ background: 'transparent', border: 'none', color: '#047857', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-        >
-          ✕
-        </button>
-      </div>
-    )
+  // Never show any install banners if app is running in standalone mode or already installed
+  if (isStandalone || isInstalled) {
+    return null
   }
 
   if (dismissed) return null
