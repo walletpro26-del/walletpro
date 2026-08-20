@@ -315,15 +315,15 @@ export default function App() {
     }
   }, [])
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (forceRefresh = true) => {
     setLoading(true)
     setError('')
     try {
       const activeUid = authState.uid || auth?.currentUser?.uid || ''
       const [allExp, allL, bankRaw] = await Promise.all([
-        getAllExpenses(false, activeUid),
-        getAllLending(false, activeUid),
-        fetchBankTransactionsFromFirestore(activeUid, subscriptionState?.isAdmin || isAdminEmail(authState?.email)).catch(() => []),
+        getAllExpenses(forceRefresh, activeUid),
+        getAllLending(forceRefresh, activeUid),
+        fetchBankTransactionsFromFirestore(activeUid, subscriptionState?.isAdmin || isAdminEmail(authState?.email), forceRefresh).catch(() => []),
       ])
       const expStats = computeExpenseStatsLocally(allExp)
       const lendStats = computeLendingStatsLocally(allL)
@@ -734,6 +734,7 @@ export default function App() {
             uid={authState.uid}
             isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
             onSelectTxn={setSelectedTxn}
+            onMergeComplete={loadDashboard}
           />
         )}
 
@@ -841,6 +842,7 @@ export default function App() {
           isAdmin={subscriptionState.isAdmin || isAdminEmail(authState?.email)}
           allowNonCsvImport={appConfig?.allowNonCsvImport !== false}
           onClose={() => setShowBankSearch(false)}
+          onMergeComplete={loadDashboard}
         />
       )}
       {showBankMergeModal && (

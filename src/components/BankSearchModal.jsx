@@ -101,7 +101,7 @@ function getNormalizedBankName(rawBank) {
   return trimmed
 }
 
-export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImport = true, onClose }) {
+export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImport = true, onClose, onMergeComplete }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [allRecords, setAllRecords] = useState(null)
   const [filtered, setFiltered] = useState([])
@@ -770,6 +770,8 @@ export default function BankSearchModal({ uid, isAdmin = false, allowNonCsvImpor
 
       setAllRecords(updatedRecords)
       saveSnapshot('bank', updatedRecords, currentUid)
+      invalidateSnapshot('bank', currentUid)
+      onMergeComplete?.()
       setFiltered(updatedRecords.slice(0, 50))
       setShowMergeModal(false)
       setImportSuccess(`🎉 Successfully merged ${matching.length} records from "${src}" into "${target}" across Firebase!`)

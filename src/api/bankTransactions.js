@@ -5,7 +5,7 @@
 
 import { db } from '../firebase'
 import { collection, getDocs, getDocsFromCache, getDoc, getDocFromCache, query, where, deleteDoc, doc, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
-import { saveSnapshot, loadSnapshot, isCacheFresh, invalidateSnapshot } from './localCache'
+import { saveSnapshot, loadSnapshot, isCacheFresh, invalidateSnapshot, registerInvalidationListener } from './localCache'
 
 export function parseSafeDate(d) {
   if (!d) return new Date()
@@ -91,6 +91,12 @@ export function invalidateBankInMemoryCache(uid = '') {
     _memBankCacheTimeMap.clear()
   }
 }
+
+registerInvalidationListener((type, uid) => {
+  if (!type || type === 'bank') {
+    invalidateBankInMemoryCache(uid)
+  }
+})
 
 function unpackFirestoreDocs(docSnapshots, currentUid) {
   const records = []

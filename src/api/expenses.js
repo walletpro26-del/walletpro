@@ -4,7 +4,7 @@ import {
   query, orderBy, limit, where, Timestamp,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
-import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot } from './localCache'
+import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot, registerInvalidationListener } from './localCache'
 
 const COL = 'expenses'
 
@@ -64,6 +64,12 @@ export function invalidateExpenseInMemoryCache(uid = '') {
     _memExpenseCacheTimeMap.clear()
   }
 }
+
+registerInvalidationListener((type, uid) => {
+  if (!type || type === 'expenses') {
+    invalidateExpenseInMemoryCache(uid)
+  }
+})
 
 export async function addExpense(data) {
   const fsData = toFirestore(data)

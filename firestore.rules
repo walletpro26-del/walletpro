@@ -26,21 +26,24 @@ service cloud.firestore {
     match /expenses/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
-      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+      allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Lending ──
     match /lending/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
-      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+      allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Bank Transactions ──
     match /bankTransactions/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
-      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+      allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Subscriptions ──
@@ -82,9 +85,9 @@ service cloud.firestore {
       );
     }
 
-    // ── App Config (readable by all authenticated, writable by admin) ──
+    // ── App Config (readable by all users/visitors, writable by admin) ──
     match /appConfig/{docId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -102,14 +105,23 @@ service cloud.firestore {
     match /scheduledReminders/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
-      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+      allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
-    // ── Reviews ──
+    // ── App Reviews & Reviews (admin reads all, users write/update own) ──
+    match /appReviews/{docId} {
+      allow read: if request.auth != null || isAdmin();
+      allow create: if request.auth != null && (isNewOwner() || isAdmin() || request.auth.uid != null);
+      allow update: if request.auth != null && (isOwner() || isNewOwner() || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
+    }
+
     match /reviews/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && (isNewOwner() || isAdmin());
-      allow update, delete: if request.auth != null && (isOwner() || isAdmin());
+      allow read: if request.auth != null || isAdmin();
+      allow create: if request.auth != null && (isNewOwner() || isAdmin() || request.auth.uid != null);
+      allow update: if request.auth != null && (isOwner() || isNewOwner() || isAdmin());
+      allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     // ── Activity Logs (admin only read, authenticated write) ──

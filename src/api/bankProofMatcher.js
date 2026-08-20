@@ -1,6 +1,7 @@
 /**
  * bankProofMatcher.js
  * Scans bank transactions to find matching bank statements / proofs for Expenses & Lending records.
+ * Only matches with confidence strictly greater than 85% are verified as Bank Proofs.
  */
 
 import { loadSnapshot } from './localCache'
@@ -13,6 +14,12 @@ function parseSafeDate(d) {
   const parsed = new Date(d)
   return isNaN(parsed.getTime()) ? new Date() : parsed
 }
+
+const GENERIC_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'paid', 'via', 'upi', 'transfer', 'to', 'by',
+  'payment', 'bank', 'account', 'inr', 'rs', 'from', 'with', 'ref',
+  'txn', 'val', 'dr', 'cr', 'null', 'undefined', 'auto', 'self'
+])
 
 export function findMatchingBankProof(item, customBankRecords = null) {
   if (!item || !item.amount) return []
@@ -52,16 +59,36 @@ export function findMatchingBankProof(item, customBankRecords = null) {
 
   const isIncoming = isLending && (item.type === 'Borrow' || item.type === 'They Return' || item.label === 'Borrow' || item.label === 'They Return')
 
-  const keywords = [
+  // Collect key elements: comment, remarks, details, person, category, forWhom
+  const rawKeywords = [
+    item.comment,
+    item.remarks,
+    item.details,
+    item.person,
     item.category,
     item.forWhom,
-    item.person,
-    item.details,
-    item.remarks,
+    item.merchant,
+    item.payee,
   ]
     .filter(Boolean)
     .map((k) => String(k).toLowerCase().trim())
     .filter((k) => k.length > 1)
+
+  // Tokenize key elements into distinct search terms
+  const tokenSet = new Set()
+  rawKeywords.forEach((phrase) => {
+    // Also include full phrase if short and meaningful
+    if (phrase.length >= 3 && !GENERIC_STOP_WORDS.has(phrase)) {
+      tokenSet.add(phrase)
+    }
+    phrase.split(/[\s,/\\_-]+/).forEach((word) => {
+      const clean = word.replace(/[^a-z0-9]/g, '').trim()
+      if (clean.length >= 3 && !GENERIC_STOP_WORDS.has(clean)) {
+        tokenSet.add(clean)
+      }
+    })
+  })
+  const searchTokens = Array.from(tokenSet)
 
   const matches = []
 
@@ -77,54 +104,78 @@ export function findMatchingBankProof(item, customBankRecords = null) {
     let score = 0
     let matchReasons = []
 
-    // 1. PRIMARY KEY 1: Amount Match Scoring
+    // 1. PRIMARY FACTOR 1: Amount Match Scoring (Max 50 points)
     const amtDiff = Math.abs(bankAmt - itemAmt)
     const relDiff = itemAmt > 0 ? amtDiff / itemAmt : 1
 
-    if (amtDiff < 0.05) {
-      score += 60
-      matchReasons.push(`Exact Amount (₹${itemAmt})`)
-    } else if (relDiff <= 0.03) {
-      score += 45
-      matchReasons.push('Near Amount (±3%)')
-    } else if (relDiff <= 0.1) {
+    if (amtDiff < 0.05 || relDiff < 0.0001) {
+      score += 50
+      matchReasons.push(`Exact Amount (₹${itemAmt.toLocaleString('en-IN')})`)
+    } else if (relDiff <= 0.005) {
+      // Within 0.5% (slight rounding/cents)
+      score += 42
+      matchReasons.push('Amount within 0.5%')
+    } else if (relDiff <= 0.01) {
+      // Within 1%
       score += 30
-      matchReasons.push('Similar Amount (±10%)')
+      matchReasons.push('Amount within 1%')
+    } else if (relDiff <= 0.02) {
+      score += 18
+      matchReasons.push('Amount within 2%')
+    } else {
+      // Amount mismatch beyond 2% fails bank proof criteria
+      return
     }
 
-    // 2. PRIMARY KEY 2: Date Proximity Scoring
+    // 2. PRIMARY FACTOR 2: Date Proximity Scoring (Max 30 points)
     const dateDiffDays = Math.abs(bankDate.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24)
     if (dateDiffDays < 0.8) {
-      score += 35
+      score += 30
       matchReasons.push('Same Date')
-    } else if (dateDiffDays <= 2) {
-      score += 25
-      matchReasons.push(`Date within ${Math.ceil(dateDiffDays)}d`)
-    } else if (dateDiffDays <= 5) {
-      score += 15
-      matchReasons.push(`Date within ${Math.ceil(dateDiffDays)}d`)
-    } else if (dateDiffDays <= 10) {
-      score += 10
-      matchReasons.push(`Date within ${Math.ceil(dateDiffDays)}d`)
+    } else if (dateDiffDays <= 1.5) {
+      score += 22
+      matchReasons.push('Date within 1 day')
+    } else if (dateDiffDays <= 2.5) {
+      score += 12
+      matchReasons.push('Date within 2 days')
+    } else if (dateDiffDays <= 3.5) {
+      score += 5
+      matchReasons.push('Date within 3 days')
+    } else {
+      // Date difference beyond 3.5 days fails high-confidence proof criteria
+      return
     }
 
-    // 3. Keyword / Narration Match
-    const bankDesc = `${b.description || ''} ${b.bank || ''} ${b.narration || ''}`.toLowerCase()
-    let kwMatchCount = 0
-    keywords.forEach((kw) => {
-      if (bankDesc.includes(kw)) {
-        kwMatchCount++
+    // 3. PRIMARY FACTOR 3: Transaction Details & Key Elements (Comments / Remarks / Details / Merchant) (Max 20 points)
+    const bankDesc = `${b.description || ''} ${b.bank || ''} ${b.narration || ''} ${b.merchant || ''} ${b.category || ''}`.toLowerCase()
+    
+    let matchedTokenCount = 0
+    let fullPhraseMatch = false
+
+    rawKeywords.forEach((phrase) => {
+      if (phrase.length >= 3 && bankDesc.includes(phrase)) {
+        fullPhraseMatch = true
       }
     })
 
-    if (kwMatchCount > 0) {
-      score += Math.min(20, kwMatchCount * 10)
-      matchReasons.push('Description Match')
+    searchTokens.forEach((token) => {
+      if (bankDesc.includes(token)) {
+        matchedTokenCount++
+      }
+    })
+
+    if (fullPhraseMatch || matchedTokenCount >= 2) {
+      score += 20
+      matchReasons.push('Details & Comments Match')
+    } else if (matchedTokenCount === 1) {
+      score += 12
+      matchReasons.push('Keyword / Merchant Match')
     }
 
-    // Inclusion criteria: Date must be within 120 days AND (exact amount OR near amount & date <= 30d OR score >= 50)
-    if (dateDiffDays <= 120 && (amtDiff < 0.05 || (relDiff <= 0.05 && dateDiffDays <= 30) || score >= 50)) {
-      const confidence = Math.min(99, Math.max(35, Math.round(score)))
+    const confidence = Math.min(100, Math.round(score))
+
+    // STRICT THRESHOLD REQUIREMENT: Bank proof is ONLY shown when confidence > 85%
+    if (confidence > 85) {
       matches.push({
         bankTransaction: b,
         confidence,

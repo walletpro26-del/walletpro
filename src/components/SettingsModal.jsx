@@ -80,7 +80,12 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      alert('Could not export backup: ' + err?.message)
+      showAlert({
+        title: 'Export Failed',
+        message: 'Could not export backup: ' + err?.message,
+        icon: '⚠️',
+        variant: 'danger',
+      })
     }
   }
 
@@ -430,7 +435,12 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                     type="button"
                     onClick={() => {
                       if (!gasUrl.trim()) {
-                        alert('Please enter a Google Apps Script Exec URL first!')
+                        showAlert({
+                          title: 'Missing URL',
+                          message: 'Please enter a Google Apps Script Exec URL first!',
+                          icon: '⚠️',
+                          variant: 'warning',
+                        })
                         return
                       }
                       setConfirmStep(1)

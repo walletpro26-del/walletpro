@@ -83,7 +83,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
     ].filter(Boolean).join('\n')
 
     const url = `https://wa.me/?text=${encodeURIComponent(lines)}`
-    window.open(url, '_blank')
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   return createPortal(
@@ -286,9 +286,9 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                     const amt = (b.debit || b.credit || 0).toLocaleString('en-IN')
                     const isDebit = b.debit > 0
                     const conf = m.confidence
-                    const badgeBg = conf >= 80 ? 'rgba(16,185,129,0.12)' : conf >= 60 ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)'
-                    const badgeColor = conf >= 80 ? '#10b981' : conf >= 60 ? '#6366f1' : '#d97706'
-                    const badgeBorder = conf >= 80 ? 'rgba(16,185,129,0.3)' : conf >= 60 ? 'rgba(99,102,241,0.3)' : 'rgba(245,158,11,0.3)'
+                    const badgeBg = conf >= 95 ? 'rgba(16,185,129,0.14)' : 'rgba(99,102,241,0.12)'
+                    const badgeColor = conf >= 95 ? '#059669' : '#4f46e5'
+                    const badgeBorder = conf >= 95 ? 'rgba(16,185,129,0.35)' : 'rgba(99,102,241,0.3)'
 
                     return (
                       <div
@@ -306,7 +306,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                             🏦 {b.bank || 'Bank Statement'}
                           </span>
                           <span style={{ fontSize: 9, fontWeight: 800, color: badgeColor, background: badgeBg, padding: '1px 7px', borderRadius: 99, border: `1px solid ${badgeBorder}` }}>
-                            {conf >= 80 ? '🟢' : conf >= 60 ? '🔵' : '🟡'} {conf}% Match
+                            ✓ Verified Proof ({conf}%)
                           </span>
                         </div>
 

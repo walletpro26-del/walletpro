@@ -85,7 +85,7 @@ export default function RatingModal({ user, onClose }) {
         (comment ? `\nReview / Feedback:\n"${comment}"` : '')
 
       const waUrl = `https://wa.me/919682547458?text=${encodeURIComponent(waText)}`
-      window.open(waUrl, '_blank')
+      window.open(waUrl, '_blank', 'noopener,noreferrer')
 
       setTimeout(() => {
         setActiveTab('view')

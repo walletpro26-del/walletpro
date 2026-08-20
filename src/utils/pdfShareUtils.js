@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { cleanPhoneNumber, generateLendingMessage, generatePersonSummaryMessage } from './commUtils'
+import { showAlert } from '../components/CustomDialogModal'
 
 /**
  * Generate a PDF document for a single transaction (Expense or Lend/Borrow)
@@ -255,7 +256,12 @@ export async function shareViaWhatsApp({ phone, item, person, personData, normal
 
     window.open(url, '_blank', 'noopener,noreferrer')
 
-    alert(`📄 PDF Statement "${fileName}" has been downloaded to your device!\n\nWhatsApp Web is now opening. Simply click the 📎 Attach icon in your WhatsApp chat to attach the downloaded PDF file.`)
+    showAlert({
+      title: 'PDF Downloaded & WhatsApp Opening',
+      message: `📄 PDF Statement "${fileName}" has been downloaded to your device!\n\nWhatsApp Web is now opening. Simply click the 📎 Attach icon in your WhatsApp chat to attach the downloaded PDF file.`,
+      icon: '📄',
+      variant: 'primary',
+    })
   } else {
     let msg = ''
     if (person && personData) {
@@ -276,7 +282,12 @@ export async function shareViaWhatsApp({ phone, item, person, personData, normal
 export function shareViaEmail({ email, item, person, personData, normalizeFn, format = 'text' }) {
   const targetEmail = email || item?.email
   if (!targetEmail || !targetEmail.includes('@')) {
-    alert('Please enter or select a valid email address!')
+    showAlert({
+      title: 'Invalid Email',
+      message: 'Please enter or select a valid email address!',
+      icon: '⚠️',
+      variant: 'warning',
+    })
     return
   }
 

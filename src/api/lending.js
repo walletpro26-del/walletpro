@@ -4,7 +4,7 @@ import {
   query, orderBy, limit, Timestamp, where,
 } from 'firebase/firestore'
 import { saveAttachment, getAttachment, deleteAttachmentChunks } from './attachments'
-import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot } from './localCache'
+import { saveSnapshot, loadSnapshot, addPending, isCacheFresh, invalidateSnapshot, registerInvalidationListener } from './localCache'
 
 const COL = 'lending'
 
@@ -86,6 +86,12 @@ export function invalidateLendingInMemoryCache(uid = '') {
     _memLendingCacheTimeMap.clear()
   }
 }
+
+registerInvalidationListener((type, uid) => {
+  if (!type || type === 'lending') {
+    invalidateLendingInMemoryCache(uid)
+  }
+})
 
 export async function addLending(data) {
   const fsData = toFirestore(data)

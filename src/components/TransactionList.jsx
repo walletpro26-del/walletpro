@@ -25,6 +25,21 @@ export default function TransactionList({ items = [], title, onSelect }) {
     })
   }, [items, searchTerm])
 
+  // Pre-calculate verified bank proof matches (>85% confidence) for all rendered items
+  const bankMatchesMap = useMemo(() => {
+    if (!cachedBankRecords || cachedBankRecords.length === 0 || !filteredItems || filteredItems.length === 0) {
+      return {}
+    }
+    const map = {}
+    filteredItems.forEach((item) => {
+      const matches = findMatchingBankProof(item, cachedBankRecords)
+      if (matches.length > 0 && matches[0].confidence > 85) {
+        map[item.id || `${item.date}_${item.amount}_${item.category || item.person || ''}`] = matches[0]
+      }
+    })
+    return map
+  }, [filteredItems, cachedBankRecords])
+
   function formatDate(iso) {
     try {
       if (!iso) return ''
@@ -136,7 +151,8 @@ export default function TransactionList({ items = [], title, onSelect }) {
             : `${item.forWhom || ''} — ${item.details || ''}`
 
           const amtInfo = getAmountDetails(item)
-          const bankMatch = cachedBankRecords.length > 0 ? findMatchingBankProof(item, cachedBankRecords)[0] : null
+          const itemKey = item.id || `${item.date}_${item.amount}_${item.category || item.person || ''}`
+          const bankMatch = bankMatchesMap[itemKey] || null
 
           return (
             <li key={item.id || i} className="txn-item" onClick={() => onSelect?.(item)}>

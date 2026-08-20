@@ -62,6 +62,17 @@ export function isCacheFresh(type, uid = '', maxAgeMs = 15 * 60 * 1000) {
   }
 }
 
+const _invalidationListeners = new Set()
+
+/**
+ * Register a listener to be notified when snapshot cache is invalidated
+ */
+export function registerInvalidationListener(fn) {
+  if (typeof fn === 'function') {
+    _invalidationListeners.add(fn)
+  }
+}
+
 /**
  * Invalidate snapshot timestamp so the next call fetches fresh data from server
  */
@@ -70,6 +81,11 @@ export function invalidateSnapshot(type, uid = '') {
     const key = getKey(type, uid)
     localStorage.removeItem(key + '_ts')
   } catch {}
+  _invalidationListeners.forEach((fn) => {
+    try {
+      fn(type, uid)
+    } catch {}
+  })
 }
 
 /**

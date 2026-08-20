@@ -916,7 +916,7 @@ export default function AdminPanel({ auth, onClose }) {
                                       `Track your daily expenses, lend/borrow ledgers, and bank statements automatically with AI.\n\n` +
                                       `Start your trial or activate Pro access here: ${window.location.origin}`
                                     )
-                                    window.open(targetPhone ? `https://wa.me/${targetPhone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank')
+                                    window.open(targetPhone ? `https://wa.me/${targetPhone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank', 'noopener,noreferrer')
                                   }}
                                   style={{ padding: '3px 8px', background: 'rgba(37, 211, 102, 0.15)', color: '#15803d', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
                                   title="Send WhatsApp Nudge to user to try WalletVibe Personal Finance"

@@ -8,6 +8,7 @@ import {
   createRazorpayOptions,
   claimFreeTrial,
 } from '../api/subscription'
+import { showAlert } from './CustomDialogModal'
 
 export default function SubscriptionModal({
   user,
@@ -555,7 +556,12 @@ export default function SubscriptionModal({
                     type="button"
                     onClick={() => {
                       if (isLimitReached) return
-                      alert(`Cashfree Gateway (${appConfig?.cashfreeMode === 'sandbox' ? 'TEST Mode' : 'LIVE Mode'}): Initiating payment session for ${selectedPlan?.toUpperCase()} (₹${amount})...`)
+                      showAlert({
+                        title: 'Cashfree Payment Gateway',
+                        message: `Cashfree Gateway (${appConfig?.cashfreeMode === 'sandbox' ? 'TEST Mode' : 'LIVE Mode'}): Initiating payment session for ${selectedPlan?.toUpperCase()} (₹${amount})...`,
+                        icon: '💳',
+                        variant: 'primary',
+                      })
                     }}
                     disabled={isLimitReached}
                     style={{

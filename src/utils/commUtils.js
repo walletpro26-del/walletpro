@@ -2,6 +2,8 @@
  * Utility functions for Mobile & Email communications in Lend/Borrow transactions
  */
 
+import { showAlert } from '../components/CustomDialogModal'
+
 export function cleanPhoneNumber(phone) {
   if (!phone) return ''
   const digits = String(phone).replace(/\D/g, '')
@@ -93,7 +95,12 @@ export function generateLendingMessage(item) {
 export function openWhatsApp(phone, item) {
   const cleanPhone = cleanPhoneNumber(phone || item?.mobileNo || item?.phone)
   if (!cleanPhone) {
-    alert('Please enter or provide a valid mobile number first!')
+    showAlert({
+      title: 'Missing Mobile Number',
+      message: 'Please enter or provide a valid mobile number first!',
+      icon: '📱',
+      variant: 'warning',
+    })
     return
   }
   const msg = generateLendingMessageWhatsApp(item)
@@ -104,7 +111,12 @@ export function openWhatsApp(phone, item) {
 export function openEmail(emailAddress, item) {
   const targetEmail = emailAddress || item?.email
   if (!targetEmail || !targetEmail.includes('@')) {
-    alert('Please enter or provide a valid email address first!')
+    showAlert({
+      title: 'Missing Email Address',
+      message: 'Please enter or provide a valid email address first!',
+      icon: '✉️',
+      variant: 'warning',
+    })
     return
   }
   const person = item?.person || 'Friend'
@@ -192,7 +204,12 @@ export function generatePersonSummaryMessage(person, data, normalizeFn) {
 export function openWhatsAppPerson(phone, person, data, normalizeFn) {
   const cleanPhone = cleanPhoneNumber(phone)
   if (!cleanPhone) {
-    alert('No mobile number available for this person.')
+    showAlert({
+      title: 'Missing Mobile Number',
+      message: 'No mobile number available for this person.',
+      icon: '📱',
+      variant: 'warning',
+    })
     return
   }
   const msg = generatePersonSummaryMessageWhatsApp(person, data, normalizeFn)
@@ -202,7 +219,12 @@ export function openWhatsAppPerson(phone, person, data, normalizeFn) {
 
 export function openEmailPerson(emailAddress, person, data, normalizeFn) {
   if (!emailAddress || !emailAddress.includes('@')) {
-    alert('No email address available for this person.')
+    showAlert({
+      title: 'Missing Email Address',
+      message: 'No email address available for this person.',
+      icon: '✉️',
+      variant: 'warning',
+    })
     return
   }
   const amtStr = `₹${Math.abs(data.net).toLocaleString('en-IN')}`

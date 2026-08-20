@@ -11,8 +11,9 @@ import PersonMergeModal from './PersonMergeModal'
 import { normalizePersonName } from '../api/entityNormalizer'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { showAlert } from './CustomDialogModal'
 
-export default function ReportsView({ allExpenses = [], allLending = [], bankRecords: parentBankRecords = [], onSelectTxn, uid, isAdmin = false }) {
+export default function ReportsView({ allExpenses = [], allLending = [], bankRecords: parentBankRecords = [], onSelectTxn, uid, isAdmin = false, onMergeComplete }) {
   const [reportType, setReportType] = useState('expense') // 'expense' | 'lending' | 'bank'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -678,7 +679,12 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
       doc.save(`WalletVibe_${outName}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       console.error('PDF generation error:', err);
-      alert('Could not generate PDF. Please try using Print instead.');
+      showAlert({
+        title: 'PDF Generation Notice',
+        message: 'Could not generate PDF. Please try using Print instead.',
+        icon: '⚠️',
+        variant: 'warning',
+      });
     } finally {
       setDownloading(false)
     }
@@ -1890,7 +1896,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
           uid={uid}
           onClose={() => setShowMergeModal(false)}
           onMergeComplete={() => {
-            // refresh data
+            onMergeComplete?.()
           }}
         />
       )}
