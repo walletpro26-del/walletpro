@@ -40,3 +40,4 @@ Whenever any feature, bug fix, or UI change is made to the React codebase:
 - **User-Friendly Error Messages**: Always wrap raw exceptions with `getUserFriendlyError()` from `userFriendlyError.js`.
 - **Offline-First Snapshot Syncing**: Always write data mutations to `saveSnapshot('bank'|'expenses'|'lending', ...)` alongside Firestore `writeBatch` queries.
 - **Deterministic Duplicate Scanner**: Enforce 5-step verification (Amount, DR/CR, Date <= 1d, 12-digit UPI RRN match, Merchant token match).
+- **No Autonomous Git Pushes**: NEVER execute `git push` commands. All git staging, committing, and pushing is strictly handled by the USER manually.

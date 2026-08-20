@@ -137,7 +137,7 @@ export async function addLending(data) {
   try {
     const docRef = await Promise.race([
       addDoc(collection(db, COL), fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
     if (data.fileData) {
       await saveAttachment(COL, docRef.id, data.fileData).catch(() => {})
@@ -179,7 +179,7 @@ export async function updateLending(id, data) {
   try {
     await Promise.race([
       updateDoc(ref, fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
     if (data.fileData) {
       await deleteAttachmentChunks(COL, id).catch(() => {})
@@ -265,7 +265,7 @@ export async function deleteLending(id, parentDocId = null) {
   try {
     await Promise.race([
       deleteDoc(doc(db, COL, id)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
     await deleteAttachmentChunks(COL, id).catch(() => {})
     return { success: true }
@@ -307,7 +307,7 @@ export async function getAllLending(forceRefresh = false, uidOverride = '') {
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await Promise.race([
       getDocs(qScoped),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 3500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
 
     let items = []

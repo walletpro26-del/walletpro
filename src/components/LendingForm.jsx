@@ -40,6 +40,13 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
   const [loadingAttachment, setLoadingAttachment] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!loading) {
+      setIsSubmitting(false)
+    }
+  }, [loading])
 
   // Load existing attachment preview when editing
   useEffect(() => {
@@ -113,6 +120,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
 
   function handleSubmit(e) {
     e.preventDefault()
+    setIsSubmitting(true)
     onSave({
       ...form,
       person: normalizePersonName(form.person),
@@ -342,7 +350,15 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         </div>
 
         <button type="submit" className="btn-primary emerald" disabled={loading}>
-          {loading ? 'Saving...' : editData ? 'Update Record' : 'Save Record'}
+          {loading ? (
+            isSubmitting ? (
+              <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> {editData ? 'Updating...' : 'Saving...'}</>
+            ) : (
+              <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> Loading...</>
+            )
+          ) : (
+            editData ? 'Update Record' : 'Save Record'
+          )}
         </button>
       </form>
     </div>

@@ -22,7 +22,14 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   const [loadingAttachment, setLoadingAttachment] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const chipsRef = useRef(null)
+
+  useEffect(() => {
+    if (!loading) {
+      setIsSubmitting(false)
+    }
+  }, [loading])
 
   // Load existing attachment preview when editing
   useEffect(() => {
@@ -95,6 +102,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
   function handleSubmit(e) {
     e.preventDefault()
+    setIsSubmitting(true)
     onSave({
       ...form,
       forWhom: normalizePersonName(form.forWhom || 'Self'),
@@ -289,7 +297,15 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         />
 
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Saving...' : editData ? 'Update Expense' : 'Save Expense'}
+          {loading ? (
+            isSubmitting ? (
+              <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> {editData ? 'Updating...' : 'Saving...'}</>
+            ) : (
+              <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> Loading...</>
+            )
+          ) : (
+            editData ? 'Update Expense' : 'Save Expense'
+          )}
         </button>
       </form>
     </div>

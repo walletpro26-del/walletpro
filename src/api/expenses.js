@@ -114,7 +114,7 @@ export async function addExpense(data) {
   try {
     const docRef = await Promise.race([
       addDoc(collection(db, COL), fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
 
     if (data.fileData) {
@@ -157,7 +157,7 @@ export async function updateExpense(id, data) {
   try {
     await Promise.race([
       updateDoc(ref, fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
     if (data.fileData) {
       await deleteAttachmentChunks(COL, id).catch(() => {})
@@ -243,7 +243,7 @@ export async function deleteExpense(id, parentDocId = null) {
   try {
     await Promise.race([
       deleteDoc(doc(db, COL, id)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
     await deleteAttachmentChunks(COL, id).catch(() => {})
     return { success: true }
@@ -282,11 +282,11 @@ export async function getAllExpenses(forceRefresh = false, uidOverride = '') {
   }
 
   try {
-    // Fetch user-scoped expenses with 3.5s network timeout
+    // Fetch user-scoped expenses with 12s network timeout
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await Promise.race([
       getDocs(qScoped),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 3500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
     ])
 
     let items = []
