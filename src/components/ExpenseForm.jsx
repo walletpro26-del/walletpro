@@ -141,22 +141,37 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
       {/* Quick Fill */}
       {suggestions?.quickFills?.length > 0 && !editData && (
-        <div className="chips-wrapper">
-          <div className="chips-header">
-            <i className="fas fa-bolt" style={{ color: 'var(--amber-500)' }}></i> Quick Fill
+        <div className="chips-wrapper" style={{ marginBottom: 10 }}>
+          <div className="chips-header" style={{ fontSize: 9.5, fontWeight: 900, color: 'var(--text-muted, #64748b)', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <i className="fas fa-bolt" style={{ color: '#f59e0b' }}></i> <span>Quick Fill</span>
           </div>
           <div className="chips-scroll-row">
-            <button className="chips-scroll-btn" onClick={() => chipsRef.current?.scrollBy(-120, 0)}>
+            <button className="chips-scroll-btn" type="button" onClick={() => chipsRef.current?.scrollBy(-120, 0)} style={{ color: '#94a3b8' }}>
               <i className="fas fa-chevron-left"></i>
             </button>
-            <div className="chips-container no-scrollbar" ref={chipsRef}>
+            <div className="chips-container no-scrollbar" ref={chipsRef} style={{ padding: '2px 2px 4px', gap: 6 }}>
               {suggestions.quickFills.map((qf, i) => (
-                <button key={i} className="chip" type="button" onClick={() => applyQuickFill(qf)}>
+                <button
+                  key={i}
+                  className="chip"
+                  type="button"
+                  onClick={() => applyQuickFill(qf)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '5px 11px',
+                    borderRadius: 99,
+                    border: '1px solid var(--border-color, #e2e8f0)',
+                    background: 'var(--bg-card, #ffffff)',
+                    color: 'var(--text-secondary, #475569)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  }}
+                >
                   {qf.label}
                 </button>
               ))}
             </div>
-            <button className="chips-scroll-btn" onClick={() => chipsRef.current?.scrollBy(120, 0)}>
+            <button className="chips-scroll-btn" type="button" onClick={() => chipsRef.current?.scrollBy(120, 0)} style={{ color: '#94a3b8' }}>
               <i className="fas fa-chevron-right"></i>
             </button>
           </div>
@@ -164,22 +179,49 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Date + Amount + Attach (Less wider, compact layout) */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', maxWidth: 350, width: '100%', marginBottom: 14 }}>
-          <div className="compact-input-block" style={{ flex: '1 1 125px', minWidth: 0, padding: '4px 8px' }}>
-            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Date</label>
+        {/* Date + Amount + Attach (Compact & Balanced Layout) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', maxWidth: 360, width: '100%', marginBottom: 12 }}>
+          <div
+            className="compact-input-block"
+            style={{
+              flex: '1 1 125px',
+              minWidth: 0,
+              padding: '6px 10px',
+              borderRadius: 12,
+              border: '1.5px solid var(--border-color, #e2e8f0)',
+              background: 'var(--bg-card, #ffffff)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+            }}
+          >
+            <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
+              Date
+            </label>
             <input
               type="date"
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
               required
-              style={{ padding: '2px 0', fontSize: 12, fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
+              style={{ padding: '2px 0', fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
             />
           </div>
-          <div className="compact-input-block" style={{ flex: '1 1 145px', minWidth: 0, padding: '4px 8px' }}>
-            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Amount</label>
+
+          <div
+            className="compact-input-block"
+            style={{
+              flex: '1 1 145px',
+              minWidth: 0,
+              padding: '6px 10px',
+              borderRadius: 12,
+              border: '1.5px solid var(--border-color, #e2e8f0)',
+              background: 'var(--bg-card, #ffffff)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+            }}
+          >
+            <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
+              Amount
+            </label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 14, fontWeight: 500, marginRight: 3, color: 'var(--text-muted)' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 15, fontWeight: 700, marginRight: 3, color: '#4f46e5' }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -188,13 +230,36 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '0', fontSize: 19, fontWeight: 800, width: '100%', boxSizing: 'border-box' }}
+                style={{ padding: '0', fontSize: 18, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
               />
             </div>
           </div>
-          <label className="attach-btn" title="Attach Image or PDF (Max 130 KB)" style={{ flex: '0 0 auto', minWidth: 46, height: 42, padding: '4px 6px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: 0 }}>
-            <div className="attach-icon" style={{ fontSize: 12 }}><i className="fas fa-paperclip"></i></div>
-            <span className="attach-label" style={{ fontSize: 8, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 40 }}>{fileLabel}</span>
+
+          <label
+            className="attach-btn"
+            title="Attach Image or PDF (Max 130 KB)"
+            style={{
+              flex: '0 0 auto',
+              minWidth: 50,
+              padding: '6px 8px',
+              borderRadius: 12,
+              border: '1.5px dashed var(--border-color, #cbd5e1)',
+              background: form.fileData ? 'rgba(99,102,241,0.08)' : 'var(--bg-subtle, #f8fafc)',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: 0,
+              cursor: 'pointer',
+            }}
+          >
+            <div className="attach-icon" style={{ fontSize: 13, color: form.fileData ? '#4f46e5' : '#64748b' }}>
+              <i className="fas fa-paperclip"></i>
+            </div>
+            <span className="attach-label" style={{ fontSize: 8, fontWeight: 800, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, color: form.fileData ? '#4f46e5' : '#64748b' }}>
+              {fileLabel}
+            </span>
             <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFile} />
             {form.fileData && (
               <button type="button" className="attach-remove" onClick={(e) => { e.preventDefault(); clearFile() }}>
@@ -296,7 +361,20 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           suggestions={suggestions?.details || []}
         />
 
-        <button type="submit" className="btn-primary" disabled={loading}>
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={loading}
+          style={{
+            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+            fontWeight: 900,
+            fontSize: 13,
+            padding: '11px 16px',
+            borderRadius: 10,
+            letterSpacing: '0.3px',
+          }}
+        >
           {loading ? (
             isSubmitting ? (
               <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> {editData ? 'Updating...' : 'Saving...'}</>

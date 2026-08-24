@@ -420,9 +420,16 @@ export function computeSuggestions(expenses) {
 
   for (let i = 0; i < expenses.length; i++) {
     const e = expenses[i]
-    if (e.forWhom) forWhomSet.add(e.forWhom)
-    if (e.category) categorySet.add(e.category)
-    if (e.details) detailsSet.add(e.details)
+    if (e.forWhom) {
+      if (typeof e.forWhom === 'string' && e.forWhom.includes('|||')) {
+        e.forWhom.split('|||').map((p) => p.trim()).filter(Boolean).forEach((p) => forWhomSet.add(p))
+      } else if (typeof e.forWhom === 'string') {
+        const trimmed = e.forWhom.trim()
+        if (trimmed) forWhomSet.add(trimmed)
+      }
+    }
+    if (e.category) categorySet.add(e.category.trim())
+    if (e.details) detailsSet.add(e.details.trim())
 
     if (e.amount > 0 && e.category && e.details) {
       const key = [e.forWhom || 'Self', e.category, e.details].join('||')

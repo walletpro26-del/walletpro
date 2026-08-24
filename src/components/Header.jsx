@@ -472,10 +472,15 @@ export default function Header({
                     </div>
 
                     {/* Subline Details */}
-                    <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.details || item.description || item.remarks || item.forWhom || ''}
-                      {item.forWhom && item.details ? ` (${item.forWhom})` : ''}
-                    </div>
+                    {(() => {
+                      const whomFormatted = item.forWhom ? (item.forWhom.includes('|||') ? item.forWhom.split('|||').join(', ') : item.forWhom) : ''
+                      return (
+                        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.details || item.description || item.remarks || whomFormatted || ''}
+                          {whomFormatted && item.details ? ` (${whomFormatted})` : ''}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* Amount */}

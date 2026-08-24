@@ -76,7 +76,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
     const lines = [
       `💰 *${typeLabel}*`,
       `Amount: ₹${item.amount || item.debit || item.credit || 0}`,
-      isBank ? `Bank: ${item.bank || '—'}` : isLending ? `Person: ${item.person}` : `For: ${item.forWhom || 'Self'}`,
+      isBank ? `Bank: ${item.bank || '—'}` : isLending ? `Person: ${item.person}` : `For: ${item.forWhom ? (item.forWhom.includes('|||') ? item.forWhom.split('|||').join(', ') : item.forWhom) : 'Self'}`,
       `Date: ${formatDate(item.dateObj || item.date)}`,
       item.description || item.details ? `Details: ${item.description || item.details}` : '',
       item.remarks ? `Remarks: ${item.remarks}` : '',
@@ -199,7 +199,7 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
                 <>
                   <div className="detail-item">
                     <label>For Whom</label>
-                    <span>{item.forWhom || 'Self'}</span>
+                    <span>{item.forWhom ? (item.forWhom.includes('|||') ? item.forWhom.split('|||').join(', ') : item.forWhom) : 'Self'}</span>
                   </div>
                   <div className="detail-item">
                     <label>Category</label>

@@ -267,22 +267,48 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           </div>
         )}
 
-        {/* Date + Amount (Less wider, 20% smaller fonts) */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap', maxWidth: 350, width: '100%', marginBottom: 14 }}>
-          <div className="compact-input-block" style={{ flex: '1 1 140px', minWidth: 0, padding: '4px 8px' }}>
-            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Date</label>
+        {/* Date + Amount (Compact & Balanced Layout) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', maxWidth: 360, width: '100%', marginBottom: 12 }}>
+          <div
+            className="compact-input-block"
+            style={{
+              flex: '1 1 140px',
+              minWidth: 0,
+              padding: '6px 10px',
+              borderRadius: 12,
+              border: '1.5px solid var(--border-color, #e2e8f0)',
+              background: 'var(--bg-card, #ffffff)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+            }}
+          >
+            <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
+              Date
+            </label>
             <input
               type="date"
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
               required
-              style={{ padding: '2px 0', fontSize: 12, fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
+              style={{ padding: '2px 0', fontSize: 12.5, fontWeight: 700, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
             />
           </div>
-          <div className="compact-input-block" style={{ flex: '1 1 160px', minWidth: 0, padding: '4px 8px' }}>
-            <label style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 1, display: 'block', letterSpacing: '0.5px' }}>Amount</label>
+          <div
+            className="compact-input-block"
+            style={{
+              flex: '1 1 160px',
+              minWidth: 0,
+              padding: '6px 10px',
+              borderRadius: 12,
+              border: '1.5px solid var(--border-color, #e2e8f0)',
+              background: 'var(--bg-card, #ffffff)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+            }}
+          >
+            <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
+              Amount
+            </label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 14, fontWeight: 500, marginRight: 3, color: 'var(--text-muted)' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 15, fontWeight: 700, marginRight: 3, color: '#059669' }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -291,7 +317,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '0', fontSize: 19, fontWeight: 800, width: '100%', boxSizing: 'border-box' }}
+                style={{ padding: '0', fontSize: 18, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
               />
             </div>
           </div>
@@ -349,7 +375,20 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           <label className="float-label">Remarks</label>
         </div>
 
-        <button type="submit" className="btn-primary emerald" disabled={loading}>
+        <button
+          type="submit"
+          className="btn-primary emerald"
+          disabled={loading}
+          style={{
+            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+            boxShadow: '0 4px 14px rgba(5, 150, 105, 0.35)',
+            fontWeight: 900,
+            fontSize: 13,
+            padding: '11px 16px',
+            borderRadius: 10,
+            letterSpacing: '0.3px',
+          }}
+        >
           {loading ? (
             isSubmitting ? (
               <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 6 }} /> {editData ? 'Updating...' : 'Saving...'}</>

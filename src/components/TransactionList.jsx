@@ -146,9 +146,10 @@ export default function TransactionList({ items = [], title, onSelect }) {
           const icon = getIcon(item)
           const isLending = item.isLend || item.sheet === 'lending'
           const titleText = isLending ? (item.person || item.label || '') : (item.category || item.details || '')
+          const formattedWhom = item.forWhom ? (item.forWhom.includes('|||') ? item.forWhom.split('|||').join(', ') : item.forWhom) : ''
           const sub = isLending
             ? `${item.label || item.type} — ${item.remarks || ''}`
-            : `${item.forWhom || ''} — ${item.details || ''}`
+            : `${formattedWhom ? formattedWhom + ' — ' : ''}${item.details || ''}`
 
           const amtInfo = getAmountDetails(item)
           const itemKey = item.id || `${item.date}_${item.amount}_${item.category || item.person || ''}`
