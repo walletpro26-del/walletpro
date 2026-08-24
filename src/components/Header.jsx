@@ -269,7 +269,7 @@ export default function Header({
             {/* Fixed-position Dropdown Menu (rendered into document.body via Portal to escape all stacking contexts) */}
             {showMenu && createPortal(
               <>
-                {/* Invisible overlay to close menu on outside click */}
+                {/* Invisible backdrop overlay to close menu on outside click */}
                 <div
                   style={{ position: 'fixed', inset: 0, zIndex: 999998 }}
                   onClick={() => setShowMenu(false)}
@@ -279,47 +279,116 @@ export default function Header({
                   ref={portalMenuRef}
                   style={{
                     position: 'fixed',
-                    top: menuPos.top + 4,
+                    top: menuPos.top + 6,
                     right: Math.max(12, menuPos.right),
-                    width: 180,
+                    width: 220,
                     background: 'var(--bg-card, #ffffff)',
-                    border: '1px solid var(--border-color, #cbd5e1)',
-                    borderRadius: 8,
-                    padding: '4px',
-                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+                    border: '1.5px solid var(--border-color, rgba(99, 102, 241, 0.25))',
+                    borderRadius: 16,
+                    padding: '8px',
+                    boxShadow: '0 20px 50px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.1)',
                     zIndex: 999999,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 1,
+                    gap: 3,
+                    animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)',
                   }}
                 >
-                  {/* User email info */}
+                  {/* User Profile Header Card */}
                   {auth?.email && (
-                    <div style={{ padding: '6px 8px 5px', borderBottom: '1px solid var(--border-color, #e2e8f0)', marginBottom: 2 }}>
-                      <div style={{ fontSize: 8, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', fontWeight: 700, letterSpacing: 0.3 }}>Signed in as</div>
-                      <div style={{ color: 'var(--text-primary, #0f172a)', fontWeight: 700, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-                        {auth.email}
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        background: 'var(--bg-subtle, #f8fafc)',
+                        borderRadius: 12,
+                        border: '1px solid var(--border-color, #e2e8f0)',
+                        marginBottom: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                          color: '#ffffff',
+                          fontWeight: 900,
+                          fontSize: 12,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)',
+                        }}
+                      >
+                        {(auth?.email || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 8.5, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', fontWeight: 800, letterSpacing: 0.5 }}>
+                          Signed in as
+                        </div>
+                        <div
+                          style={{
+                            color: 'var(--text-primary, #0f172a)',
+                            fontWeight: 800,
+                            fontSize: 11,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            marginTop: 1,
+                          }}
+                          title={auth.email}
+                        >
+                          {auth.email}
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {/* Admin Control Panel item */}
-                  {isAdminEmail(auth?.email) && (
+                  {(subscription?.isAdmin || isAdminEmail(auth?.email)) && (
                     <button
                       type="button"
                       onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       onClick={(e) => { e.stopPropagation(); setShowMenu(false); onAdminPanel?.() }}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                        background: 'transparent', border: 'none', color: '#7c3aed', borderRadius: 6,
-                        fontSize: 10, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                        transition: 'background 0.1s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        width: '100%',
+                        padding: '7px 10px',
+                        background: 'rgba(124, 58, 237, 0.08)',
+                        border: '1px solid rgba(124, 58, 237, 0.2)',
+                        color: '#7c3aed',
+                        borderRadius: 10,
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(124, 58, 237, 0.16)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(124, 58, 237, 0.08)'}
                     >
-                      <i className="fas fa-crown" style={{ color: '#d97706', width: 14, textAlign: 'center', fontSize: 10 }} />
-                      Admin Panel
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 6,
+                          background: 'rgba(217, 119, 6, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <i className="fas fa-crown" style={{ color: '#d97706', fontSize: 11 }} />
+                      </div>
+                      <span style={{ flex: 1 }}>Admin Panel</span>
+                      <span style={{ fontSize: 9, background: '#7c3aed', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 900 }}>PRO</span>
                     </button>
                   )}
 
@@ -329,16 +398,39 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenCsvImport?.('expense') }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
-                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '7px 10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary, #0f172a)',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-file-import" style={{ color: '#4f46e5', width: 14, textAlign: 'center', fontSize: 10 }} />
-                    Import ({allowNonCsvImport ? 'CSV/PDF' : 'CSV'})
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: 'rgba(99, 102, 241, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i className="fas fa-file-import" style={{ color: '#4f46e5', fontSize: 11 }} />
+                    </div>
+                    <span style={{ flex: 1 }}>Import ({allowNonCsvImport ? 'CSV/PDF' : 'CSV'})</span>
                   </button>
 
                   {/* App Settings item */}
@@ -347,16 +439,39 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onSettings?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
-                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '7px 10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary, #0f172a)',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-cog" style={{ color: '#64748b', width: 14, textAlign: 'center', fontSize: 10 }} />
-                    Settings
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: 'rgba(100, 116, 139, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i className="fas fa-sliders-h" style={{ color: '#64748b', fontSize: 11 }} />
+                    </div>
+                    <span style={{ flex: 1 }}>Settings</span>
                   </button>
 
                   {/* Rate & Review App item */}
@@ -365,16 +480,39 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onOpenRatingModal?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
-                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '7px 10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary, #0f172a)',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-star" style={{ color: '#d97706', width: 14, textAlign: 'center', fontSize: 10 }} />
-                    Rate &amp; Review
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i className="fas fa-star" style={{ color: '#d97706', fontSize: 11 }} />
+                    </div>
+                    <span style={{ flex: 1 }}>Rate &amp; Review</span>
                   </button>
 
                   {/* Refresh Data item */}
@@ -383,19 +521,42 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onRefresh?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                      background: 'transparent', border: 'none', color: 'var(--text-primary, #0f172a)', borderRadius: 6,
-                      fontSize: 10, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '7px 10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary, #0f172a)',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-subtle, #f1f5f9)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <i className="fas fa-sync-alt" style={{ color: '#059669', width: 14, textAlign: 'center', fontSize: 10 }} />
-                    Refresh
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i className="fas fa-sync-alt" style={{ color: '#059669', fontSize: 11 }} />
+                    </div>
+                    <span style={{ flex: 1 }}>Refresh</span>
                   </button>
 
-                  <div style={{ height: 1, background: 'var(--border-color, #e2e8f0)', margin: '2px 2px' }} />
+                  <div style={{ height: 1, background: 'var(--border-color, #e2e8f0)', margin: '3px 4px' }} />
 
                   {/* Logout item */}
                   <button
@@ -403,16 +564,39 @@ export default function Header({
                     onMouseDown={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onLogout?.() }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '5px 8px',
-                      background: 'transparent', border: 'none', color: '#dc2626',
-                      borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '7px 10px',
+                      background: 'rgba(239, 68, 68, 0.06)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      color: '#dc2626',
+                      borderRadius: 10,
+                      fontSize: 11.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)'}
                   >
-                    <i className="fas fa-power-off" style={{ color: '#ef4444', width: 14, textAlign: 'center', fontSize: 10 }} />
-                    Log Out
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i className="fas fa-power-off" style={{ color: '#ef4444', fontSize: 11 }} />
+                    </div>
+                    <span style={{ flex: 1 }}>Log Out</span>
                   </button>
                 </div>
               </>,
