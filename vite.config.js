@@ -15,7 +15,7 @@ export default defineConfig({
         manualChunks: {
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           html2canvas: ['html2canvas'],
-          dompurify: ['dompurify']
+          pdf: ['jspdf', 'jspdf-autotable']
         }
       }
     }

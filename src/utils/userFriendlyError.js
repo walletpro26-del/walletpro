@@ -57,3 +57,7 @@ export function formatUserFriendlyError(errOrMsg, defaultUserMsg = 'Something we
   // 7. General fallback - polite and clean
   return defaultUserMsg || 'Something went wrong while processing your request. Please try again.'
 }
+
+// Alias export for standard rule compliance
+export const getUserFriendlyError = formatUserFriendlyError
+

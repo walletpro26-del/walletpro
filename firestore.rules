@@ -28,6 +28,15 @@ service cloud.firestore {
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
       allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
       allow delete: if request.auth != null && (isOwner() || isAdmin());
+
+      // Attachment chunks subcollection
+      match /attachmentChunks/{chunkId} {
+        allow read, write: if request.auth != null && (
+          get(/databases/$(database)/documents/expenses/$(docId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/expenses/$(docId)).data.uid == request.auth.uid ||
+          isAdmin()
+        );
+      }
     }
 
     // ── Lending ──
@@ -36,6 +45,15 @@ service cloud.firestore {
       allow create: if request.auth != null && (isNewOwner() || isAdmin());
       allow update: if request.auth != null && ((isOwner() && isNewOwner()) || isAdmin());
       allow delete: if request.auth != null && (isOwner() || isAdmin());
+
+      // Attachment chunks subcollection
+      match /attachmentChunks/{chunkId} {
+        allow read, write: if request.auth != null && (
+          get(/databases/$(database)/documents/lending/$(docId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/lending/$(docId)).data.uid == request.auth.uid ||
+          isAdmin()
+        );
+      }
     }
 
     // ── Bank Transactions ──
@@ -112,14 +130,14 @@ service cloud.firestore {
     // ── App Reviews & Reviews (admin reads all, users write/update own) ──
     match /appReviews/{docId} {
       allow read: if request.auth != null || isAdmin();
-      allow create: if request.auth != null && (isNewOwner() || isAdmin() || request.auth.uid != null);
+      allow create: if request.auth != null && (isNewOwner() || isAdmin());
       allow update: if request.auth != null && (isOwner() || isNewOwner() || isAdmin());
       allow delete: if request.auth != null && (isOwner() || isAdmin());
     }
 
     match /reviews/{docId} {
       allow read: if request.auth != null || isAdmin();
-      allow create: if request.auth != null && (isNewOwner() || isAdmin() || request.auth.uid != null);
+      allow create: if request.auth != null && (isNewOwner() || isAdmin());
       allow update: if request.auth != null && (isOwner() || isNewOwner() || isAdmin());
       allow delete: if request.auth != null && (isOwner() || isAdmin());
     }

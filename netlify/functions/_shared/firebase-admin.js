@@ -32,8 +32,11 @@ export async function verifyAuthToken(event) {
   }
   const token = authHeader.split('Bearer ')[1].trim()
   if (!adminAuth) {
-    // Development fallback if service account is not yet configured in Netlify env
-    return { uid: 'dev-user-id', email: 'walletpro26@gmail.com' }
+    if (process.env.NODE_ENV === 'production' || process.env.NETLIFY === 'true') {
+      throw new Error('Authentication service unavailable. Firebase admin credentials not initialized.')
+    }
+    // Local development fallback only
+    return { uid: 'dev-user-id', email: 'dev-user@example.com' }
   }
   const decodedToken = await adminAuth.verifyIdToken(token)
   return decodedToken

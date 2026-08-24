@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { signInWithGoogle } from '../api/auth'
 import { listenAppConfig } from '../api/appConfig'
 import WalletVibeLogo from './WalletVibeLogo'
-import LegalModal from './LegalModal'
-import PreLoginFeaturesModal from './PreLoginFeaturesModal'
+
+const LegalModal = lazy(() => import('./LegalModal'))
+const PreLoginFeaturesModal = lazy(() => import('./PreLoginFeaturesModal'))
+
 
 export default function LoginScreen({ registrationError = '', appConfig: initialAppConfig = null }) {
   const [loading, setLoading] = useState(false)
@@ -82,10 +84,13 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
 
       {/* Glassmorphic card */}
       <div className="login-card">
-        {/* Logo with glow */}
+        {/* Logo with spinning orbital glow */}
         <div className="login-logo-area">
+          <div className="splash-spinner-ring" />
+          <div className="splash-spinner-ring-reverse" />
+          <div className="splash-glow-pulse" />
           <div className="login-logo-glow" />
-          <WalletVibeLogo size={68} variant="icon" animate={true} className="login-logo-svg" />
+          <WalletVibeLogo size={68} variant="icon" animate={false} className="login-logo-svg" />
         </div>
 
         {/* Brand name */}
@@ -268,20 +273,21 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
         </div>
       </footer>
 
-      {/* Legal Modal */}
-      {legalModalTab && (
-        <LegalModal
-          initialTab={legalModalTab}
-          onClose={closeLegalModal}
-        />
-      )}
+      {/* Legal & Pre-Login Modals */}
+      <Suspense fallback={null}>
+        {legalModalTab && (
+          <LegalModal
+            initialTab={legalModalTab}
+            onClose={closeLegalModal}
+          />
+        )}
 
-      {/* Pre-Login Features Modal */}
-      {showFeaturesModal && (
-        <PreLoginFeaturesModal
-          onClose={() => setShowFeaturesModal(false)}
-        />
-      )}
+        {showFeaturesModal && (
+          <PreLoginFeaturesModal
+            onClose={() => setShowFeaturesModal(false)}
+          />
+        )}
+      </Suspense>
     </div>
   )
 }
