@@ -445,32 +445,36 @@ export default function AdminPanel({ auth, onClose }) {
       <div
         className="modal-container custom-scrollbar"
         style={{
-          maxWidth: 520,
+          maxWidth: 540,
           width: '95%',
           maxHeight: '94dvh',
           display: 'flex',
           flexDirection: 'column',
           padding: 0,
-          borderRadius: 14,
+          borderRadius: 18,
           overflowY: 'auto',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          background: 'var(--bg-card, #ffffff)',
         }}
       >
+        {/* ── Luxury Header ── */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
+            background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #312e81 100%)',
             color: '#fff',
-            padding: '8px 12px 6px',
+            padding: '12px 14px 10px',
             position: 'relative',
             flexShrink: 0,
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           }}
         >
           <button
             className="modal-close"
             style={{
-              position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.15)',
-              color: '#fff', width: 24, height: 24, borderRadius: '50%', border: 'none',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
+              position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.12)',
+              color: '#fff', width: 28, height: 28, borderRadius: '50%', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+              backdropFilter: 'blur(8px)', transition: 'all 0.2s ease',
             }}
             onClick={onClose}
             aria-label="Close"
@@ -478,77 +482,99 @@ export default function AdminPanel({ auth, onClose }) {
             <i className="fas fa-times" />
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 32 }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 36, marginBottom: 10 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 10,
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(99, 102, 241, 0.35))',
+              border: '1px solid rgba(234, 179, 8, 0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+              boxShadow: '0 0 16px rgba(234, 179, 8, 0.3)',
+            }}>
               👑
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>Admin Control Panel</h3>
-              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc' }}>
-                LoggedIn: <strong style={{ color: '#fff' }}>{auth?.email}</strong>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, letterSpacing: '-0.3px', color: '#ffffff' }}>Admin Control Panel</h3>
+                <span style={{ fontSize: 8, fontWeight: 800, background: 'rgba(16, 185, 129, 0.2)', color: '#6ee7b7', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '1px 6px', borderRadius: 99, textTransform: 'uppercase' }}>
+                  Live Admin
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: 10, color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span>Account:</span> <strong style={{ color: '#ffffff', fontWeight: 700 }}>{auth?.email}</strong>
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 3, marginTop: 6, background: 'rgba(0,0,0,0.3)', padding: 2, borderRadius: 6 }}>
+
+          {/* Segmented Tab Navigation */}
+          <div style={{
+            display: 'flex', gap: 4, background: 'rgba(0,0,0,0.35)', padding: 3, borderRadius: 10,
+            border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)',
+          }}>
             <button
               type="button"
               onClick={() => { setActiveTab('users'); setFilterTab('all'); }}
               style={{
-                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
-                background: activeTab === 'users' ? '#ffffff' : 'transparent',
-                color: activeTab === 'users' ? '#312e81' : '#cbd5e1',
-                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                transition: 'all 0.15s',
+                flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
+                background: activeTab === 'users' ? 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' : 'transparent',
+                color: activeTab === 'users' ? '#ffffff' : '#94a3b8',
+                fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                boxShadow: activeTab === 'users' ? '0 2px 8px rgba(79, 70, 229, 0.4)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              <i className="fas fa-users" /> Accounts ({uniqueSubscriptions.length})
+              <i className="fas fa-users" style={{ fontSize: 11 }} />
+              <span>Accounts ({uniqueSubscriptions.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
               style={{
-                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
-                background: activeTab === 'settings' ? '#ffffff' : 'transparent',
-                color: activeTab === 'settings' ? '#312e81' : '#cbd5e1',
-                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                transition: 'all 0.15s',
+                flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
+                background: activeTab === 'settings' ? 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' : 'transparent',
+                color: activeTab === 'settings' ? '#ffffff' : '#94a3b8',
+                fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                boxShadow: activeTab === 'settings' ? '0 2px 8px rgba(79, 70, 229, 0.4)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              <i className="fas fa-cog" /> Settings
+              <i className="fas fa-cog" style={{ fontSize: 11 }} />
+              <span>Settings</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('storage')}
               style={{
-                flex: 1, padding: '4px 6px', borderRadius: 4, border: 'none',
-                background: activeTab === 'storage' ? '#ffffff' : 'transparent',
-                color: activeTab === 'storage' ? '#312e81' : '#cbd5e1',
-                fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                transition: 'all 0.15s',
+                flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
+                background: activeTab === 'storage' ? 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' : 'transparent',
+                color: activeTab === 'storage' ? '#ffffff' : '#94a3b8',
+                fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                boxShadow: activeTab === 'storage' ? '0 2px 8px rgba(79, 70, 229, 0.4)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              <i className="fas fa-database" /> 🔥 Storage Quota
+              <i className="fas fa-database" style={{ fontSize: 11 }} />
+              <span>🔥 Storage Quota</span>
             </button>
           </div>
         </div>
 
         {/* ── Body ── */}
-        <div style={{ padding: '12px 14px', flex: 1 }}>
+        <div style={{ padding: '14px', flex: 1, background: 'var(--bg-card, #ffffff)' }}>
 
           {/* Toast Notification Banner */}
           {toast && (
-            <div style={{ padding: '8px 12px', borderRadius: 8, background: '#10b981', color: '#fff', fontSize: 11, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
+            <div style={{ padding: '8px 12px', borderRadius: 8, background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 11, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(16,185,129,0.3)' }}>
               <i className="fas fa-check-circle" /> {toast}
             </div>
           )}
 
           {/* Error Banner */}
           {error && (
-            <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 11, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 11, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
               <i className="fas fa-exclamation-triangle" /> {error}
-              <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12 }}>×</button>
+              <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 14 }}>×</button>
             </div>
           )}
 
@@ -558,24 +584,25 @@ export default function AdminPanel({ auth, onClose }) {
           {activeTab === 'users' && (
             <div>
               {/* Quick Status Stats Bar (Clickable Hyperlink Filters) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5, marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 12 }}>
                 {/* 1. All Accounts Stat Card */}
                 <div
                   onClick={() => setFilterTab('all')}
                   style={{
-                    background: filterTab === 'all' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.06)',
-                    border: `1.5px solid ${filterTab === 'all' ? '#4f46e5' : '#818cf8'}`,
-                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
-                    boxShadow: filterTab === 'all' ? '0 0 0 2px rgba(99,102,241,0.3)' : 'none',
+                    background: filterTab === 'all' ? 'linear-gradient(135deg, rgba(99,102,241,0.22), rgba(129,140,248,0.15))' : 'rgba(99,102,241,0.06)',
+                    border: `1.5px solid ${filterTab === 'all' ? '#4f46e5' : 'rgba(99,102,241,0.3)'}`,
+                    borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'all' ? '0 0 0 2px rgba(99,102,241,0.35), 0 4px 10px rgba(99,102,241,0.2)' : 'none',
+                    transform: filterTab === 'all' ? 'translateY(-1px)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                   title="Show All Registered Accounts"
                 >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#4f46e5' }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#4f46e5', letterSpacing: '-0.5px' }}>
                     {uniqueSubscriptions.length}
                   </div>
-                  <div style={{ fontSize: 8, color: '#4338ca', fontWeight: 800 }}>
-                    👥 All ({uniqueSubscriptions.length})
+                  <div style={{ fontSize: 8.5, color: '#4338ca', fontWeight: 800, textTransform: 'uppercase', marginTop: 1 }}>
+                    All ({uniqueSubscriptions.length})
                   </div>
                 </div>
 
@@ -583,19 +610,20 @@ export default function AdminPanel({ auth, onClose }) {
                 <div
                   onClick={() => setFilterTab(filterTab === 'regular' ? 'all' : 'regular')}
                   style={{
-                    background: filterTab === 'regular' ? 'rgba(16,185,129,0.18)' : (regularActiveCount >= limitNum ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'),
-                    border: `1.5px solid ${filterTab === 'regular' ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : '#10b981')}`,
-                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
-                    boxShadow: filterTab === 'regular' ? '0 0 0 2px rgba(16,185,129,0.3)' : 'none',
+                    background: filterTab === 'regular' ? 'linear-gradient(135deg, rgba(16,185,129,0.22), rgba(52,211,153,0.15))' : (regularActiveCount >= limitNum ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.06)'),
+                    border: `1.5px solid ${filterTab === 'regular' ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : 'rgba(16,185,129,0.35)')}`,
+                    borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'regular' ? '0 0 0 2px rgba(16,185,129,0.35), 0 4px 10px rgba(16,185,129,0.2)' : 'none',
+                    transform: filterTab === 'regular' ? 'translateY(-1px)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                   title="Click to filter by Regular Active Subscribers"
                 >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: regularActiveCount >= limitNum ? '#ef4444' : '#059669' }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: regularActiveCount >= limitNum ? '#ef4444' : '#059669', letterSpacing: '-0.5px' }}>
                     {regularActiveCount} / {limitNum}
                   </div>
-                  <div style={{ fontSize: 8, color: regularActiveCount >= limitNum ? '#b91c1c' : '#047857', fontWeight: 800 }}>
-                    {regularActiveCount >= limitNum ? '🔴 Limit' : '🟢 Regular'}
+                  <div style={{ fontSize: 8.5, color: regularActiveCount >= limitNum ? '#b91c1c' : '#047857', fontWeight: 800, textTransform: 'uppercase', marginTop: 1 }}>
+                    {regularActiveCount >= limitNum ? '🔴 Full' : '🟢 Regular'}
                   </div>
                 </div>
 
@@ -603,59 +631,62 @@ export default function AdminPanel({ auth, onClose }) {
                 <div
                   onClick={() => setFilterTab(filterTab === 'admin' ? 'all' : 'admin')}
                   style={{
-                    background: filterTab === 'admin' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)',
-                    border: `1.5px solid ${filterTab === 'admin' ? '#4338ca' : '#6366f1'}`,
-                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
-                    boxShadow: filterTab === 'admin' ? '0 0 0 2px rgba(99,102,241,0.3)' : 'none',
+                    background: filterTab === 'admin' ? 'linear-gradient(135deg, rgba(99,102,241,0.22), rgba(168,85,247,0.15))' : 'rgba(99,102,241,0.06)',
+                    border: `1.5px solid ${filterTab === 'admin' ? '#4338ca' : 'rgba(99,102,241,0.3)'}`,
+                    borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'admin' ? '0 0 0 2px rgba(99,102,241,0.35), 0 4px 10px rgba(99,102,241,0.2)' : 'none',
+                    transform: filterTab === 'admin' ? 'translateY(-1px)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                   title="Click to filter by Admin Granted (Exempt) accounts"
                 >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#4f46e5' }}>{adminActivatedCount}</div>
-                  <div style={{ fontSize: 8, color: '#4338ca', fontWeight: 800 }}>👑 Admin</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#4f46e5', letterSpacing: '-0.5px' }}>{adminActivatedCount}</div>
+                  <div style={{ fontSize: 8.5, color: '#4338ca', fontWeight: 800, textTransform: 'uppercase', marginTop: 1 }}>👑 Admin</div>
                 </div>
 
                 {/* 4. Pending Verification Stat Card */}
                 <div
                   onClick={() => setFilterTab(filterTab === 'pending' ? 'all' : 'pending')}
                   style={{
-                    background: filterTab === 'pending' ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.08)',
-                    border: `1.5px solid ${filterTab === 'pending' ? '#b45309' : '#f59e0b'}`,
-                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
-                    boxShadow: filterTab === 'pending' ? '0 0 0 2px rgba(245,158,11,0.3)' : 'none',
+                    background: filterTab === 'pending' ? 'linear-gradient(135deg, rgba(245,158,11,0.22), rgba(251,191,36,0.15))' : 'rgba(245,158,11,0.06)',
+                    border: `1.5px solid ${filterTab === 'pending' ? '#b45309' : 'rgba(245,158,11,0.35)'}`,
+                    borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'pending' ? '0 0 0 2px rgba(245,158,11,0.35), 0 4px 10px rgba(245,158,11,0.2)' : 'none',
+                    transform: filterTab === 'pending' ? 'translateY(-1px)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                   title="Click to filter by Pending Verification accounts"
                 >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#d97706' }}>{pendingSubsCount}</div>
-                  <div style={{ fontSize: 8, color: '#b45309', fontWeight: 800 }}>⏳ Pending</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#d97706', letterSpacing: '-0.5px' }}>{pendingSubsCount}</div>
+                  <div style={{ fontSize: 8.5, color: '#b45309', fontWeight: 800, textTransform: 'uppercase', marginTop: 1 }}>⏳ Pending</div>
                 </div>
 
                 {/* 5. Inactive Stat Card */}
                 <div
                   onClick={() => setFilterTab(filterTab === 'inactive' ? 'all' : 'inactive')}
                   style={{
-                    background: filterTab === 'inactive' ? 'rgba(100,116,139,0.18)' : 'var(--bg-subtle, #f8fafc)',
+                    background: filterTab === 'inactive' ? 'linear-gradient(135deg, rgba(100,116,139,0.22), rgba(148,163,184,0.15))' : 'var(--bg-subtle, #f8fafc)',
                     border: `1.5px solid ${filterTab === 'inactive' ? '#334155' : 'var(--border-color, #e2e8f0)'}`,
-                    borderRadius: 8, padding: '6px 2px', textAlign: 'center', cursor: 'pointer',
-                    boxShadow: filterTab === 'inactive' ? '0 0 0 2px rgba(100,116,139,0.3)' : 'none',
+                    borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: 'pointer',
+                    boxShadow: filterTab === 'inactive' ? '0 0 0 2px rgba(100,116,139,0.35), 0 4px 10px rgba(100,116,139,0.15)' : 'none',
+                    transform: filterTab === 'inactive' ? 'translateY(-1px)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                   title="Click to filter by Inactive / Registered accounts"
                 >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#64748b' }}>{revokedSubsCount}</div>
-                  <div style={{ fontSize: 8, color: '#64748b', fontWeight: 800 }}>🔴 Inactive</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#64748b', letterSpacing: '-0.5px' }}>{revokedSubsCount}</div>
+                  <div style={{ fontSize: 8.5, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', marginTop: 1 }}>🔴 Inactive</div>
                 </div>
               </div>
 
               {/* Active Filter Clear Chip */}
               {filterTab !== 'all' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 10, fontWeight: 700, color: '#6366f1' }}>
-                  <span>Filtered by: <strong style={{ textTransform: 'uppercase' }}>{filterTab} accounts ({filteredSubscriptions.length})</strong></span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '4px 10px', background: 'rgba(99,102,241,0.08)', borderRadius: 8, fontSize: 10.5, fontWeight: 700, color: '#4f46e5' }}>
+                  <span>Showing: <strong style={{ textTransform: 'uppercase' }}>{filterTab} Accounts ({filteredSubscriptions.length})</strong></span>
                   <button
                     type="button"
                     onClick={() => setFilterTab('all')}
-                    style={{ background: 'rgba(99,102,241,0.1)', border: 'none', color: '#4f46e5', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 9, fontWeight: 800 }}
+                    style={{ background: '#4f46e5', border: 'none', color: '#fff', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 9.5, fontWeight: 800 }}
                   >
                     Clear Filter ×
                   </button>
@@ -664,10 +695,10 @@ export default function AdminPanel({ auth, onClose }) {
 
               {/* Collapsible Quick Manual Access Tool */}
               {showQuickActivate && (
-                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid #6366f1', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid #6366f1', borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: '0 4px 14px rgba(99, 102, 241, 0.15)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span><i className="fas fa-user-plus" /> Activate / Deactivate Any Account</span>
-                    <button type="button" onClick={() => setShowQuickActivate(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>×</button>
+                    <button type="button" onClick={() => setShowQuickActivate(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14 }}>×</button>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <input
@@ -676,15 +707,15 @@ export default function AdminPanel({ auth, onClose }) {
                       value={manualUser}
                       onChange={(e) => setManualUser(e.target.value)}
                       style={{
-                        flex: 2, minWidth: 160, padding: '6px 9px', borderRadius: 6,
-                        border: '1px solid var(--border-color, #e2e8f0)', fontSize: 11, fontWeight: 600,
+                        flex: 2, minWidth: 160, padding: '7px 10px', borderRadius: 8,
+                        border: '1px solid var(--border-color, #cbd5e1)', fontSize: 11, fontWeight: 600,
                         background: '#fff', color: '#1e293b',
                       }}
                     />
                     <select
                       value={manualPlan}
                       onChange={(e) => setManualPlan(e.target.value)}
-                      style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10, fontWeight: 700, background: '#fff', color: '#1e293b' }}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 10.5, fontWeight: 700, background: '#fff', color: '#1e293b' }}
                     >
                       <option value="monthly">Pro 30 Days (1 Month)</option>
                       <option value="yearly">Pro 365 Days (1 Year)</option>
@@ -700,7 +731,7 @@ export default function AdminPanel({ auth, onClose }) {
                       type="button"
                       onClick={() => handleManualSet('active')}
                       disabled={manualSubmitting || !manualUser.trim()}
-                      style={{ padding: '6px 10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ padding: '7px 12px', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       ⚡ Activate
                     </button>
@@ -708,7 +739,7 @@ export default function AdminPanel({ auth, onClose }) {
                       type="button"
                       onClick={() => handleManualSet('revoked')}
                       disabled={manualSubmitting || !manualUser.trim()}
-                      style={{ padding: '6px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ padding: '7px 12px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       ⛔ Deactivate
                     </button>
@@ -716,69 +747,105 @@ export default function AdminPanel({ auth, onClose }) {
                 </div>
               )}
 
-              {/* Registered Accounts Filter Input */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ position: 'relative', flex: 1, marginRight: 8 }}>
-                  <i className="fas fa-search" style={{ position: 'absolute', left: 9, top: 8, fontSize: 10, color: '#94a3b8' }} />
-                  <input
-                    type="text"
-                    placeholder="Search accounts by email or UID..."
-                    value={searchFilter}
-                    onChange={(e) => setSearchFilter(e.target.value)}
-                    style={{
-                      width: '100%', padding: '5px 8px 5px 26px', borderRadius: 6,
-                      border: '1px solid var(--border-color, #e2e8f0)', fontSize: 11,
-                      background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+              {/* Registered Accounts Search & Action Bar */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#94a3b8' }} />
+                    <input
+                      type="text"
+                      placeholder="Search accounts by email or UID..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      style={{
+                        width: '100%', padding: '7px 10px 7px 30px', borderRadius: 8,
+                        border: '1.5px solid var(--border-color, #e2e8f0)', fontSize: 11.5,
+                        background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)',
+                        boxSizing: 'border-box', outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                    />
+                    {searchFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchFilter('')}
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    style={{
+                      background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)',
+                      color: '#4f46e5', fontSize: 10.5, fontWeight: 800, borderRadius: 8,
+                      padding: '7px 10px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
+                    title="Refresh accounts from Firestore"
+                  >
+                    <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} /> Refresh
+                  </button>
+                </div>
+
+                {/* Secondary Action Toolbar */}
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }} className="no-scrollbar">
                   <button
                     type="button"
                     onClick={() => setShowQuickActivate(!showQuickActivate)}
-                    style={{ background: showQuickActivate ? '#6366f1' : 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: showQuickActivate ? '#fff' : '#6366f1', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    title="Toggle manual account activation form"
+                    style={{
+                      background: showQuickActivate ? '#4f46e5' : 'var(--bg-subtle, #f8fafc)',
+                      border: '1px solid ' + (showQuickActivate ? '#4f46e5' : 'var(--border-color, #e2e8f0)'),
+                      color: showQuickActivate ? '#fff' : 'var(--text-primary, #1e293b)',
+                      fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '4px 10px',
+                      cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
                   >
-                    <i className="fas fa-user-plus" style={{ marginRight: 4 }} />
-                    {showQuickActivate ? 'Close Form' : 'Activate User'}
+                    <i className="fas fa-user-plus" style={{ color: showQuickActivate ? '#fff' : '#6366f1' }} />
+                    {showQuickActivate ? 'Close Form' : '+ Activate User'}
                   </button>
+
                   <button
                     type="button"
                     onClick={handlePurgeDuplicates}
                     disabled={purging}
-                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#dc2626', fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '4px 10px',
+                      cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
                     title="Scan Firestore and clean up duplicate documents for the same email"
                   >
-                    <i className={`fas ${purging ? 'fa-spinner fa-spin' : 'fa-broom'}`} style={{ marginRight: 4 }} />
+                    <i className={`fas ${purging ? 'fa-spinner fa-spin' : 'fa-broom'}`} />
                     {purging ? 'Purging...' : 'Purge Duplicates'}
                   </button>
+
                   <button
                     type="button"
                     onClick={() => setShowSyncPanel(!showSyncPanel)}
-                    style={{ background: showSyncPanel ? '#6366f1' : 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: showSyncPanel ? '#fff' : '#6366f1', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    style={{
+                      background: showSyncPanel ? '#4f46e5' : 'var(--bg-subtle, #f8fafc)',
+                      border: '1px solid ' + (showSyncPanel ? '#4f46e5' : 'var(--border-color, #e2e8f0)'),
+                      color: showSyncPanel ? '#fff' : 'var(--text-primary, #1e293b)',
+                      fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '4px 10px',
+                      cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4,
+                    }}
                     title="Import Firebase Auth users into Firestore (paste emails from Firebase Console)"
                   >
-                    <i className={`fas ${showSyncPanel ? 'fa-chevron-up' : 'fa-cloud-download-alt'}`} style={{ marginRight: 4 }} />
+                    <i className={`fas ${showSyncPanel ? 'fa-chevron-up' : 'fa-cloud-download-alt'}`} style={{ color: showSyncPanel ? '#fff' : '#6366f1' }} />
                     {showSyncPanel ? 'Close Sync' : 'Sync Users'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRefresh}
-                    style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    <i className={`fas fa-sync-alt ${refreshing ? 'fa-spin' : ''}`} style={{ marginRight: 4 }} /> Refresh
                   </button>
                 </div>
               </div>
 
               {/* Sync Firebase Auth Users Panel */}
               {showSyncPanel && (
-                <div style={{ padding: 10, background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
+                <div style={{ padding: 12, background: 'rgba(99,102,241,0.04)', border: '1.5px solid rgba(99,102,241,0.25)', borderRadius: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 6 }}>
                     🔄 Import Firebase Auth Users
                   </div>
-                  <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+                  <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 8, lineHeight: 1.4 }}>
                     Paste emails from <strong>Firebase Console → Authentication</strong> (one per line, comma, or semicolon separated).
                     Users already in Firestore will be skipped. New ones appear under <strong>⏳ Pending</strong>.
                   </div>
@@ -787,21 +854,21 @@ export default function AdminPanel({ auth, onClose }) {
                     onChange={(e) => setSyncEmails(e.target.value)}
                     placeholder={'daraehsan199@gmail.com\nsameerqasmi5@gmail.com\njawharwani09@gmail.com\n...paste all emails here'}
                     style={{
-                      width: '100%', minHeight: 80, padding: 8, borderRadius: 6,
+                      width: '100%', minHeight: 80, padding: 8, borderRadius: 8,
                       border: '1px solid var(--border-color, #e2e8f0)', fontSize: 10,
                       fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box',
                       background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)',
                     }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                    <span style={{ fontSize: 9, color: '#94a3b8' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                    <span style={{ fontSize: 9.5, color: '#94a3b8', fontWeight: 600 }}>
                       {syncEmails.split(/[\n,;]+/).filter((e) => e.trim() && e.includes('@')).length} valid email(s) detected
                     </span>
                     <button
                       type="button"
                       onClick={handleSyncUsers}
                       disabled={syncing}
-                      style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+                      style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}
                     >
                       <i className={`fas ${syncing ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`} style={{ marginRight: 4 }} />
                       {syncing ? 'Syncing...' : 'Sync to Firestore'}
@@ -809,13 +876,15 @@ export default function AdminPanel({ auth, onClose }) {
                   </div>
                 </div>
               )}
+
               {/* Registered Accounts Cards List */}
               {filteredSubscriptions.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 8, fontSize: 11, color: '#64748b' }}>
-                  No registered account records found matching query.
+                <div style={{ padding: 24, textAlign: 'center', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 12, border: '1px dashed var(--border-color, #cbd5e1)', fontSize: 11.5, color: '#64748b' }}>
+                  <i className="fas fa-search" style={{ fontSize: 20, color: '#cbd5e1', display: 'block', marginBottom: 8 }} />
+                  No registered account records found matching your filter query.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: showQuickActivate || showSyncPanel ? 290 : 440, overflowY: 'auto' }} className="custom-scrollbar">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: showQuickActivate || showSyncPanel ? 290 : 440, overflowY: 'auto' }} className="custom-scrollbar">
                   {filteredSubscriptions.map((sub, idx) => {
                     const expiresDate = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : (sub.expiresAt ? new Date(sub.expiresAt) : null)
 
@@ -830,69 +899,84 @@ export default function AdminPanel({ auth, onClose }) {
                       <div
                         key={sub.id || sub.userId}
                         style={{
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          border: isActive ? (isSuperAdmin ? '1px solid #a5b4fc' : '1px solid #a7f3d0') : isPending ? '1.5px solid #f59e0b' : '1px solid var(--border-color, #e2e8f0)',
-                          background: isActive ? (isSuperAdmin ? 'rgba(99,102,241,0.04)' : 'rgba(16,185,129,0.03)') : isPending ? 'rgba(245,158,11,0.05)' : 'var(--bg-subtle, #f8fafc)',
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: isActive
+                            ? (isSuperAdmin ? '1.5px solid #818cf8' : '1.5px solid #10b981')
+                            : isPending
+                              ? '1.5px solid #f59e0b'
+                              : '1px solid var(--border-color, #e2e8f0)',
+                          background: isActive
+                            ? (isSuperAdmin ? 'rgba(99,102,241,0.04)' : 'rgba(16,185,129,0.03)')
+                            : isPending
+                              ? 'rgba(245,158,11,0.04)'
+                              : 'var(--bg-subtle, #f8fafc)',
                           fontSize: 11,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 9.5, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 900, color: '#4f46e5', background: 'rgba(99,102,241,0.12)', padding: '2px 6px', borderRadius: 6, flexShrink: 0 }}>
                                 Sl. {idx + 1}
                               </span>
-                              <strong style={{ color: 'var(--text-primary, #1e293b)', fontSize: 11 }}>{sub.email || sub.userId}</strong>
+                              <strong style={{ color: 'var(--text-primary, #1e293b)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {sub.email || sub.userId}
+                              </strong>
                               {isActive && isAdminEmail(sub.email) && (
-                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(99,102,241,0.2)', color: '#4338ca', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: 8, fontWeight: 900, background: 'rgba(99,102,241,0.2)', color: '#4338ca', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
                                   👑 Super Admin
                                 </span>
                               )}
                               {isActive && isAdminActivatedUser && (
-                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(16,185,129,0.15)', color: '#047857', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: 8, fontWeight: 900, background: 'rgba(16,185,129,0.18)', color: '#047857', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
                                   ⚡ Admin Activated
                                 </span>
                               )}
                               {isActive && !isSuperAdmin && !isAdminActivatedUser && (
-                                <span style={{ fontSize: 7.5, fontWeight: 900, background: sub.plan === 'trial' ? 'rgba(16,185,129,0.15)' : 'rgba(14,165,233,0.15)', color: sub.plan === 'trial' ? '#047857' : '#0284c7', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: 8, fontWeight: 900, background: sub.plan === 'trial' ? 'rgba(16,185,129,0.18)' : 'rgba(14,165,233,0.18)', color: sub.plan === 'trial' ? '#047857' : '#0284c7', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
                                   {sub.plan === 'trial' ? '🎁 Free Trial' : '💳 Paid Sub'}
                                 </span>
                               )}
                               {(!isActive && (sub.hadPaidSubscription || sub.paidAmount || sub.paymentId)) && (
-                                <span style={{ fontSize: 7.5, fontWeight: 900, background: 'rgba(16,185,129,0.15)', color: '#047857', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: 8, fontWeight: 900, background: 'rgba(16,185,129,0.18)', color: '#047857', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
                                   💳 Paid Record (₹{sub.paidAmount || 150})
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
-                              Plan: <strong style={{ color: '#6366f1' }}>{(sub.plan || 'NONE').toUpperCase()}</strong>
+                            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>Plan: <strong style={{ color: '#6366f1', textTransform: 'uppercase' }}>{sub.plan || 'NONE'}</strong></span>
                               {expiresDate && (
-                                <> &bull; Expires: <span>{expiresDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
+                                <span>&bull; Expires: <strong style={{ color: 'var(--text-primary, #1e293b)' }}>{expiresDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
                               )}
                             </div>
                           </div>
 
                           <span
                             style={{
-                              fontSize: 8, fontWeight: 900, padding: '2px 6px', borderRadius: 99, textTransform: 'uppercase', flexShrink: 0,
+                              fontSize: 8.5, fontWeight: 900, padding: '3px 8px', borderRadius: 99, textTransform: 'uppercase', flexShrink: 0,
                               background: isActive ? 'rgba(16,185,129,0.15)' : isPending ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.12)',
                               color: isActive ? '#059669' : isPending ? '#d97706' : '#ef4444',
+                              border: isActive ? '1px solid rgba(16,185,129,0.3)' : isPending ? '1px solid rgba(245,158,11,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
                             }}
                           >
-                            {isActive ? '🟢 Active' : isPending ? (sub.status === 'registered' ? '📋 Registered' : '⏳ Pending') : '🔴 Inactive'}
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isActive ? '#10b981' : isPending ? '#f59e0b' : '#ef4444' }} />
+                            {isActive ? 'Active' : isPending ? (sub.status === 'registered' ? 'Registered' : 'Pending') : 'Inactive'}
                           </span>
                         </div>
 
-                        {/* Inline Actions */}
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', gap: 4 }}>
+                        {/* Action Buttons Row */}
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                             {!isActive ? (
                               <>
                                 <button
                                   type="button"
                                   onClick={() => handleManualSet('active', sub.email || sub.userId, 'yearly')}
-                                  style={{ padding: '3px 8px', background: '#059669', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  style={{ padding: '4px 9px', background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer', boxShadow: '0 2px 6px rgba(16,185,129,0.25)' }}
                                   title="Activate 1-Year Pro Subscription"
                                 >
                                   ⚡ Activate 1Yr
@@ -900,7 +984,7 @@ export default function AdminPanel({ auth, onClose }) {
                                 <button
                                   type="button"
                                   onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
-                                  style={{ padding: '3px 8px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  style={{ padding: '4px 9px', background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
                                   title="Activate 30-Day Pro Subscription"
                                 >
                                   ⚡ Activate 30D
@@ -918,10 +1002,10 @@ export default function AdminPanel({ auth, onClose }) {
                                     )
                                     window.open(targetPhone ? `https://wa.me/${targetPhone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank', 'noopener,noreferrer')
                                   }}
-                                  style={{ padding: '3px 8px', background: 'rgba(37, 211, 102, 0.15)', color: '#15803d', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  style={{ padding: '4px 9px', background: 'rgba(37, 211, 102, 0.15)', color: '#15803d', border: '1px solid rgba(37, 211, 102, 0.35)', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                                   title="Send WhatsApp Nudge to user to try WalletVibe Personal Finance"
                                 >
-                                  <i className="fab fa-whatsapp" style={{ marginRight: 3 }} /> Nudge
+                                  <i className="fab fa-whatsapp" /> Nudge
                                 </button>
                               </>
                             ) : (
@@ -929,7 +1013,7 @@ export default function AdminPanel({ auth, onClose }) {
                                 <button
                                   type="button"
                                   onClick={() => handleManualSet('active', sub.email || sub.userId, 'monthly')}
-                                  style={{ padding: '3px 8px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  style={{ padding: '4px 9px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer', boxShadow: '0 2px 6px rgba(99,102,241,0.25)' }}
                                   title="Add 30 days to current active expiration date"
                                 >
                                   ➕ +30D
@@ -942,7 +1026,7 @@ export default function AdminPanel({ auth, onClose }) {
                                       handleManualSet('active', sub.email || sub.userId, String(Number(inputDays)))
                                     }
                                   }}
-                                  style={{ padding: '3px 8px', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                  style={{ padding: '4px 9px', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
                                   title="Add custom number of days (e.g. 7, 15, 60, 90, 365)"
                                 >
                                   ➕ +Days
@@ -951,7 +1035,7 @@ export default function AdminPanel({ auth, onClose }) {
                                   <button
                                     type="button"
                                     onClick={() => handleManualSet('revoked', sub.email || sub.userId)}
-                                    style={{ padding: '3px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                                    style={{ padding: '4px 9px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
                                   >
                                     ⛔ Deactivate
                                   </button>
@@ -963,10 +1047,10 @@ export default function AdminPanel({ auth, onClose }) {
                             <button
                               type="button"
                               onClick={() => handleDeleteAccount(sub.email || sub.userId || sub.id)}
-                              style={{ padding: '3px 8px', background: 'rgba(239,68,68,0.12)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                              style={{ padding: '4px 9px', background: 'rgba(239,68,68,0.08)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                               title="Permanently Delete Account from Firestore (Both subscriptions & userProfiles)"
                             >
-                              🗑️ Delete Account
+                              <i className="fas fa-trash-alt" /> Delete Account
                             </button>
                           )}
                         </div>
@@ -979,93 +1063,110 @@ export default function AdminPanel({ auth, onClose }) {
           )}
 
           {/* ══════════════════════════════════════════════════════════
-              TAB 3: CONFIGURATION & SETTINGS
+              TAB 2: CONFIGURATION & SETTINGS
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'settings' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Pricing section: Pro & Ultra Tiers */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
-                  💰 Subscription Pricing Configuration (₹ INR)
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-coins" />
+                  <span>Subscription Pricing Configuration (₹ INR)</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                   <div>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Monthly Price (₹)</label>
-                    <input
-                      type="number"
-                      value={monthlyPrice}
-                      onChange={(e) => setMonthlyPrice(e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
-                    />
+                    <label style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-secondary, #64748b)', display: 'block', marginBottom: 4 }}>
+                      Pro Monthly Price (₹)
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: 13 }}>₹</span>
+                      <input
+                        type="number"
+                        value={monthlyPrice}
+                        onChange={(e) => setMonthlyPrice(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px 7px 24px', borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 13, fontWeight: 800, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Pro Yearly Price (₹)</label>
-                    <input
-                      type="number"
-                      value={yearlyPrice}
-                      onChange={(e) => setYearlyPrice(e.target.value)}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
-                    />
+                    <label style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-secondary, #64748b)', display: 'block', marginBottom: 4 }}>
+                      Pro Yearly Price (₹)
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: 13 }}>₹</span>
+                      <input
+                        type="number"
+                        value={yearlyPrice}
+                        onChange={(e) => setYearlyPrice(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px 7px 24px', borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 13, fontWeight: 800, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Ultra Tier Settings */}
-                <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1.5px solid rgba(139, 92, 246, 0.25)', borderRadius: 8, padding: 8, marginTop: 6 }}>
-                  <div style={{ fontSize: 9.5, fontWeight: 800, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>👑 Ultra Tier (Auto Bank Sync via Setu)</span>
-                    <span style={{ fontSize: 8, background: ultraEnabled ? '#10b981' : '#f59e0b', color: '#fff', padding: '1px 5px', borderRadius: 99 }}>
+                <div style={{ background: 'linear-gradient(145deg, rgba(139, 92, 246, 0.08), rgba(236, 72, 153, 0.04))', border: '1.5px solid rgba(139, 92, 246, 0.3)', borderRadius: 10, padding: 10, marginTop: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, color: '#7c3aed', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="fas fa-crown" /> Ultra Tier (Auto Bank Sync via Setu)</span>
+                    <span style={{ fontSize: 8.5, fontWeight: 900, background: ultraEnabled ? '#10b981' : '#f59e0b', color: '#fff', padding: '2px 7px', borderRadius: 99 }}>
                       {ultraEnabled ? 'ACTIVE' : 'SETUP / COMING SOON'}
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
                     <div>
-                      <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Monthly (₹)</label>
-                      <input
-                        type="number"
-                        value={ultraMonthlyPrice}
-                        onChange={(e) => setUltraMonthlyPrice(e.target.value)}
-                        style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
-                      />
+                      <label style={{ fontSize: 9, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 3 }}>Ultra Monthly (₹)</label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: 12 }}>₹</span>
+                        <input
+                          type="number"
+                          value={ultraMonthlyPrice}
+                          onChange={(e) => setUltraMonthlyPrice(e.target.value)}
+                          style={{ width: '100%', padding: '6px 8px 6px 20px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
+                        />
+                      </div>
                     </div>
                     <div>
-                      <label style={{ fontSize: 8.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>Ultra Yearly (₹)</label>
-                      <input
-                        type="number"
-                        value={ultraYearlyPrice}
-                        onChange={(e) => setUltraYearlyPrice(e.target.value)}
-                        style={{ width: '100%', padding: '5px 7px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontWeight: 700, boxSizing: 'border-box' }}
-                      />
+                      <label style={{ fontSize: 9, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 3 }}>Ultra Yearly (₹)</label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: 12 }}>₹</span>
+                        <input
+                          type="number"
+                          value={ultraYearlyPrice}
+                          onChange={(e) => setUltraYearlyPrice(e.target.value)}
+                          style={{ width: '100%', padding: '6px 8px 6px 20px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12, fontWeight: 800, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
+                        />
+                      </div>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#4c1d95', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: '#4c1d95', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={ultraEnabled}
                         onChange={(e) => setUltraEnabled(e.target.checked)}
-                        style={{ width: 14, height: 14, accentColor: '#8b5cf6' }}
+                        style={{ width: 15, height: 15, accentColor: '#8b5cf6', cursor: 'pointer' }}
                       />
                       Enable Ultra Tier Purchase (Turn ON after Setu AA keys are configured)
                     </label>
 
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#6b21a8', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: '#6b21a8', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={ultraComingSoon}
                         onChange={(e) => setUltraComingSoon(e.target.checked)}
-                        style={{ width: 14, height: 14, accentColor: '#ec4899' }}
+                        style={{ width: 15, height: 15, accentColor: '#ec4899', cursor: 'pointer' }}
                       />
                       Show "Coming Soon" badge on Ultra tier in Subscription modal
                     </label>
 
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9.5, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={hideUltraBanner}
                         onChange={(e) => setHideUltraBanner(e.target.checked)}
-                        style={{ width: 14, height: 14, accentColor: '#4f46e5' }}
+                        style={{ width: 15, height: 15, accentColor: '#4f46e5', cursor: 'pointer' }}
                       />
                       Hide "Coming Soon" Bank Sync banner completely in Bank History view
                     </label>
@@ -1074,10 +1175,10 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Subscriber Limit Section */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><i className="fas fa-users-cog" /> Subscriber Limit Control</span>
-                  <span style={{ fontSize: 8.5, color: limitNum <= 0 ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : '#10b981'), background: limitNum <= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.08)', padding: '2px 8px', borderRadius: 99, fontWeight: 800 }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><i className="fas fa-users-cog" /> Subscriber Limit Control</span>
+                  <span style={{ fontSize: 9, color: limitNum <= 0 ? '#059669' : (regularActiveCount >= limitNum ? '#ef4444' : '#10b981'), background: limitNum <= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.08)', padding: '3px 8px', borderRadius: 99, fontWeight: 800 }}>
                     {limitNum <= 0 ? '♾️ Unlimited Allowed' : `Regular Active: ${regularActiveCount} / ${limitNum}`}
                   </span>
                 </div>
@@ -1088,56 +1189,58 @@ export default function AdminPanel({ auth, onClose }) {
                       min="0"
                       value={subscriberLimit}
                       onChange={(e) => setSubscriberLimit(e.target.value)}
-                      style={{ width: 75, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 12, fontWeight: 800, boxSizing: 'border-box', background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)' }}
+                      style={{ width: 80, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)', fontSize: 13, fontWeight: 800, boxSizing: 'border-box', background: 'var(--bg-card, #fff)', color: 'var(--text-primary, #1e293b)' }}
                     />
                     <button
                       type="button"
                       onClick={() => setSubscriberLimit(subscriberLimit === '0' ? '10' : '0')}
                       style={{
-                        padding: '5px 10px',
-                        fontSize: 10,
+                        padding: '6px 12px',
+                        fontSize: 10.5,
                         fontWeight: 800,
-                        borderRadius: 6,
+                        borderRadius: 8,
                         border: '1px solid #6366f1',
                         background: subscriberLimit === '0' ? '#6366f1' : 'rgba(99,102,241,0.08)',
                         color: subscriberLimit === '0' ? '#fff' : '#4f46e5',
                         cursor: 'pointer',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {subscriberLimit === '0' ? '♾️ Unlimited Set' : 'Set Unlimited (0)'}
                     </button>
                   </div>
-                  <div style={{ flex: 1, minWidth: 180, fontSize: 9.5, color: '#64748b', lineHeight: 1.35 }}>
+                  <div style={{ flex: 1, minWidth: 180, fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
                     Max regular subscribers allowed (enter <strong>0</strong> for Unlimited). Admin-activated accounts are <strong>exempt</strong>.
                   </div>
                 </div>
               </div>
 
               {/* Announcement Banner Editor */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, padding: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: 6 }}>
-                  📢 Global App Announcement Banner
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-bullhorn" />
+                  <span>Global App Announcement Banner</span>
                 </div>
                 <input
                   type="text"
                   placeholder="e.g. 🎉 Limited Offer: Upgrade now to Pro!"
                   value={announcement}
                   onChange={(e) => setAnnouncement(e.target.value)}
-                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, marginBottom: 6, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 11.5, marginBottom: 8, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
                 />
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
                   {['info', 'warning', 'success'].map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setAnnouncementType(t)}
                       style={{
-                        padding: '3px 8px', borderRadius: 99,
-                        border: announcementType === t ? '2px solid #6366f1' : '1px solid #cbd5e1',
-                        background: announcementType === t ? 'rgba(99,102,241,0.1)' : '#fff',
+                        padding: '4px 10px', borderRadius: 99,
+                        border: announcementType === t ? '2px solid #4f46e5' : '1px solid #cbd5e1',
+                        background: announcementType === t ? 'rgba(99,102,241,0.12)' : '#fff',
                         color: announcementType === t ? '#4f46e5' : '#64748b',
-                        fontSize: 9, fontWeight: 800, textTransform: 'uppercase', cursor: 'pointer',
+                        fontSize: 10, fontWeight: 800, textTransform: 'uppercase', cursor: 'pointer',
+                        boxShadow: announcementType === t ? '0 2px 6px rgba(99,102,241,0.2)' : 'none',
                       }}
                     >
                       {t === 'info' ? '🔵 Info' : t === 'warning' ? '🟡 Warning' : '🟢 Success'}
@@ -1147,13 +1250,14 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Razorpay Payment Gateway Settings */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1px solid ${razorpayEnabled ? '#6366f1' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 8, padding: 10, transition: 'border-color 0.2s' }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1.5px solid ${razorpayEnabled ? '#4f46e5' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'border-color 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase' }}>
-                      ⚡ Razorpay Payment Gateway
+                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#4f46e5', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fas fa-bolt" />
+                      <span>Razorpay Payment Gateway</span>
                     </div>
-                    <div style={{ fontSize: 9, color: '#64748b' }}>
+                    <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 1 }}>
                       Enable Razorpay PG (Cards, Netbanking, UPI, Wallets)
                     </div>
                   </div>
@@ -1163,27 +1267,28 @@ export default function AdminPanel({ auth, onClose }) {
                     onChange={(e) => {
                       const checked = e.target.checked
                       setRazorpayEnabled(checked)
-                      if (checked) setCashfreeEnabled(false) // Exclusive: disable Cashfree
+                      if (checked) setCashfreeEnabled(false)
                     }}
-                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                    style={{ width: 18, height: 18, accentColor: '#4f46e5', cursor: 'pointer' }}
                   />
                 </div>
 
                 {razorpayEnabled && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px solid #cbd5e1' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
                     <div>
-                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                      <label style={{ fontSize: 9.5, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 4 }}>
                         Environment Mode
                       </label>
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
                         <button
                           type="button"
                           onClick={() => setRazorpayMode('test')}
                           style={{
-                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            flex: 1, padding: '7px', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer',
                             border: razorpayMode === 'test' ? '2px solid #f59e0b' : '1px solid #cbd5e1',
                             background: razorpayMode === 'test' ? 'rgba(245, 158, 11, 0.15)' : '#fff',
                             color: razorpayMode === 'test' ? '#b45309' : '#64748b',
+                            boxShadow: razorpayMode === 'test' ? '0 2px 6px rgba(245,158,11,0.2)' : 'none',
                           }}
                         >
                           🟡 TEST Mode (rzp_test_...)
@@ -1192,16 +1297,17 @@ export default function AdminPanel({ auth, onClose }) {
                           type="button"
                           onClick={() => setRazorpayMode('live')}
                           style={{
-                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            flex: 1, padding: '7px', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer',
                             border: razorpayMode === 'live' ? '2px solid #10b981' : '1px solid #cbd5e1',
                             background: razorpayMode === 'live' ? 'rgba(16, 185, 129, 0.15)' : '#fff',
                             color: razorpayMode === 'live' ? '#047857' : '#64748b',
+                            boxShadow: razorpayMode === 'live' ? '0 2px 6px rgba(16,185,129,0.2)' : 'none',
                           }}
                         >
                           🟢 LIVE Mode (rzp_live_...)
                         </button>
                       </div>
-                      <div style={{ fontSize: 8, color: razorpayMode === 'test' ? '#d97706' : '#059669', marginTop: 3 }}>
+                      <div style={{ fontSize: 8.5, color: razorpayMode === 'test' ? '#d97706' : '#059669', marginTop: 4, fontWeight: 600 }}>
                         {razorpayMode === 'test'
                           ? '⚡ Test mode: Use rzp_test_... key for sandbox payments.'
                           : '🚀 Live mode: Processes real money using rzp_live_... key.'}
@@ -1209,7 +1315,7 @@ export default function AdminPanel({ auth, onClose }) {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                      <label style={{ fontSize: 9.5, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 4 }}>
                         Razorpay Key ID
                       </label>
                       <input
@@ -1217,7 +1323,7 @@ export default function AdminPanel({ auth, onClose }) {
                         placeholder={razorpayMode === 'test' ? 'rzp_test_...' : 'rzp_live_...'}
                         value={razorpayKeyId}
                         onChange={(e) => setRazorpayKeyId(e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 11.5, fontFamily: 'monospace', boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
                       />
                     </div>
                   </div>
@@ -1225,13 +1331,14 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Cashfree Payment Gateway Settings */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1px solid ${cashfreeEnabled ? '#0284c7' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 8, padding: 10, transition: 'border-color 0.2s' }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: `1.5px solid ${cashfreeEnabled ? '#0284c7' : 'var(--border-color, #e2e8f0)'}`, borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'border-color 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#0284c7', textTransform: 'uppercase' }}>
-                      💳 Cashfree Payment Gateway Integration
+                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#0284c7', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fas fa-credit-card" />
+                      <span>Cashfree Payment Gateway Integration</span>
                     </div>
-                    <div style={{ fontSize: 9, color: '#64748b' }}>
+                    <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 1 }}>
                       Enable Cashfree PG (Cards, Netbanking, UPI, Wallets)
                     </div>
                   </div>
@@ -1241,27 +1348,28 @@ export default function AdminPanel({ auth, onClose }) {
                     onChange={(e) => {
                       const checked = e.target.checked
                       setCashfreeEnabled(checked)
-                      if (checked) setRazorpayEnabled(false) // Exclusive: disable Razorpay
+                      if (checked) setRazorpayEnabled(false)
                     }}
-                    style={{ width: 16, height: 16, accentColor: '#0284c7', cursor: 'pointer' }}
+                    style={{ width: 18, height: 18, accentColor: '#0284c7', cursor: 'pointer' }}
                   />
                 </div>
 
                 {cashfreeEnabled && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px solid #cbd5e1' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
                     <div>
-                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                      <label style={{ fontSize: 9.5, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 4 }}>
                         Environment Mode
                       </label>
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
                         <button
                           type="button"
                           onClick={() => setCashfreeMode('sandbox')}
                           style={{
-                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            flex: 1, padding: '7px', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer',
                             border: cashfreeMode === 'sandbox' ? '2px solid #f59e0b' : '1px solid #cbd5e1',
                             background: cashfreeMode === 'sandbox' ? 'rgba(245, 158, 11, 0.15)' : '#fff',
                             color: cashfreeMode === 'sandbox' ? '#b45309' : '#64748b',
+                            boxShadow: cashfreeMode === 'sandbox' ? '0 2px 6px rgba(245,158,11,0.2)' : 'none',
                           }}
                         >
                           🟡 TEST / Sandbox (Immediate)
@@ -1270,16 +1378,17 @@ export default function AdminPanel({ auth, onClose }) {
                           type="button"
                           onClick={() => setCashfreeMode('production')}
                           style={{
-                            flex: 1, padding: '5px', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                            flex: 1, padding: '7px', borderRadius: 8, fontSize: 10.5, fontWeight: 800, cursor: 'pointer',
                             border: cashfreeMode === 'production' ? '2px solid #10b981' : '1px solid #cbd5e1',
                             background: cashfreeMode === 'production' ? 'rgba(16, 185, 129, 0.15)' : '#fff',
                             color: cashfreeMode === 'production' ? '#047857' : '#64748b',
+                            boxShadow: cashfreeMode === 'production' ? '0 2px 6px rgba(16,185,129,0.2)' : 'none',
                           }}
                         >
                           🟢 PROD / Live (After KYC)
                         </button>
                       </div>
-                      <div style={{ fontSize: 8, color: cashfreeMode === 'sandbox' ? '#d97706' : '#059669', marginTop: 3 }}>
+                      <div style={{ fontSize: 8.5, color: cashfreeMode === 'sandbox' ? '#d97706' : '#059669', marginTop: 4, fontWeight: 600 }}>
                         {cashfreeMode === 'sandbox'
                           ? '⚡ Sandbox active: Can be used immediately right now for testing payments!'
                           : '🚀 Live active: Processes real money payments once Cashfree KYC is approved.'}
@@ -1287,7 +1396,7 @@ export default function AdminPanel({ auth, onClose }) {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: 9, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 2 }}>
+                      <label style={{ fontSize: 9.5, fontWeight: 800, color: '#64748b', display: 'block', marginBottom: 4 }}>
                         Cashfree App ID / Client ID
                       </label>
                       <input
@@ -1295,7 +1404,7 @@ export default function AdminPanel({ auth, onClose }) {
                         placeholder="e.g. 1048473TEST..."
                         value={cashfreeAppId}
                         onChange={(e) => setCashfreeAppId(e.target.value)}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 11, boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 11.5, boxSizing: 'border-box', background: '#fff', color: '#1e293b' }}
                       />
                     </div>
                   </div>
@@ -1303,21 +1412,21 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Gemini AI Multi-Key Setup */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: 12 }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <i className="fas fa-brain" style={{ color: '#6366f1' }} />
-                    <span>🤖 Multiple Gemini AI API Keys (Auto-Rotation &amp; Failover)</span>
+                    <span>Multiple Gemini AI API Keys (Rotation &amp; Failover)</span>
                   </div>
                   {(() => {
                     const validCount = extractValidGeminiKeys(geminiApiKeys).length
                     return (
                       <span style={{
-                        fontSize: 9.5, fontWeight: 800,
-                        background: validCount > 0 ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                        color: validCount > 0 ? '#10b981' : '#d97706',
+                        fontSize: 9, fontWeight: 800,
+                        background: validCount > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                        color: validCount > 0 ? '#059669' : '#d97706',
                         padding: '2px 8px', borderRadius: 99,
-                        border: validCount > 0 ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                        border: validCount > 0 ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(245,158,11,0.35)',
                       }}>
                         {validCount > 0 ? `🟢 ${validCount} API Keys Configured` : '⚡ Using App Fallback Keys'}
                       </span>
@@ -1325,7 +1434,7 @@ export default function AdminPanel({ auth, onClose }) {
                   })()}
                 </div>
                 <p style={{ margin: '0 0 8px', fontSize: 10, color: '#64748b', lineHeight: 1.4 }}>
-                  Setup multiple Google Gemini API keys (comma or newline separated). If Key #1 hits rate limits (429) or quota errors, the app automatically switches to Key #2, Key #3, etc. for seamless AI parsing!
+                  Setup multiple Google Gemini API keys (comma or newline separated). If Key #1 hits rate limits (429), the app automatically switches to Key #2, Key #3, etc. for seamless AI parsing!
                 </p>
                 <textarea
                   rows={3}
@@ -1342,13 +1451,13 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Gemini AI Model Preference Order Setup */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: 12 }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 12, padding: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <i className="fas fa-microchip" style={{ color: '#10b981' }} />
-                    <span>⚡ Gemini AI Models (Preference Order &amp; Fallback)</span>
+                    <span>Gemini AI Models (Preference Order &amp; Fallback)</span>
                   </div>
-                  <span style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(16,185,129,0.12)', color: '#10b981', padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.3)' }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, background: 'rgba(16,185,129,0.15)', color: '#059669', padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.35)' }}>
                     🟢 {geminiModels.split(/[\n,;]+/).filter((m) => m.trim()).length} Models Listed
                   </span>
                 </div>
@@ -1370,30 +1479,30 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Maintenance & Controls */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 10, cursor: 'pointer' }}>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>📄 Allow Non-CSV Imports (PDF Statements & AI Extraction)</div>
-                    <div style={{ fontSize: 9, color: '#64748b' }}>Toggle whether users can upload PDF bank statements or non-CSV files using AI document extraction</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>📄 Allow Non-CSV Imports (PDF Statements &amp; AI Extraction)</div>
+                    <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 1 }}>Toggle whether users can upload PDF bank statements or non-CSV files using AI document extraction</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={allowNonCsvImport}
                     onChange={(e) => setAllowNonCsvImport(e.target.checked)}
-                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                    style={{ width: 18, height: 18, accentColor: '#6366f1', cursor: 'pointer' }}
                   />
                 </label>
 
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 8, cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 10, cursor: 'pointer' }}>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>Maintenance Mode</div>
-                    <div style={{ fontSize: 9, color: '#64748b' }}>Show maintenance banner to all users</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>🚧 Maintenance Mode</div>
+                    <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 1 }}>Show maintenance banner to all users</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={maintenanceMode}
                     onChange={(e) => setMaintenanceMode(e.target.checked)}
-                    style={{ width: 16, height: 16, accentColor: '#ef4444' }}
+                    style={{ width: 18, height: 18, accentColor: '#ef4444', cursor: 'pointer' }}
                   />
                 </label>
               </div>
@@ -1404,12 +1513,13 @@ export default function AdminPanel({ auth, onClose }) {
                 onClick={handleSaveConfig}
                 disabled={saving}
                 style={{
-                  width: '100%', padding: '10px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(99,102,241,0.3)', marginTop: 4,
+                  width: '100%', padding: '12px', background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 900, cursor: 'pointer',
+                  boxShadow: '0 4px 18px rgba(79, 70, 229, 0.4)', marginTop: 4, letterSpacing: '0.2px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
-                {saving ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} /> Saving...</> : <><i className="fas fa-save" style={{ marginRight: 6 }} /> Save Configuration</>}
+                {saving ? <><i className="fas fa-spinner fa-spin" /> Saving Configuration...</> : <><i className="fas fa-save" /> Save Configuration</>}
               </button>
             </div>
           )}
@@ -1421,70 +1531,74 @@ export default function AdminPanel({ auth, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Live Storage Gauge Card */}
               <div style={{
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
-                padding: '14px 16px',
-                borderRadius: 12,
-                border: '1px solid rgba(99,102,241,0.3)',
+                background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #312e81 100%)',
+                padding: '16px 18px',
+                borderRadius: 14,
+                border: '1px solid rgba(99,102,241,0.35)',
                 color: '#fff',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#a5b4fc', letterSpacing: 0.5 }}>
-                    🔥 FIRESTORE STORAGE OCCUPANCY (1.0 GB FREE SPARK PLAN)
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 900, textTransform: 'uppercase', color: '#a5b4fc', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-fire" style={{ color: '#f59e0b' }} />
+                    <span>Firestore Storage Occupancy (1.0 GB Free Spark Plan)</span>
                   </div>
                   <span style={{
                     fontSize: 9,
-                    fontWeight: 800,
-                    background: storageBytes > 900 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
-                    color: storageBytes > 900 ? '#ef4444' : '#10b981',
-                    padding: '2px 8px',
+                    fontWeight: 900,
+                    background: storageBytes > 900 ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)',
+                    color: storageBytes > 900 ? '#fca5a5' : '#6ee7b7',
+                    padding: '3px 9px',
                     borderRadius: 99,
-                    border: storageBytes > 900 ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(16,185,129,0.4)',
+                    border: storageBytes > 900 ? '1px solid rgba(239,68,68,0.5)' : '1px solid rgba(16,185,129,0.5)',
                   }}>
                     {storageBytes > 900 ? '⚠️ WARNING: 90% THRESHOLD' : '🟢 SAFE & OPTIMAL'}
                   </span>
                 </div>
 
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 2 }}>
-                  {storageBytes.toFixed(2)} MiB <span style={{ fontSize: 13, color: '#a5b4fc', fontWeight: 600 }}>/ 1,024 MiB</span>
+                <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', marginTop: 4, letterSpacing: '-0.5px' }}>
+                  {storageBytes.toFixed(2)} MiB <span style={{ fontSize: 14, color: '#a5b4fc', fontWeight: 600 }}>/ 1,024 MiB</span>
                 </div>
 
                 {/* Progress Bar */}
-                <div style={{ background: 'rgba(255,255,255,0.1)', height: 9, borderRadius: 6, overflow: 'hidden', margin: '8px 0 6px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.12)', height: 10, borderRadius: 99, overflow: 'hidden', margin: '10px 0 8px', border: '1px solid rgba(255,255,255,0.08)' }}>
                   <div style={{
                     height: '100%',
                     width: `${Math.min(100, (storageBytes / 1024) * 100).toFixed(2)}%`,
                     background: storageBytes > 900 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #6366f1)',
-                    borderRadius: 6,
+                    borderRadius: 99,
+                    boxShadow: '0 0 10px rgba(99,102,241,0.5)',
                     transition: 'width 0.3s ease',
                   }} />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8' }}>
-                  <span>Occupied: {((storageBytes / 1024) * 100).toFixed(2)}%</span>
-                  <span>Available Free: {(1024 - storageBytes).toFixed(2)} MiB (98.34%)</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#cbd5e1', fontWeight: 600 }}>
+                  <span>Occupied: <strong>{((storageBytes / 1024) * 100).toFixed(2)}%</strong></span>
+                  <span>Available Free: <strong>{(1024 - storageBytes).toFixed(2)} MiB ({(((1024 - storageBytes) / 1024) * 100).toFixed(2)}%)</strong></span>
                 </div>
               </div>
 
               {/* Privacy Guard Notice Banner */}
-              <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="fas fa-user-shield" /> 🔒 User Privacy & Data Protection Active
+              <div style={{ background: 'rgba(16,185,129,0.08)', border: '1.5px solid rgba(16,185,129,0.3)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 900, color: '#047857', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-shield-alt" />
+                  <span>User Privacy &amp; Data Protection Active</span>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-secondary, #475569)', marginTop: 4, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary, #475569)', marginTop: 4, lineHeight: 1.45 }}>
                   All user transactions (Expenses, Lending, Bank Statements) are stored in isolated documents scoped by User ID. Personal transaction descriptions, remarks, narration text, and proof attachments are strictly private and never rendered or exposed in admin tools.
                 </div>
               </div>
 
               {/* GCP Metrics Sync Box */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 10, borderRadius: 10, border: '1px solid var(--border-color, #e2e8f0)' }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)', marginBottom: 4 }}>
-                  📡 Google Cloud Monitoring Metric Sync (data_and_index_storage_bytes):
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 12, borderRadius: 12, border: '1.5px solid var(--border-color, #e2e8f0)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--text-primary, #1e293b)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-satellite-dish" style={{ color: '#6366f1' }} />
+                  <span>Google Cloud Monitoring Metric Sync (data_and_index_storage_bytes)</span>
                 </div>
-                <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
                   Directly enter exact MiB metric from Google Cloud Console Metrics Explorer:
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     type="number"
                     step="0.01"
@@ -1493,10 +1607,13 @@ export default function AdminPanel({ auth, onClose }) {
                     placeholder="e.g. 17.01"
                     style={{
                       flex: 1,
-                      padding: '6px 10px',
-                      borderRadius: 6,
+                      padding: '7px 10px',
+                      borderRadius: 8,
                       border: '1px solid #cbd5e1',
-                      fontSize: 11,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      background: '#fff',
+                      color: '#1e293b',
                     }}
                   />
                   <button
@@ -1508,14 +1625,15 @@ export default function AdminPanel({ auth, onClose }) {
                       showToast(`✔ Firestore Occupancy updated to ${val} MiB!`)
                     }}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: 6,
+                      padding: '7px 14px',
+                      borderRadius: 8,
                       border: 'none',
-                      background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                      background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
                       color: '#fff',
                       fontSize: 11,
                       fontWeight: 800,
                       cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
                     }}
                   >
                     Save GCP Metric
@@ -1524,24 +1642,26 @@ export default function AdminPanel({ auth, onClose }) {
               </div>
 
               {/* Real-time Collection Scanner Section */}
-              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 10, borderRadius: 10, border: '1px solid var(--border-color, #e2e8f0)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
-                    ⚡ Real-Time Collection Document Byte Scanner:
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: 12, borderRadius: 12, border: '1.5px solid var(--border-color, #e2e8f0)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="fas fa-bolt" style={{ color: '#f59e0b' }} />
+                    <span>Real-Time Collection Document Byte Scanner</span>
                   </div>
                   <button
                     type="button"
                     onClick={calculateRealtimeStorage}
                     disabled={calculatingStorage}
                     style={{
-                      padding: '4px 10px',
-                      borderRadius: 6,
+                      padding: '5px 12px',
+                      borderRadius: 8,
                       border: 'none',
                       background: 'linear-gradient(135deg, #10b981, #059669)',
                       color: '#fff',
-                      fontSize: 10,
+                      fontSize: 10.5,
                       fontWeight: 800,
                       cursor: calculatingStorage ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 2px 8px rgba(16,185,129,0.3)',
                     }}
                   >
                     {calculatingStorage ? 'Scanning...' : '🔄 Run Real-Time Scan'}
@@ -1549,26 +1669,26 @@ export default function AdminPanel({ auth, onClose }) {
                 </div>
 
                 {calcStats ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10.5 }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Expenses: <strong>{calcStats.expensesCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Lending: <strong>{calcStats.lendingCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       User Profiles: <strong>{calcStats.usersCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Subscriptions: <strong>{calcStats.subsCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Bank Sync: <strong>{calcStats.bankCount} docs</strong>
                     </div>
-                    <div style={{ padding: '6px 8px', borderRadius: 6, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
+                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--bg-card, #fff)', border: '1px solid var(--border-color, #cbd5e1)', color: 'var(--text-primary, #1e293b)' }}>
                       Reviews &amp; Reminders: <strong>{(calcStats.reviewsCount || 0) + (calcStats.remindersCount || 0)} docs</strong>
                     </div>
-                    <div style={{ gridColumn: 'span 2', padding: '8px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#059669', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <div style={{ gridColumn: 'span 2', padding: '10px 12px', borderRadius: 8, background: 'rgba(16,185,129,0.1)', border: '1.5px solid rgba(16,185,129,0.3)', color: '#047857', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                       <span>✔ Scanned {calcStats.totalDocs} docs (~{calcStats.calculatedMB} MiB payload)</span>
                       <button
                         type="button"
@@ -1579,14 +1699,14 @@ export default function AdminPanel({ auth, onClose }) {
                           localStorage.setItem('wv_firestore_occupancy_mb', String(val))
                           showToast(`✔ Applied scanned payload (${val} MiB) to Storage Occupancy!`)
                         }}
-                        style={{ padding: '4px 10px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                        style={{ padding: '5px 12px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
                       >
                         ⚡ Apply to Gauge
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div style={{ fontSize: 9.5, color: '#64748b', fontStyle: 'italic' }}>
+                  <div style={{ fontSize: 10, color: '#64748b', fontStyle: 'italic', lineHeight: 1.4 }}>
                     Click "Run Real-Time Scan" to query live document byte sizes across expenses, lending, user accounts, bank transactions, and reviews.
                   </div>
                 )}
@@ -1595,8 +1715,8 @@ export default function AdminPanel({ auth, onClose }) {
           )}
 
           {/* Admin emails footer */}
-          <div style={{ textAlign: 'center', marginTop: 10, fontSize: 9, color: '#64748b' }}>
-            Whitelisted Admins: {ADMIN_EMAILS.join(', ')}
+          <div style={{ textAlign: 'center', marginTop: 14, fontSize: 9.5, color: '#64748b', fontWeight: 600 }}>
+            Whitelisted Admins: <strong>{ADMIN_EMAILS.join(', ')}</strong>
           </div>
         </div>
       </div>

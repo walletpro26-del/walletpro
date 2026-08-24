@@ -99,66 +99,154 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
   ]
 
   return createPortal(
-    <div className="modal-overlay">
+    <div className="modal-overlay" style={{ zIndex: 130 }}>
       <div className="modal-backdrop" onClick={onClose}></div>
-      <div className="modal-container" style={{ maxWidth: 420, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        {/* Compact Header */}
-        <div className="modal-header" style={{ padding: '8px 12px' }}>
-          <div className="modal-header-info">
-            <div className="modal-header-icon" style={{ width: 26, height: 26, fontSize: 12, background: 'var(--accent-50)', color: 'var(--accent-600)' }}>
-              <i className="fas fa-cog"></i>
+      <div
+        className="modal-container custom-scrollbar"
+        style={{
+          maxWidth: 440,
+          width: '92%',
+          maxHeight: '92dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 18,
+          overflowY: 'auto',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          background: 'var(--bg-card, #ffffff)',
+          padding: 0,
+        }}
+      >
+        {/* Luxury Modern Header */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #312e81 100%)',
+            color: '#fff',
+            padding: '14px 16px 12px',
+            position: 'relative',
+            flexShrink: 0,
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  fontSize: 14,
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))',
+                  border: '1px solid rgba(165, 180, 252, 0.3)',
+                  color: '#e0e7ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 14px rgba(99, 102, 241, 0.3)',
+                }}
+              >
+                <i className="fas fa-sliders-h"></i>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, letterSpacing: '-0.3px', color: '#ffffff' }}>
+                  Settings &amp; Preferences
+                </h3>
+                <div style={{ fontSize: 10, color: '#a5b4fc', marginTop: 1 }}>WalletVibe Account &amp; App Config</div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>Settings &amp; Preferences</h3>
-              <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>WalletVibe Account &amp; App Config</div>
-            </div>
-          </div>
-          <button className="modal-close" onClick={onClose} style={{ width: 24, height: 24, fontSize: 10 }}>
-            <i className="fas fa-times"></i>
-          </button>
-        </div>
 
-        {/* Compact Body */}
-        <div className="modal-body custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', overflowY: 'auto', flex: 1 }}>
-          {/* User Account & Subscription Card */}
-          <div style={{
-            background: 'var(--bg-subtle, #f8fafc)',
-            borderRadius: 8,
-            border: '1px solid var(--border-color, #e2e8f0)',
-            padding: '6px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <div style={{
-                width: 26,
-                height: 26,
+            <button
+              className="modal-close"
+              onClick={onClose}
+              style={{
+                width: 28,
+                height: 28,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: 'none',
                 color: '#fff',
-                fontWeight: 800,
-                fontSize: 11,
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0,
-              }}>
+                fontSize: 12,
+                backdropFilter: 'blur(8px)',
+                transition: 'all 0.2s ease',
+              }}
+              aria-label="Close"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div
+          className="modal-body custom-scrollbar"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            padding: '14px 16px',
+            overflowY: 'auto',
+            flex: 1,
+            background: 'var(--bg-card, #ffffff)',
+          }}
+        >
+          {/* User Account & Subscription Card */}
+          <div
+            style={{
+              background: 'var(--bg-subtle, #f8fafc)',
+              borderRadius: 12,
+              border: '1.5px solid var(--border-color, #e2e8f0)',
+              padding: '10px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  color: '#fff',
+                  fontWeight: 900,
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)',
+                }}
+              >
                 {userInitial}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 12, fontWeight: 800, color: 'var(--text-primary, #1e293b)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                    fontSize: 12.5,
+                    fontWeight: 900,
+                    color: 'var(--text-primary, #1e293b)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                   title={auth?.email || auth?.name}
                 >
                   {auth?.email || auth?.name || 'WalletVibe User'}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted, #64748b)', marginTop: 1, fontWeight: 700 }}>
-                  {subscription?.isAdmin ? '👑 Free Lifetime Admin' : (subscription?.active ? '⭐ Active Plan' : '⚠️ Free Account')}
+                <div style={{ fontSize: 10, color: 'var(--text-muted, #64748b)', marginTop: 2, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {subscription?.isAdmin ? (
+                    <span style={{ color: '#d97706', fontWeight: 800 }}>👑 Free Lifetime Admin</span>
+                  ) : subscription?.active ? (
+                    <span style={{ color: '#059669', fontWeight: 800 }}>🟢 Pro Plan Active</span>
+                  ) : (
+                    <span style={{ color: '#64748b', fontWeight: 700 }}>⚠️ Free Plan</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -174,12 +262,15 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   width: 'auto',
                   flexShrink: 0,
                   whiteSpace: 'nowrap',
-                  padding: '6px 14px',
+                  padding: '7px 14px',
                   fontSize: 11,
-                  fontWeight: 800,
+                  fontWeight: 900,
                   borderRadius: 8,
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  boxShadow: '0 3px 10px rgba(79, 70, 229, 0.35)',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: 'pointer',
                 }}
               >
                 {subscription?.active ? 'Manage Plan' : '⚡ Upgrade'}
@@ -189,10 +280,11 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
 
           {/* Theme Selector */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              <i className="fas fa-palette" style={{ color: 'var(--accent-500)', marginRight: 5 }} /> Theme
+            <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <i className="fas fa-palette" style={{ color: '#6366f1' }} />
+              <span>Theme Appearance</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {themes.map((t) => {
                 const isActive = theme === t.id
                 return (
@@ -201,26 +293,27 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                     type="button"
                     onClick={() => setTheme(t.id)}
                     style={{
-                      padding: '8px 6px',
-                      borderRadius: 8,
-                      border: isActive ? '2px solid #6366f1' : '1px solid var(--border-color, #e2e8f0)',
+                      padding: '10px 6px',
+                      borderRadius: 10,
+                      border: isActive ? '2px solid #4f46e5' : '1.5px solid var(--border-color, #e2e8f0)',
                       background: t.bg,
                       color: t.color,
                       cursor: 'pointer',
                       textAlign: 'center',
-                      fontSize: 10.5,
-                      fontWeight: 800,
-                      boxShadow: isActive ? '0 0 0 2px rgba(99,102,241,0.2)' : 'none',
+                      fontSize: 11,
+                      fontWeight: 900,
+                      boxShadow: isActive ? '0 0 0 3px rgba(79, 70, 229, 0.25), 0 4px 10px rgba(0,0,0,0.1)' : '0 2px 4px rgba(0,0,0,0.03)',
+                      transform: isActive ? 'scale(1.02)' : 'none',
                       transition: 'all 0.15s ease',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      minHeight: 44,
+                      minHeight: 48,
                     }}
                   >
                     <div>{t.name}</div>
-                    <div style={{ height: 4, width: '100%', borderRadius: 2, background: t.accent, marginTop: 4 }} />
+                    <div style={{ height: 4, width: '80%', borderRadius: 99, background: t.accent, marginTop: 6 }} />
                   </button>
                 )
               })}
@@ -228,15 +321,25 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           </div>
 
           {/* Currency & Start Screen Preferences */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                Currency
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                Default Currency
               </label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 11.5, background: 'var(--bg-card)' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  border: '1.5px solid var(--border-color, #cbd5e1)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-primary, #1e293b)',
+                  outline: 'none',
+                }}
               >
                 <option value="₹">Rupee (₹)</option>
                 <option value="$">Dollar ($)</option>
@@ -247,13 +350,23 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
                 Start Screen
               </label>
               <select
                 value={startScreen}
                 onChange={(e) => setStartScreen(e.target.value)}
-                style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 11.5, background: 'var(--bg-card)' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  border: '1.5px solid var(--border-color, #cbd5e1)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-primary, #1e293b)',
+                  outline: 'none',
+                }}
               >
                 <option value="expense">Expenses</option>
                 <option value="lending">Lend/Borrow</option>
@@ -267,29 +380,41 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
             const isPwaInstalled = checkIsPwaInstalled()
 
             return (
-              <div style={{
-                padding: '9px 12px',
-                background: isPwaInstalled ? 'rgba(16,185,129,0.06)' : 'var(--bg-subtle, #f8fafc)',
-                border: isPwaInstalled ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border-color, #e2e8f0)',
-                borderRadius: 10,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 10
-              }}>
+              <div
+                style={{
+                  padding: '10px 12px',
+                  background: isPwaInstalled ? 'rgba(16,185,129,0.08)' : 'var(--bg-subtle, #f8fafc)',
+                  border: isPwaInstalled ? '1.5px solid rgba(16,185,129,0.35)' : '1.5px solid var(--border-color, #e2e8f0)',
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                }}
+              >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: isPwaInstalled ? '#047857' : 'var(--text-primary, #1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: 900,
+                      color: isPwaInstalled ? '#047857' : 'var(--text-primary, #1e293b)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
                     <i className={`fas ${isPwaInstalled ? 'fa-check-circle' : 'fa-mobile-alt'}`} style={{ color: isPwaInstalled ? '#10b981' : '#6366f1' }} />
                     <span>App Installation Status</span>
                   </div>
-                  <div style={{ fontSize: 9.5, color: isPwaInstalled ? '#065f46' : '#64748b', marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: isPwaInstalled ? '#065f46' : '#64748b', marginTop: 2 }}>
                     {isPwaInstalled
                       ? 'Installed & Recognized on your device (PWA Standalone Mode)'
                       : 'Running in Web Browser mode'}
                   </div>
                 </div>
                 {isPwaInstalled ? (
-                  <span style={{ fontSize: 9.5, fontWeight: 900, background: '#10b981', color: '#ffffff', padding: '3px 8px', borderRadius: 99, flexShrink: 0 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 900, background: '#10b981', color: '#ffffff', padding: '4px 10px', borderRadius: 99, flexShrink: 0 }}>
                     ✓ Installed
                   </span>
                 ) : (
@@ -307,7 +432,17 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       })
                       onClose?.()
                     }}
-                    style={{ fontSize: 10, fontWeight: 800, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      background: 'rgba(99,102,241,0.12)',
+                      color: '#4f46e5',
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(99,102,241,0.3)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
                   >
                     📲 Install App
                   </button>
@@ -317,15 +452,15 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           })()}
 
           {/* Custom Gemini AI API Key Input */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+          <div style={{ background: 'var(--bg-subtle, #f8fafc)', borderRadius: 12, border: '1.5px solid var(--border-color, #e2e8f0)', padding: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 🔑 Custom Gemini AI API Keys (Optional)
               </label>
               {(() => {
                 const count = extractValidGeminiKeys(geminiApiKey).length
                 return count > 0 ? (
-                  <span style={{ fontSize: 9, fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 6px', borderRadius: 99 }}>
+                  <span style={{ fontSize: 9, fontWeight: 900, color: '#059669', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.3)' }}>
                     🟢 {count} Key{count > 1 ? 's' : ''} Active
                   </span>
                 ) : null
@@ -337,59 +472,72 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
               value={geminiApiKey}
               onChange={(e) => setGeminiApiKey(e.target.value)}
               style={{
-                width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-color)',
-                fontSize: 11, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'monospace',
-                boxSizing: 'border-box', resize: 'vertical'
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1px solid var(--border-color, #cbd5e1)',
+                fontSize: 11,
+                background: 'var(--bg-card, #fff)',
+                color: 'var(--text-primary, #1e293b)',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+                resize: 'vertical',
               }}
             />
-            <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
+            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 4, lineHeight: 1.4 }}>
               Add multiple Google AI Studio keys to enable automatic key failover if one key hits rate limits (429).
             </div>
           </div>
 
           {/* Quick Action Tools */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              <i className="fas fa-tools" style={{ color: 'var(--accent-500)', marginRight: 5 }} /> Quick Actions
+            <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <i className="fas fa-tools" style={{ color: '#6366f1' }} />
+              <span>Quick Actions &amp; Tools</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               <button
                 type="button"
                 onClick={handleExportBackup}
                 style={{
-                  padding: '7px 8px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border-color)',
-                  background: 'var(--bg-subtle)',
-                  color: 'var(--text-primary)',
-                  fontWeight: 700,
-                  fontSize: 10.5,
+                  padding: '9px 8px',
+                  borderRadius: 10,
+                  border: '1.5px solid rgba(99,102,241,0.3)',
+                  background: 'rgba(99,102,241,0.06)',
+                  color: '#4f46e5',
+                  fontWeight: 800,
+                  fontSize: 11,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 4
+                  gap: 6,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <i className="fas fa-download" style={{ color: 'var(--accent-600)', fontSize: 10 }} /> JSON Backup
+                <i className="fas fa-download" style={{ fontSize: 11 }} /> JSON Backup
               </button>
 
               <button
                 type="button"
-                onClick={() => { onClose(); onOpenRatingModal?.() }}
+                onClick={() => {
+                  onClose()
+                  onOpenRatingModal?.()
+                }}
                 style={{
-                  padding: '7px 8px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  padding: '9px 8px',
+                  borderRadius: 10,
+                  border: '1.5px solid rgba(245, 158, 11, 0.4)',
                   background: 'rgba(245, 158, 11, 0.1)',
                   color: '#d97706',
-                  fontWeight: 700,
-                  fontSize: 10.5,
+                  fontWeight: 800,
+                  fontSize: 11,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
-                  gap: 4
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 ⭐ Rate App
@@ -399,28 +547,29 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                 type="button"
                 onClick={handleClearCache}
                 style={{
-                  padding: '7px 8px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  background: 'rgba(239, 68, 68, 0.06)',
+                  padding: '9px 8px',
+                  borderRadius: 10,
+                  border: '1.5px solid rgba(239, 68, 68, 0.3)',
+                  background: 'rgba(239, 68, 68, 0.08)',
                   color: '#dc2626',
-                  fontWeight: 700,
-                  fontSize: 10.5,
+                  fontWeight: 800,
+                  fontSize: 11,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
-                  gap: 4
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <i className="fas fa-eraser" style={{ fontSize: 10 }} /> Clear Cache
+                <i className="fas fa-eraser" style={{ fontSize: 11 }} /> Clear Cache
               </button>
             </div>
 
             {/* Legacy Import (Admin-only) */}
             {isAdmin && (
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 8, marginTop: 8 }}>
-                <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: 10, marginTop: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', marginBottom: 6 }}>
                   👑 Legacy GAS Data Migration (Admin Only)
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -429,7 +578,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                     placeholder="https://script.google.com/macros/s/.../exec"
                     value={gasUrl}
                     onChange={(e) => setGasUrl(e.target.value)}
-                    style={{ flex: 1, padding: '5px 8px', fontSize: 10.5, borderRadius: 6, border: '1px solid var(--border-color)' }}
+                    style={{ flex: 1, padding: '7px 10px', fontSize: 11, borderRadius: 8, border: '1px solid var(--border-color, #cbd5e1)', background: '#fff', color: '#1e293b' }}
                   />
                   <button
                     type="button"
@@ -446,15 +595,15 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       setConfirmStep(1)
                     }}
                     style={{
-                      padding: '5px 8px',
-                      borderRadius: 6,
-                      border: '1px solid var(--accent-200)',
-                      background: 'var(--accent-50)',
-                      color: 'var(--accent-600)',
-                      fontWeight: 700,
-                      fontSize: 10.5,
+                      padding: '7px 12px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(99,102,241,0.3)',
+                      background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      fontSize: 11,
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     Migration Tool
@@ -465,16 +614,64 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           </div>
 
           {/* About App Banner */}
-          <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '8px 10px', fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>
-            <div><b>WalletVibe Pro v1.0.0</b> • Developed by <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-600)', fontWeight: 700, textDecoration: 'none' }}>NextLifTechnologies</a></div>
-            <div style={{ marginTop: 2 }}>Support: <a href="mailto:walletpro26@gmail.com" style={{ color: 'var(--accent-600)', fontWeight: 700, textDecoration: 'none' }}>walletpro26@gmail.com</a></div>
+          <div
+            style={{
+              background: 'var(--bg-subtle, #f8fafc)',
+              border: '1px solid var(--border-color, #e2e8f0)',
+              borderRadius: 12,
+              padding: '10px 12px',
+              fontSize: 10.5,
+              color: 'var(--text-muted, #64748b)',
+              textAlign: 'center',
+              lineHeight: 1.5,
+            }}
+          >
+            <div>
+              <strong style={{ color: 'var(--text-primary, #1e293b)' }}>WalletVibe Pro v1.0.0</strong> • Developed by{' '}
+              <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#4f46e5', fontWeight: 800, textDecoration: 'none' }}>
+                NextLifTechnologies
+              </a>
+            </div>
+            <div style={{ marginTop: 2 }}>
+              Support:{' '}
+              <a href="mailto:walletpro26@gmail.com" style={{ color: '#4f46e5', fontWeight: 700, textDecoration: 'none' }}>
+                walletpro26@gmail.com
+              </a>
+            </div>
           </div>
         </div>
 
         {/* Save Footer Button */}
-        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-subtle)' }}>
-          <button className="btn-primary" onClick={handleSave} style={{ width: '100%', padding: '9px 14px', fontSize: 12, background: 'var(--accent-gradient)', boxShadow: 'var(--shadow-xs)', borderRadius: 8 }}>
-            <i className="fas fa-check" style={{ marginRight: 6 }}></i> Save &amp; Apply Settings
+        <div
+          style={{
+            padding: '12px 16px',
+            borderTop: '1px solid var(--border-color, #e2e8f0)',
+            background: 'var(--bg-subtle, #f8fafc)',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={handleSave}
+            style={{
+              width: '100%',
+              padding: '11px 16px',
+              fontSize: 13,
+              fontWeight: 900,
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              boxShadow: '0 4px 18px rgba(79, 70, 229, 0.4)',
+              borderRadius: 10,
+              border: 'none',
+              color: '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              letterSpacing: '0.2px',
+            }}
+          >
+            <i className="fas fa-check"></i>
+            <span>Save &amp; Apply Settings</span>
           </button>
         </div>
       </div>
