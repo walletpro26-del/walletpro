@@ -2,12 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { auth } from '../firebase'
 import { loadSnapshot } from '../api/localCache'
-import { fetchBankTransactionsFromFirestore, deleteBankTransaction, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
+import { fetchBankTransactionsFromFirestore, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
 import { downloadBankCsvTemplate } from '../utils/csvTemplate'
 import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 import BankLinkCard from './BankLinkCard'
 import { showConfirm, showAlert } from './CustomDialogModal'
-import { formatUserFriendlyError } from '../utils/userFriendlyError'
 
 function toLocalYMD(d) {
   if (!d) return ''

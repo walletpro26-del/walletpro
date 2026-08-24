@@ -4,7 +4,7 @@ import { db, auth } from '../firebase'
 import { collection, getDocs, query, where, writeBatch, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot } from '../api/localCache'
 import { showConfirm } from './CustomDialogModal'
-import { fetchBankTransactionsFromFirestore, deleteBankTransaction, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
+import { fetchBankTransactionsFromFirestore, deleteBankTransactionsBulk, parseSafeDate } from '../api/bankTransactions'
 
 import {
   parsePdfWithGemini, MAX_PDF_SIZE_BYTES,
