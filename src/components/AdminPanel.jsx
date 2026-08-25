@@ -16,6 +16,8 @@ import {
   purgeDuplicateSubscriptions,
   deleteSubscriptionAccount,
   backfillUserProfiles,
+  deduplicateSubscriptions,
+  getSubscriberCounts,
 } from '../api/subscription'
 
 export default function AdminPanel({ auth, onClose }) {

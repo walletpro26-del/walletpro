@@ -204,7 +204,7 @@ export default function Header({
           <button
             type="button"
             onClick={(subscription?.isAdmin || isAdminEmail(auth?.email)) ? onAdminPanel : onManageSubscription}
-            title={subscription?.isAdmin ? 'Admin Account (Free Lifetime)' : (subscription?.active ? 'Pro Active' : 'Subscribe Now')}
+            title={(subscription?.isAdmin || isAdminEmail(auth?.email)) ? 'Admin Account (Free Lifetime)' : (subscription?.active ? 'Pro Active' : 'Subscribe Now')}
             style={{
               height: 32,
               padding: '0 12px',
@@ -214,25 +214,29 @@ export default function Header({
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 5,
+              gap: 6,
               whiteSpace: 'nowrap',
               cursor: 'pointer',
               boxSizing: 'border-box',
-              background: subscription?.isAdmin
-                ? 'rgba(16, 185, 129, 0.25)'
-                : (subscription?.active ? 'rgba(99, 102, 241, 0.25)' : 'rgba(239, 68, 68, 0.25)'),
-              color: subscription?.isAdmin
+              background: (subscription?.isAdmin || isAdminEmail(auth?.email))
+                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.35) 100%)'
+                : (subscription?.active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(124, 58, 237, 0.35) 100%)' : 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.35) 100%)'),
+              color: (subscription?.isAdmin || isAdminEmail(auth?.email))
                 ? '#6ee7b7'
                 : (subscription?.active ? '#a5b4fc' : '#fca5a5'),
-              border: `1px solid ${subscription?.isAdmin
-                ? 'rgba(16, 185, 129, 0.4)'
-                : (subscription?.active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(239, 68, 68, 0.5)')}`,
-              transition: 'all 0.15s ease',
+              border: `1.5px solid ${(subscription?.isAdmin || isAdminEmail(auth?.email))
+                ? 'rgba(16, 185, 129, 0.5)'
+                : (subscription?.active ? 'rgba(99, 102, 241, 0.5)' : 'rgba(239, 68, 68, 0.55)')}`,
+              boxShadow: (subscription?.isAdmin || isAdminEmail(auth?.email))
+                ? '0 2px 10px rgba(16, 185, 129, 0.25)'
+                : (subscription?.active ? '0 2px 10px rgba(99, 102, 241, 0.25)' : 'none'),
+              backdropFilter: 'blur(8px)',
+              transition: 'all 0.18s ease',
             }}
           >
-            <span style={{ fontSize: 13, lineHeight: 1 }}>{subscription?.isAdmin ? '👑' : (subscription?.active ? '⭐' : '⚡')}</span>
-            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {subscription?.isAdmin ? 'Admin' : (subscription?.active ? 'Pro' : 'Upgrade')}
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{(subscription?.isAdmin || isAdminEmail(auth?.email)) ? '👑' : (subscription?.active ? '⭐' : '⚡')}</span>
+            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 900 }}>
+              {(subscription?.isAdmin || isAdminEmail(auth?.email)) ? 'Admin' : (subscription?.active ? 'Pro' : 'Upgrade')}
             </span>
           </button>
 

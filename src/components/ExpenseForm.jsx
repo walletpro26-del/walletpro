@@ -179,18 +179,18 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Date + Amount + Attach (Compact & Balanced Layout) */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', maxWidth: 360, width: '100%', marginBottom: 12 }}>
+        {/* Date + Amount + Attach (Compact & Balanced Full-Width Layout) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', width: '100%', marginBottom: 12 }}>
           <div
             className="compact-input-block"
             style={{
-              flex: '1 1 125px',
+              flex: '1 1 120px',
               minWidth: 0,
-              padding: '6px 10px',
+              padding: '7px 10px',
               borderRadius: 12,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
             }}
           >
             <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
@@ -208,20 +208,20 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           <div
             className="compact-input-block"
             style={{
-              flex: '1 1 145px',
+              flex: '1.4 1 150px',
               minWidth: 0,
-              padding: '6px 10px',
+              padding: '7px 12px',
               borderRadius: 12,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
             }}
           >
             <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
               Amount
             </label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 15, fontWeight: 700, marginRight: 3, color: '#4f46e5' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 16, fontWeight: 800, marginRight: 4, color: '#4f46e5' }}>₹</span>
               <input
                 type="number"
                 step="0.01"
@@ -239,8 +239,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
             className="attach-btn"
             title="Attach Image or PDF (Max 130 KB)"
             style={{
-              flex: '0 0 auto',
-              minWidth: 50,
+              flex: '0 0 54px',
               padding: '6px 8px',
               borderRadius: 12,
               border: '1.5px dashed var(--border-color, #cbd5e1)',
@@ -252,6 +251,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               justifyContent: 'center',
               margin: 0,
               cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
             <div className="attach-icon" style={{ fontSize: 13, color: form.fileData ? '#4f46e5' : '#64748b' }}>
@@ -366,13 +366,14 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           className="btn-primary"
           disabled={loading}
           style={{
-            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6366f1 100%)',
+            boxShadow: '0 6px 20px -2px rgba(79, 70, 229, 0.4)',
             fontWeight: 900,
-            fontSize: 13,
-            padding: '11px 16px',
-            borderRadius: 10,
-            letterSpacing: '0.3px',
+            fontSize: 13.5,
+            padding: '12px 18px',
+            borderRadius: 12,
+            letterSpacing: '0.4px',
+            transition: 'all 0.15s ease',
           }}
         >
           {loading ? (

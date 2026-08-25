@@ -53,14 +53,24 @@ function LazyLoader({ isView = false }) {
       color: 'var(--text-muted, #64748b)',
     }}>
       <div style={{
-        width: '32px',
-        height: '32px',
-        border: '3px solid rgba(99, 102, 241, 0.2)',
-        borderTopColor: '#6366f1',
-        borderRadius: '50%',
-        animation: 'spin 0.8s linear infinite',
-      }} />
-      <span style={{ fontSize: '12px', fontWeight: 600 }}>Loading view...</span>
+        position: 'relative',
+        width: '56px',
+        height: '56px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          border: '2.5px solid rgba(99, 102, 241, 0.2)',
+          borderTopColor: '#6366f1',
+          borderRadius: '50%',
+          animation: 'spin 0.85s linear infinite',
+        }} />
+        <WalletVibeLogo size={34} variant="icon" animate={false} />
+      </div>
+      <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.3px' }}>Loading view...</span>
     </div>
   )
 }
@@ -554,7 +564,7 @@ export default function App() {
     localStorage.removeItem('wv_pending_queue')
   }
 
-  // ─── Direct Clean Spinning Circle Loader (auth initializing) ────────────
+  // ─── Direct Clean Logo + Spinning Circle Loader (auth initializing) ───────
   if (!authReady) {
     return (
       <div style={{
@@ -566,13 +576,23 @@ export default function App() {
         background: 'var(--bg-primary, #0f172a)',
       }}>
         <div style={{
-          width: '42px',
-          height: '42px',
-          border: '3.5px solid rgba(99, 102, 241, 0.2)',
-          borderTopColor: '#6366f1',
-          borderRadius: '50%',
-          animation: 'spin 0.75s linear infinite',
-        }} />
+          position: 'relative',
+          width: '72px',
+          height: '72px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            border: '3px solid rgba(99, 102, 241, 0.2)',
+            borderTopColor: '#6366f1',
+            borderRadius: '50%',
+            animation: 'spin 0.9s linear infinite',
+          }} />
+          <WalletVibeLogo size={44} variant="icon" animate={false} />
+        </div>
       </div>
     )
   }

@@ -32,7 +32,22 @@
   <body>
     <div id="root">
       <div style="min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f172a;">
-        <div style="width: 42px; height: 42px; border: 3.5px solid rgba(99, 102, 241, 0.2); border-top-color: #6366f1; border-radius: 50%; animation: wv-spin 0.75s linear infinite;"></div>
+        <div style="position: relative; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center;">
+          <div style="position: absolute; inset: 0; border: 3px solid rgba(99, 102, 241, 0.2); border-top-color: #6366f1; border-radius: 50%; animation: wv-spin 0.9s linear infinite;"></div>
+          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="wv-init-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#818cf8" />
+                <stop offset="50%" stop-color="#6366f1" />
+                <stop offset="100%" stop-color="#a855f7" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="4" width="36" height="32" rx="9" fill="url(#wv-init-grad)" />
+            <path d="M8 22 Q12 17 16 22 Q20 27 24 22 Q28 17 32 22" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round" fill="none" />
+            <path d="M8 26 Q12 21 16 26 Q20 31 24 26 Q28 21 32 26" stroke="rgba(255,255,255,0.25)" stroke-width="1.4" stroke-linecap="round" fill="none" />
+            <text x="20" y="18" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="900" font-family="system-ui, -apple-system, sans-serif" fill="white">₹</text>
+          </svg>
+        </div>
       </div>
       <style>
         @keyframes wv-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
