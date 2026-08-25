@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import MultiSelectCombobox from './MultiSelectCombobox'
+import QuickFillModal from './QuickFillModal'
 import { normalizePersonName } from '../api/entityNormalizer'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
@@ -23,6 +24,9 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   const [attachmentError, setAttachmentError] = useState('')
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedQuickFill, setSelectedQuickFill] = useState(null)
+  const [isQuickFillModalOpen, setIsQuickFillModalOpen] = useState(false)
+  const [importedNotice, setImportedNotice] = useState('')
   const chipsRef = useRef(null)
 
   useEffect(() => {
@@ -58,15 +62,38 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
   function set(key, val) { setForm((s) => ({ ...s, [key]: val })) }
 
-  function applyQuickFill(qf) {
+  function handleQuickFillClick(qf) {
+    setSelectedQuickFill(qf)
+    setIsQuickFillModalOpen(true)
+  }
+
+  function handleImportFromModal(customizedData) {
     setForm((s) => ({
       ...s,
-      forWhom: qf.whom || s.forWhom,
-      category: qf.category || s.category,
-      details: qf.details || s.details,
-      amount: qf.amount || s.amount,
-      paymentMode: qf.mode || s.paymentMode,
+      date: customizedData.date || s.date,
+      forWhom: customizedData.forWhom || s.forWhom,
+      category: customizedData.category || s.category,
+      details: customizedData.details || s.details,
+      amount: customizedData.amount !== undefined ? customizedData.amount : s.amount,
+      paymentMode: customizedData.paymentMode || s.paymentMode,
+      remarks: customizedData.remarks || s.remarks,
     }))
+    setImportedNotice(`⚡ Imported "${customizedData.details || customizedData.category}" into form!`)
+    setTimeout(() => setImportedNotice(''), 3500)
+  }
+
+  function handleDirectSaveFromModal(savePayload) {
+    setIsSubmitting(true)
+    onSave({
+      ...savePayload,
+      forWhom: normalizePersonName(savePayload.forWhom || 'Self'),
+      formType: 'expense',
+      fileData: null,
+      fileName: '',
+      mimeType: '',
+    })
+    setImportedNotice(`✔ Saved "${savePayload.details || savePayload.category}" directly!`)
+    setTimeout(() => setImportedNotice(''), 3500)
   }
 
   async function handleFile(e) {
@@ -132,6 +159,17 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
   return (
     <div className="animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
+      {/* Quick Fill Review & Customization Modal */}
+      <QuickFillModal
+        isOpen={isQuickFillModalOpen}
+        onClose={() => setIsQuickFillModalOpen(false)}
+        quickFillItem={selectedQuickFill}
+        suggestions={suggestions}
+        onImport={handleImportFromModal}
+        onDirectSave={handleDirectSaveFromModal}
+        loading={loading}
+      />
+
       {editData && (
         <div className="edit-banner">
           <span><i className="fas fa-edit"></i> Editing Record</span>
@@ -139,11 +177,47 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         </div>
       )}
 
-      {/* Quick Fill */}
+      {/* Imported Confirmation Toast */}
+      {importedNotice && (
+        <div
+          className="animate-fade-in"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '6px 12px',
+            marginBottom: 10,
+            borderRadius: 10,
+            background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(16, 185, 129, 0.12) 100%)',
+            border: '1px solid rgba(79, 70, 229, 0.25)',
+            color: 'var(--text-primary)',
+            fontSize: 11.5,
+            fontWeight: 800,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i className="fas fa-bolt" style={{ color: '#f59e0b' }}></i> {importedNotice}
+          </span>
+          <button
+            type="button"
+            onClick={() => setImportedNotice('')}
+            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 900 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Quick Fill Chips Bar */}
       {suggestions?.quickFills?.length > 0 && !editData && (
         <div className="chips-wrapper" style={{ marginBottom: 10 }}>
           <div className="chips-header" style={{ fontSize: 9.5, fontWeight: 900, color: 'var(--text-muted, #64748b)', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 5 }}>
             <i className="fas fa-bolt" style={{ color: '#f59e0b' }}></i> <span>Quick Fill</span>
+            <span style={{ fontSize: 8.5, fontWeight: 700, color: '#94a3b8', marginLeft: 'auto' }}>
+              Tap to customize &amp; import
+            </span>
           </div>
           <div className="chips-scroll-row">
             <button className="chips-scroll-btn" type="button" onClick={() => chipsRef.current?.scrollBy(-120, 0)} style={{ color: '#94a3b8' }}>
@@ -155,7 +229,8 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                   key={i}
                   className="chip"
                   type="button"
-                  onClick={() => applyQuickFill(qf)}
+                  onClick={() => handleQuickFillClick(qf)}
+                  title="Click to preview, edit & import"
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
@@ -165,9 +240,15 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                     background: 'var(--bg-card, #ffffff)',
                     color: 'var(--text-secondary, #475569)',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
                   }}
                 >
-                  {qf.label}
+                  <span style={{ color: '#4f46e5', fontWeight: 900 }}>₹{qf.amount || 0}</span>
+                  <span style={{ opacity: 0.4 }}>·</span>
+                  <span>{qf.label}</span>
                 </button>
               ))}
             </div>
