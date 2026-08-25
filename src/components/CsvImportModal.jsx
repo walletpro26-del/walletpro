@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { auth } from '../firebase'
 import { saveExpensesBatch } from '../api/expenses'
 import { saveLendingBatch } from '../api/lending'
 import { saveBankTransactionsBatch, fetchBankTransactionsFromFirestore } from '../api/bankTransactions'

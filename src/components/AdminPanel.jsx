@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom'
 import { extractValidGeminiKeys } from '../api/pdfExtractor'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
-import { getAppConfig, updateAppConfig } from '../api/appConfig'
+import { getAppConfig, updateAppConfig, invalidateConfigCache } from '../api/appConfig'
 import { showConfirm } from './CustomDialogModal'
 import {
   isAdminEmail,
   ADMIN_EMAILS,
+  getAllSubscriptions,
   revokeSubscription,
   reactivateSubscription,
   adminSetSubscriptionByEmailOrUid,
