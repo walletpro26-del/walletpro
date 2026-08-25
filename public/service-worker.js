@@ -4,7 +4,7 @@
    - Posts SW_UPDATED message to all clients when a new SW activates
 */
 
-const CACHE_NAME = 'walletvibe-cache-v6'
+const CACHE_NAME = 'walletvibe-cache-v7'
 const VERSION_KEY = 'wv-deployed-version'
 
 // On install — cache shell assets

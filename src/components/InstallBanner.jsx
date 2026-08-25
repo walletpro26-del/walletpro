@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import WalletVibeLogo from './WalletVibeLogo'
 
 function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
@@ -117,8 +118,8 @@ export default function InstallBanner() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <i className="fas fa-mobile-alt" />
-            <span>📱 Install WalletVibe on iPhone / iPad</span>
+            <WalletVibeLogo size={18} />
+            <span>Install WalletVibe on iPhone / iPad</span>
           </div>
           <button
             type="button"
@@ -143,13 +144,13 @@ export default function InstallBanner() {
   return (
     <div style={{
       padding: '10px 14px', margin: '12px 14px 4px', borderRadius: 12,
-      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-      color: '#ffffff', boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
+      background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+      color: '#ffffff', boxShadow: '0 4px 14px rgba(79,70,229,0.35)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-          📲
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <WalletVibeLogo size={32} />
         </div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 12, lineHeight: 1.2 }}>Install WalletVibe App</div>

@@ -428,7 +428,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                         message: '💡 Installation Banner re-activated! Please tap "⚡ Install App" at the top of your screen or open your browser menu -> "Add to Home Screen".',
                         buttonText: 'Got it!',
                         variant: 'primary',
-                        icon: '📲',
+                        icon: 'fa-download',
                       })
                       onClose?.()
                     }}
@@ -442,9 +442,12 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       border: '1px solid rgba(99,102,241,0.3)',
                       cursor: 'pointer',
                       flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
                     }}
                   >
-                    📲 Install App
+                    <i className="fas fa-download" style={{ fontSize: 10 }} /> Install App
                   </button>
                 )}
               </div>

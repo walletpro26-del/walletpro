@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <defs>
+    <linearGradient id="wv-fav-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+    <linearGradient id="wv-fav-shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.35)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="4" width="36" height="32" rx="9" fill="url(#wv-fav-grad)" />
+  <rect x="2" y="4" width="36" height="16" rx="9" fill="url(#wv-fav-shine)" opacity="0.6" />
+  <path d="M8 22 Q12 17 16 22 Q20 27 24 22 Q28 17 32 22" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round" fill="none" />
+  <path d="M8 26 Q12 21 16 26 Q20 31 24 26 Q28 21 32 26" stroke="rgba(255,255,255,0.25)" stroke-width="1.4" stroke-linecap="round" fill="none" />
+  <text x="20" y="18" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="900" font-family="system-ui, -apple-system, sans-serif" fill="#ffffff">₹</text>
+</svg>

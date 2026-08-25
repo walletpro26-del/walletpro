@@ -1,59 +1,52 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 export default function UpdateBanner() {
   const [showUpdate, setShowUpdate] = useState(false)
   const [newVersion, setNewVersion] = useState('')
+  const currentVersionRef = useRef('')
 
   useEffect(() => {
-    // Listen for messages from the service worker
+    // In development mode, bypass update banners entirely
+    if (import.meta.env.DEV) return
+
+    let isMounted = true
+
+    // Fetch the version active when this session started
+    fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ version }) => {
+        if (!isMounted || !version) return
+        currentVersionRef.current = version
+        localStorage.setItem('wv_app_version', version)
+      })
+      .catch(() => {})
+
+    // Listen for messages from the service worker (only APP_UPDATED, never SW_ACTIVATED)
     function handleSWMessage(event) {
-      if (event.data?.type === 'APP_UPDATED' || event.data?.type === 'SW_ACTIVATED') {
-        // Only show update banner if the page has been open for a bit (not on fresh load)
-        const openTime = window.__wv_open_time || Date.now()
-        const age = Date.now() - openTime
-        if (age > 5000) { // only show if app was open > 5s (not on first load)
+      if (event.data?.type === 'APP_UPDATED' && event.data?.version) {
+        const incomingVersion = event.data.version
+        const activeVersion = currentVersionRef.current || localStorage.getItem('wv_app_version')
+        if (activeVersion && incomingVersion !== activeVersion) {
           setShowUpdate(true)
-          if (event.data?.version) setNewVersion(event.data.version)
+          setNewVersion(incomingVersion)
         }
       }
     }
     navigator.serviceWorker?.addEventListener('message', handleSWMessage)
 
-    // Also poll version.json every 5 minutes to catch deploy without SW update
+    // Periodically poll version.json (every 10 minutes) during an extended active session
     const interval = setInterval(async () => {
       try {
         const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
         if (!res.ok) return
         const { version } = await res.json()
-        const stored = localStorage.getItem('wv_app_version')
-        if (stored && stored !== version) {
+        const activeVersion = currentVersionRef.current || localStorage.getItem('wv_app_version')
+        if (activeVersion && version && version !== activeVersion) {
           setShowUpdate(true)
           setNewVersion(version)
-        } else if (!stored) {
-          localStorage.setItem('wv_app_version', version)
         }
       } catch (_) {}
-    }, 5 * 60 * 1000)
-
-    // Initial version fetch — store without showing banner
-    fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
-      .then((r) => r.json())
-      .then(({ version }) => {
-        const stored = localStorage.getItem('wv_app_version')
-        if (!stored) {
-          localStorage.setItem('wv_app_version', version)
-        } else if (stored !== version) {
-          const openTime = window.__wv_open_time || Date.now()
-          const age = Date.now() - openTime
-          if (age > 3000) {
-            setShowUpdate(true)
-            setNewVersion(version)
-          } else {
-            localStorage.setItem('wv_app_version', version)
-          }
-        }
-      })
-      .catch(() => {})
+    }, 10 * 60 * 1000)
 
     // Ping SW to check version
     if (navigator.serviceWorker?.controller) {
@@ -61,6 +54,7 @@ export default function UpdateBanner() {
     }
 
     return () => {
+      isMounted = false
       navigator.serviceWorker?.removeEventListener('message', handleSWMessage)
       clearInterval(interval)
     }
@@ -79,18 +73,21 @@ export default function UpdateBanner() {
   if (!showUpdate) return null
 
   return (
-    <div className="update-banner" role="alert">
+    <div className="update-banner" role="alert" aria-live="polite">
       <div className="update-banner-inner">
-        <span className="update-banner-icon">🚀</span>
+        <div className="update-banner-icon-box">
+          <i className="fas fa-sparkles update-banner-icon" />
+          <span className="update-banner-pulse" />
+        </div>
         <div className="update-banner-text">
-          <strong>New version available!</strong>
-          <span> Reload to get the latest features.</span>
+          <span className="update-banner-title">Update Available</span>
+          <span className="update-banner-desc">A newer version of WalletVibe is ready.</span>
         </div>
         <div className="update-banner-actions">
-          <button className="update-btn-reload" onClick={handleReload}>
-            Reload
+          <button type="button" className="update-btn-reload" onClick={handleReload}>
+            <i className="fas fa-arrow-rotate-right" /> Update Now
           </button>
-          <button className="update-btn-dismiss" onClick={handleDismiss} aria-label="Dismiss">
+          <button type="button" className="update-btn-dismiss" onClick={handleDismiss} aria-label="Dismiss">
             ✕
           </button>
         </div>
@@ -98,3 +95,4 @@ export default function UpdateBanner() {
     </div>
   )
 }
+

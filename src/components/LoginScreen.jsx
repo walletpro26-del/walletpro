@@ -84,157 +84,105 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
 
       {/* Glassmorphic card */}
       <div className="login-card">
-        {/* Clean Logo Header */}
-        <div className="login-logo-area">
-          <div className="login-logo-glow" />
-          <WalletVibeLogo size={68} variant="icon" animate={false} className="login-logo-svg" />
+        {/* Brand Header */}
+        <div className="login-header">
+          <div className="login-logo-wrapper">
+            <div className="login-logo-glow" />
+            <WalletVibeLogo size={52} variant="icon" animate={false} className="login-logo-svg" />
+          </div>
+          <h1 className="login-brand">
+            <span className="login-brand-wallet">Wallet</span>
+            <span className="login-brand-vibe">Vibe</span>
+          </h1>
+          <p className="login-tagline">Smart Personal Finance &amp; Wealth Management</p>
         </div>
 
-        {/* Brand name */}
-        <h1 className="login-brand">
-          <span className="login-brand-wallet">Wallet</span>
-          <span className="login-brand-vibe">Vibe</span>
-        </h1>
-        <p className="login-tagline">Personal Finance, Simplified</p>
-
-        {/* Interactive Feature pills */}
-        <div className="login-features">
-          <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-receipt" style={{ color: '#34d399' }} />
-            <span>Expenses</span>
-          </div>
-          <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-handshake" style={{ color: '#fbbf24' }} />
-            <span>Lending</span>
-          </div>
-          <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-chart-bar" style={{ color: '#38bdf8' }} />
-            <span>Reports</span>
-          </div>
-          <div className="login-feature-pill" style={{ cursor: 'pointer' }} onClick={() => setShowFeaturesModal(true)} title="Click to view details">
-            <i className="fas fa-university" style={{ color: '#c084fc' }} />
-            <span>Bank &amp; AI</span>
-          </div>
-        </div>
-
-        {/* Explore Features Button */}
+        {/* Unified Interactive Features Preview */}
         <button
           type="button"
+          className="login-features-preview"
           onClick={() => setShowFeaturesModal(true)}
-          style={{
-            margin: '0 0 24px',
-            padding: '8px 16px',
-            borderRadius: 99,
-            border: '1px solid rgba(165, 180, 252, 0.4)',
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)',
-            color: '#ffffff',
-            fontSize: 12,
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
-            transition: 'all 0.2s ease',
-          }}
+          title="Click to explore all features &amp; capabilities"
         >
-          <i className="fas fa-layer-group" style={{ fontSize: 11 }} /> Explore App Features
+          <div className="features-preview-chips">
+            <span className="preview-chip chip-expenses"><i className="fas fa-receipt" /> Expenses</span>
+            <span className="preview-chip chip-lending"><i className="fas fa-handshake" /> Lending</span>
+            <span className="preview-chip chip-bank"><i className="fas fa-brain" /> Bank &amp; AI</span>
+            <span className="preview-chip chip-reports"><i className="fas fa-chart-pie" /> Reports</span>
+          </div>
+          <div className="features-preview-action">
+            <span>Explore App Features</span>
+            <i className="fas fa-arrow-right" />
+          </div>
         </button>
 
         {/* Subscriber Limit Capacity Info Banner */}
         {isLimitReached && (
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 12,
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
-              color: '#f87171',
-              fontSize: 11,
-              fontWeight: 700,
-              marginBottom: 16,
-              textAlign: 'left',
-              backdropFilter: 'blur(8px)',
-              lineHeight: 1.4,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 900, color: '#fca5a5', marginBottom: 4 }}>
+          <div className="login-limit-banner">
+            <div className="limit-banner-title">
               <i className="fas fa-exclamation-triangle" />
-              <span>Registration &amp; Subscriptions Full ({activeSubscriberCount} / {subscriberLimit})</span>
+              <span>Registration Full ({activeSubscriberCount} / {subscriberLimit})</span>
             </div>
-            <div style={{ color: 'rgba(254, 226, 226, 0.9)', fontSize: 10.5, marginBottom: 10 }}>
-              Online user registration is currently closed because the maximum capacity of {subscriberLimit} active accounts has been reached. Existing registered users can log in normally. If you need a new account, please contact the admin for direct activation.
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <p className="limit-banner-desc">
+              Online user registration is currently closed because the capacity limit has been reached. Existing registered users can sign in normally below.
+            </p>
+            <div className="limit-banner-actions">
               <a
                 href="mailto:walletpro26@gmail.com?subject=WalletVibe%20Pro%20New%20User%20Registration%20Request"
-                style={{
-                  padding: '6px 12px', background: '#ef4444', color: '#fff',
-                  borderRadius: 6, fontSize: 10.5, fontWeight: 800, textDecoration: 'none',
-                  display: 'inline-flex', alignItems: 'center', gap: 4, boxShadow: '0 2px 6px rgba(239,68,68,0.3)'
-                }}
+                className="limit-btn-contact"
               >
                 <i className="fas fa-envelope" /> Contact Admin
               </a>
               <button
                 type="button"
                 onClick={handleCopyAdminEmail}
-                style={{
-                  padding: '6px 12px', background: 'rgba(255,255,255,0.15)', color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, fontSize: 10.5,
-                  fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
-                }}
+                className="limit-btn-copy"
               >
                 <i className={`fas ${copiedEmail ? 'fa-check' : 'fa-copy'}`} />
-                {copiedEmail ? 'Copied Email!' : 'Copy Admin Email'}
+                {copiedEmail ? 'Copied' : 'Copy Email'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Error */}
+        {/* Error Notification */}
         {error && (
-          <div className="login-error" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <i className="fas fa-exclamation-circle" />
+          <div className="login-error">
+            <div className="login-error-msg">
+              <i className="fas fa-circle-exclamation" />
               <span>{error}</span>
             </div>
             {error.includes('Registration Closed') && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              <div className="login-error-actions">
                 <a
                   href="mailto:walletpro26@gmail.com?subject=WalletVibe%20Pro%20Registration%20Access%20Request"
-                  style={{
-                    padding: '4px 8px', background: '#ef4444', color: '#fff',
-                    borderRadius: 4, fontSize: 10, fontWeight: 800, textDecoration: 'none',
-                  }}
+                  className="limit-btn-contact"
                 >
-                  ✉️ Email Admin
+                  <i className="fas fa-envelope" /> Email Admin
                 </a>
                 <button
                   type="button"
                   onClick={handleCopyAdminEmail}
-                  style={{
-                    padding: '4px 8px', background: 'rgba(255,255,255,0.2)', color: '#fff',
-                    border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 800, cursor: 'pointer'
-                  }}
+                  className="limit-btn-copy"
                 >
-                  {copiedEmail ? '✓ Copied' : '📋 Copy Email'}
+                  {copiedEmail ? '✓ Copied' : 'Copy Email'}
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Google Sign In — the only login method */}
+        {/* Google Sign In — Primary CTA */}
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
           className="login-google-btn"
+          type="button"
         >
           {loading ? (
             <>
               <i className="fas fa-spinner fa-spin" />
-              Signing in...
+              <span>Signing in securely...</span>
             </>
           ) : (
             <>
@@ -244,16 +192,16 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
                 width="20"
                 height="20"
               />
-              Continue with Google
+              <span>Continue with Google</span>
             </>
           )}
         </button>
 
-        {/* Security note */}
-        <p className="login-secure-note">
-          <i className="fas fa-shield-alt" />
-          End-to-end encrypted &middot; Secured by Firebase
-        </p>
+        {/* Security & Privacy Badge */}
+        <div className="login-secure-note">
+          <i className="fas fa-shield-check" />
+          <span>256-bit Encrypted &middot; Secured by Firebase</span>
+        </div>
       </div>
 
       {/* Footer */}
