@@ -84,11 +84,8 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
 
       {/* Glassmorphic card */}
       <div className="login-card">
-        {/* Logo with spinning orbital glow */}
+        {/* Clean Logo Header */}
         <div className="login-logo-area">
-          <div className="splash-spinner-ring" />
-          <div className="splash-spinner-ring-reverse" />
-          <div className="splash-glow-pulse" />
           <div className="login-logo-glow" />
           <WalletVibeLogo size={68} variant="icon" animate={false} className="login-logo-svg" />
         </div>

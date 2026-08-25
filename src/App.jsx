@@ -554,31 +554,25 @@ export default function App() {
     localStorage.removeItem('wv_pending_queue')
   }
 
-  // ─── Splash screen (auth not ready) ────────────────────────────────────────
+  // ─── Direct Clean Spinning Circle Loader (auth initializing) ────────────
   if (!authReady) {
     return (
-      <div className="splash-screen">
-        <div className="splash-orb splash-orb-1" />
-        <div className="splash-orb splash-orb-2" />
-        <div className="splash-content">
-          {/* Glowing Orbital Spinning Circle Around Logo */}
-          <div className="splash-logo-orbit-wrapper">
-            <div className="splash-spinner-ring" />
-            <div className="splash-spinner-ring-reverse" />
-            <div className="splash-glow-pulse" />
-            <div className="splash-logo-core">
-              <WalletVibeLogo size={76} variant="icon" animate={false} />
-            </div>
-          </div>
-          <div className="splash-name">
-            <span className="splash-wallet">Wallet</span>
-            <span className="splash-vibe">Vibe</span>
-          </div>
-          <div className="splash-tagline">Personal Finance, Simplified</div>
-          <div className="splash-loader">
-            <div className="splash-loader-bar" />
-          </div>
-        </div>
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-primary, #0f172a)',
+      }}>
+        <div style={{
+          width: '42px',
+          height: '42px',
+          border: '3.5px solid rgba(99, 102, 241, 0.2)',
+          borderTopColor: '#6366f1',
+          borderRadius: '50%',
+          animation: 'spin 0.75s linear infinite',
+        }} />
       </div>
     )
   }
