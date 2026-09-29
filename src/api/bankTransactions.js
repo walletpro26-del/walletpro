@@ -4,7 +4,7 @@
  */
 
 import { db } from '../firebase'
-import { collection, getDocs, getDocsFromCache, getDoc, getDocFromCache, query, where, deleteDoc, doc, addDoc, updateDoc, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, getDocsFromCache, getDoc, getDocFromCache, query, where, deleteDoc, doc, addDoc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore'
 import { saveSnapshot, loadSnapshot, isCacheFresh, invalidateSnapshot, registerInvalidationListener } from './localCache'
 
 export function parseSafeDate(d) {
@@ -171,6 +171,20 @@ export async function fetchBankTransactionsFromFirestore(currentUid = '', isAdmi
 
   let records = unpackFirestoreDocs(rawDocs, currentUid).sort((a, b) => b.date - a.date)
 
+  // Merge any recently saved or pending records from local snapshot so replication lag never drops items
+  const localSnapshot = loadSnapshot('bank', currentUid) || []
+  const seenBankIds = new Set(records.map((r) => r.id))
+  for (const localRec of localSnapshot) {
+    if (!seenBankIds.has(localRec.id)) {
+      const isRecent = (Date.now() - (localRec._createdLocalAt || 0)) < 180000
+      if (localRec._pending || isRecent) {
+        records.push(toRecord({ ...localRec, id: localRec.id || 'cached' }))
+        seenBankIds.add(localRec.id)
+      }
+    }
+  }
+  records.sort((a, b) => b.date - a.date)
+
   // 6. Final fallback: localStorage cache
   if (records.length === 0) {
     const cached = loadSnapshot('bank', currentUid) || loadSnapshot('bank')
@@ -241,10 +255,16 @@ export async function saveBankTransactionsBatch(currentUid, itemsArray = [], def
 /**
  * Delete a single bank transaction from Firestore (supports single docs and batch sub-items)
  */
-export async function deleteBankTransaction(id, parentDocId = null) {
+export async function deleteBankTransaction(id, parentDocId = null, currentUid = '') {
   if (!id) return
-  invalidateSnapshot('bank')
-  invalidateBankInMemoryCache()
+  const effUid = currentUid || (typeof window !== 'undefined' ? localStorage.getItem('wv_last_uid') || '' : '')
+  
+  // 1. Immediately delete from local snapshot & memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('bank', effUid) || []
+  const filtered = snapshot.filter((r) => r.id !== id)
+  saveSnapshot('bank', filtered, effUid)
+  _memBankCacheMap.set(effUid, filtered)
+  _memBankCacheTimeMap.set(effUid, Date.now())
 
   if (parentDocId) {
     try {
@@ -271,7 +291,7 @@ export async function deleteBankTransaction(id, parentDocId = null) {
     }
   }
 
-  await deleteDoc(doc(db, 'bankTransactions', id))
+  await deleteDoc(doc(db, 'bankTransactions', id)).catch((err) => console.warn('[bankTransactions] deleteDoc failed:', err?.message))
 }
 
 /**

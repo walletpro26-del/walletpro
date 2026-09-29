@@ -71,40 +71,55 @@ registerInvalidationListener((type, uid) => {
   }
 })
 
-export async function addExpense(data) {
+export async function addExpense(data, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
   const fsData = toFirestore(data)
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('expenses', currentUid)
-  invalidateExpenseInMemoryCache(currentUid)
+  if (currentUid && !fsData.userId) {
+    fsData.userId = currentUid
+    fsData.uid = currentUid
+  }
+
+  const tempId = data.id || `exp_tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const ts = data.date ? new Date(data.date) : new Date()
+
+  // Full unpacked optimistic item for instant UI & local cache
+  const optimisticItem = {
+    id: tempId,
+    date: ts.toISOString(),
+    dateObj: ts,
+    forWhom: data.forWhom || 'Self',
+    category: data.category || '',
+    details: data.details || '',
+    amount: parseFloat(data.amount) || 0,
+    paymentMode: data.paymentMode || 'Cash',
+    remarks: data.remarks || '',
+    fileName: data.fileName || data.existingFileName || '',
+    mimeType: data.mimeType || data.existingMimeType || '',
+    hasAttachment: Boolean(data.fileData || data.hasAttachment),
+    hasChunkedAttachment: Boolean(data.hasChunkedAttachment),
+    fileData: data.fileData || null,
+    receipt: data.fileData ? 'inline' : '',
+    userId: currentUid,
+    _createdLocalAt: Date.now(),
+  }
+
+  // 1. Immediately update local snapshot & in-memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('expenses', currentUid) || []
+  const updatedSnapshot = [optimisticItem, ...snapshot.filter((e) => e.id !== tempId && e.id !== data.id)]
+  updatedSnapshot.sort((a, b) => b.dateObj - a.dateObj)
+  saveSnapshot('expenses', updatedSnapshot, currentUid)
+  _memExpenseCacheMap.set(currentUid, updatedSnapshot)
+  _memExpenseCacheTimeMap.set(currentUid, Date.now())
 
   const saveOffline = () => {
-    const tempId = addPending({
+    addPending({
       type: 'add',
       collection: COL,
       data: { ...data, _offline: true },
+      tempId,
     })
-    const snapshot = loadSnapshot('expenses', currentUid) || []
-    const optimistic = {
-      id: tempId,
-      date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
-      dateObj: data.date ? new Date(data.date) : new Date(),
-      forWhom: data.forWhom || 'Self',
-      category: data.category || '',
-      details: data.details || '',
-      amount: parseFloat(data.amount) || 0,
-      paymentMode: data.paymentMode || 'Cash',
-      remarks: data.remarks || '',
-      fileName: data.fileName || '',
-      mimeType: data.mimeType || '',
-      hasAttachment: false,
-      hasChunkedAttachment: false,
-      _pending: true,
-    }
-    snapshot.unshift(optimistic)
-    saveSnapshot('expenses', snapshot, currentUid)
-    _memExpenseCacheMap.set(currentUid, snapshot)
-    _memExpenseCacheTimeMap.set(currentUid, Date.now())
-    return { success: true, id: tempId, offline: true }
+    optimisticItem._pending = true
+    return { success: true, id: tempId, offline: true, item: optimisticItem }
   }
 
   if (!navigator.onLine) {
@@ -114,13 +129,24 @@ export async function addExpense(data) {
   try {
     const docRef = await Promise.race([
       addDoc(collection(db, COL), fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
 
-    if (data.fileData) {
-      await saveAttachment(COL, docRef.id, data.fileData).catch(() => {})
+    // Replace tempId with permanent Firestore doc ID in local cache
+    const finalId = docRef.id
+    optimisticItem.id = finalId
+    const currentList = _memExpenseCacheMap.get(currentUid) || updatedSnapshot
+    const idx = currentList.findIndex((e) => e.id === tempId)
+    if (idx !== -1) {
+      currentList[idx] = { ...currentList[idx], id: finalId }
+      saveSnapshot('expenses', currentList, currentUid)
+      _memExpenseCacheMap.set(currentUid, currentList)
     }
-    return { success: true, id: docRef.id }
+
+    if (data.fileData) {
+      saveAttachment(COL, finalId, data.fileData).catch(() => {})
+    }
+    return { success: true, id: finalId, item: optimisticItem }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
       return saveOffline()
@@ -129,25 +155,35 @@ export async function addExpense(data) {
   }
 }
 
-export async function updateExpense(id, data) {
+export async function updateExpense(id, data, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
   const ref = doc(db, COL, id)
   const fsData = toFirestore(data)
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('expenses', currentUid)
-  invalidateExpenseInMemoryCache(currentUid)
   delete fsData.fileData
+
+  // 1. Immediately update local snapshot & in-memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('expenses', currentUid) || []
+  const idx = snapshot.findIndex((e) => e.id === id)
+  let updatedItem = null
+  if (idx !== -1) {
+    const ts = data.date ? new Date(data.date) : (snapshot[idx].dateObj || new Date(snapshot[idx].date))
+    updatedItem = {
+      ...snapshot[idx],
+      ...data,
+      date: ts.toISOString(),
+      dateObj: ts,
+      amount: parseFloat(data.amount) || snapshot[idx].amount,
+    }
+    snapshot[idx] = updatedItem
+    snapshot.sort((a, b) => b.dateObj - a.dateObj)
+    saveSnapshot('expenses', snapshot, currentUid)
+    _memExpenseCacheMap.set(currentUid, snapshot)
+    _memExpenseCacheTimeMap.set(currentUid, Date.now())
+  }
 
   const saveOfflineUpdate = () => {
     addPending({ type: 'update', collection: COL, id, data })
-    const snapshot = loadSnapshot('expenses', currentUid) || []
-    const idx = snapshot.findIndex((e) => e.id === id)
-    if (idx !== -1) {
-      snapshot[idx] = { ...snapshot[idx], ...data, _pending: true }
-      saveSnapshot('expenses', snapshot, currentUid)
-      _memExpenseCacheMap.set(currentUid, snapshot)
-      _memExpenseCacheTimeMap.set(currentUid, Date.now())
-    }
-    return { success: true, id, offline: true }
+    return { success: true, id, offline: true, item: updatedItem }
   }
 
   if (!navigator.onLine) {
@@ -157,13 +193,13 @@ export async function updateExpense(id, data) {
   try {
     await Promise.race([
       updateDoc(ref, fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
     if (data.fileData) {
-      await deleteAttachmentChunks(COL, id).catch(() => {})
-      await saveAttachment(COL, id, data.fileData).catch(() => {})
+      deleteAttachmentChunks(COL, id).catch(() => {})
+      saveAttachment(COL, id, data.fileData).catch(() => {})
     }
-    return { success: true }
+    return { success: true, id, item: updatedItem }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
       return saveOfflineUpdate()
@@ -200,18 +236,18 @@ function unpackExpenseDoc(docSnap) {
   return [fromFirestore(docSnap)]
 }
 
-export async function deleteExpense(id, parentDocId = null) {
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('expenses', currentUid)
-  invalidateExpenseInMemoryCache(currentUid)
+export async function deleteExpense(id, parentDocId = null, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
+
+  // 1. Immediately delete from local snapshot & memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('expenses', currentUid) || []
+  const filtered = snapshot.filter((e) => e.id !== id)
+  saveSnapshot('expenses', filtered, currentUid)
+  _memExpenseCacheMap.set(currentUid, filtered)
+  _memExpenseCacheTimeMap.set(currentUid, Date.now())
 
   const saveOfflineDelete = () => {
     addPending({ type: 'delete', collection: COL, id })
-    const snapshot = loadSnapshot('expenses', currentUid) || []
-    const filtered = snapshot.filter((e) => e.id !== id)
-    saveSnapshot('expenses', filtered, currentUid)
-    _memExpenseCacheMap.set(currentUid, filtered)
-    _memExpenseCacheTimeMap.set(currentUid, Date.now())
     return { success: true, offline: true }
   }
 
@@ -243,9 +279,9 @@ export async function deleteExpense(id, parentDocId = null) {
   try {
     await Promise.race([
       deleteDoc(doc(db, COL, id)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
-    await deleteAttachmentChunks(COL, id).catch(() => {})
+    deleteAttachmentChunks(COL, id).catch(() => {})
     return { success: true }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
@@ -282,11 +318,11 @@ export async function getAllExpenses(forceRefresh = false, uidOverride = '') {
   }
 
   try {
-    // Fetch user-scoped expenses with 12s network timeout
+    // Fetch user-scoped expenses with 8s network timeout
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await Promise.race([
       getDocs(qScoped),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
 
     let items = []
@@ -318,6 +354,18 @@ export async function getAllExpenses(forceRefresh = false, uidOverride = '') {
             }
           })
         })
+      }
+    }
+
+    // Merge any recently saved or pending items from local snapshot so replication lag never drops an item
+    const localSnapshot = loadSnapshot('expenses', currentUid) || []
+    for (const localItem of localSnapshot) {
+      if (!seenIds.has(localItem.id)) {
+        const isRecent = (Date.now() - (localItem._createdLocalAt || 0)) < 180000 // 3 minutes
+        if (localItem._pending || isRecent) {
+          items.push(localItem)
+          seenIds.add(localItem.id)
+        }
       }
     }
 

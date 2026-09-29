@@ -446,6 +446,77 @@ export default function MultiSelectCombobox({
             </div>
           </div>
 
+          {/* Dedicated In-Popup Search Input */}
+          <div style={{
+            padding: '6px 10px',
+            borderBottom: '1px solid var(--border-color, #e2e8f0)',
+            background: 'var(--bg-card, #ffffff)',
+            flexShrink: 0,
+          }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <i
+                className="fas fa-search"
+                style={{
+                  position: 'absolute',
+                  left: 9,
+                  fontSize: 10,
+                  color: 'var(--text-muted, #94a3b8)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setIsDirty(true)
+                }}
+                placeholder={`Search ${label || 'options'}...`}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    closeDropdown()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '6px 24px 6px 26px',
+                  fontSize: 11.5,
+                  fontWeight: 500,
+                  border: '1px solid var(--border-color, #cbd5e1)',
+                  borderRadius: 6,
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-primary, #0f172a)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSearch('')
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 7,
+                    border: 'none',
+                    background: 'none',
+                    color: 'var(--text-muted, #94a3b8)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 11,
+                    lineHeight: 1,
+                  }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Scrollable Items List */}
           <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
             {showAddOption && (

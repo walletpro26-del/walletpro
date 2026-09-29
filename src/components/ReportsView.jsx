@@ -747,11 +747,19 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
   const [showTypeDropdown, setShowTypeDropdown] = useState(false)
   const [showPersonDropdown, setShowPersonDropdown] = useState(false)
 
-  // Available filter options
-  const catOptions = useMemo(() => [...new Set(allExpenses.map((e) => e.category).filter(Boolean))], [allExpenses])
-  const whomOptions = useMemo(() => [...new Set(allExpenses.map((e) => e.forWhom).filter(Boolean))], [allExpenses])
-  const personOptions = useMemo(() => [...new Set(allLending.map((l) => l.person).filter(Boolean))], [allLending])
+  // Bank filters
+  const [selectedBanks, setSelectedBanks] = useState([])
+  const [selectedBankTypes, setSelectedBankTypes] = useState([])
+  const [showBankDropdown, setShowBankDropdown] = useState(false)
+  const [showBankTypeDropdown, setShowBankTypeDropdown] = useState(false)
+
+  // Available filter options (sorted alphabetically for fast searching)
+  const catOptions = useMemo(() => [...new Set(allExpenses.map((e) => e.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [allExpenses])
+  const whomOptions = useMemo(() => [...new Set(allExpenses.map((e) => e.forWhom).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [allExpenses])
+  const personOptions = useMemo(() => [...new Set(allLending.map((l) => l.person).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [allLending])
   const typeOptions = ['Lend', 'Borrow', 'They Return', 'I Return', 'Forgive']
+  const bankOptions = useMemo(() => [...new Set((bankRecords || []).map((b) => b.bank).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [bankRecords])
+  const bankTypeOptions = ['Debit', 'Credit']
 
   // Filtered data
   const filteredExpenses = useMemo(() => {
@@ -800,9 +808,17 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
         end.setHours(23, 59, 59, 999)
         if (dt < start || dt > end) return false
       }
+      if (selectedBanks.length && !selectedBanks.includes(b.bank)) return false
+      if (selectedBankTypes.length) {
+        const isDebit = parseFloat(b.debit || 0) > 0
+        const isCredit = parseFloat(b.credit || 0) > 0
+        const matchDebit = selectedBankTypes.includes('Debit') && isDebit
+        const matchCredit = selectedBankTypes.includes('Credit') && isCredit
+        if (!matchDebit && !matchCredit) return false
+      }
       return true
     })
-  }, [bankRecords, isAllTime, startDate, endDate])
+  }, [bankRecords, isAllTime, startDate, endDate, selectedBanks, selectedBankTypes])
 
   const bankStats = useMemo(() => {
     let debit = 0
@@ -1263,6 +1279,26 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
               onChange={setSelectedPersons}
               open={showPersonDropdown}
               setOpen={setShowPersonDropdown}
+            />
+          </div>
+        )}
+        {reportType === 'bank' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <MultiSelect
+              label="Bank"
+              options={bankOptions}
+              selected={selectedBanks}
+              onChange={setSelectedBanks}
+              open={showBankDropdown}
+              setOpen={setShowBankDropdown}
+            />
+            <MultiSelect
+              label="Txn Type"
+              options={bankTypeOptions}
+              selected={selectedBankTypes}
+              onChange={setSelectedBankTypes}
+              open={showBankTypeDropdown}
+              setOpen={setShowBankTypeDropdown}
             />
           </div>
         )}
@@ -1903,12 +1939,20 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
 
 function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
   const containerRef = useRef(null)
+  const searchInputRef = useRef(null)
   const [multiMode, setMultiMode] = useState(false)
+  const [search, setSearch] = useState('')
 
-  // Sync multiMode with selected length on open
+  // Sync multiMode with selected length and auto-focus search on open
   useEffect(() => {
     if (open) {
       setMultiMode(selected.length > 1)
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 60)
+      return () => clearTimeout(timer)
+    } else {
+      setSearch('')
     }
   }, [open, selected])
 
@@ -1917,6 +1961,7 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
     function handleClickOutside(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setOpen(false)
+        setSearch('')
       }
     }
     if (open) document.addEventListener('mousedown', handleClickOutside)
@@ -1928,8 +1973,17 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
     if (lower === 'category') return 'Categories'
     if (lower === 'person') return 'People'
     if (lower === 'for whom') return 'For Whom'
+    if (lower === 'bank') return 'Banks'
+    if (lower === 'txn type' || lower === 'type') return 'Types'
     return word + 's'
   }
+
+  // Filter options by search term
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return options
+    const q = search.trim().toLowerCase()
+    return options.filter((opt) => String(opt).toLowerCase().includes(q))
+  }, [options, search])
 
   const displayText = selected.length === 0
     ? `All ${pluralize(label)}`
@@ -1947,6 +2001,20 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
     } else {
       onChange([opt])
       setOpen(false)
+      setSearch('')
+    }
+  }
+
+  function handleSelectAllFiltered() {
+    const newSelected = Array.from(new Set([...selected, ...filteredOptions]))
+    onChange(newSelected)
+  }
+
+  function handleClearFiltered() {
+    if (search.trim()) {
+      onChange(selected.filter((s) => !filteredOptions.includes(s)))
+    } else {
+      onChange([])
     }
   }
 
@@ -1958,8 +2026,19 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
         <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 9, color: 'var(--text-muted)' }}></i>
       </div>
       {open && (
-        <div className="multi-select-options custom-scrollbar" style={{ animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)', zIndex: 9999 }}>
-          {/* Header: label + multi toggle + Close button */}
+        <div
+          className="multi-select-options custom-scrollbar"
+          style={{
+            animation: 'dropdown-spring 0.18s cubic-bezier(0.34,1.56,0.64,1)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            maxHeight: 280,
+            boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          {/* Header Toolbar: label + multi toggle + Close button */}
           <div style={{
             borderBottom: '1px solid var(--border-color)',
             padding: '5px 8px',
@@ -1968,17 +2047,18 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
             justifyContent: 'space-between',
             alignItems: 'center',
             background: 'var(--bg-subtle)',
+            flexShrink: 0,
           }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {multiMode ? 'Multi' : 'Select'}
+            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {multiMode ? `Multi (${selected.length})` : 'Select'}
             </span>
             
             <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-              {multiMode && options.length > 0 && (
+              {multiMode && filteredOptions.length > 0 && (
                 <>
                   <button
                     type="button"
-                    onClick={() => onChange([...options])}
+                    onClick={handleSelectAllFiltered}
                     style={{
                       padding: '2px 5px',
                       fontSize: 9.5,
@@ -1990,14 +2070,14 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
                     }}
-                    title="Select all options"
+                    title={search.trim() ? "Select all matching options" : "Select all options"}
                   >
-                    ✓ All
+                    ✓ All {search.trim() ? `(${filteredOptions.length})` : ''}
                   </button>
                   {selected.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => onChange([])}
+                      onClick={handleClearFiltered}
                       style={{
                         padding: '2px 5px',
                         fontSize: 9.5,
@@ -2009,7 +2089,7 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                       }}
-                      title="Clear all selections"
+                      title="Clear selections"
                     >
                       ✕ Clear
                     </button>
@@ -2044,7 +2124,7 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
 
               <button
                 type="button"
-                onClick={() => { setOpen(false); setMultiMode(false) }}
+                onClick={() => { setOpen(false); setMultiMode(false); setSearch('') }}
                 style={{
                   padding: '3px 6px',
                   fontSize: 10,
@@ -2067,16 +2147,94 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
             </div>
           </div>
 
-          <div className="custom-scrollbar" style={{ maxHeight: 150, overflowY: 'auto' }}>
-            {/* All option */}
-            <div
-              className={`multi-select-option${selected.length === 0 ? ' selected' : ''}`}
-              onClick={() => { onChange([]); setOpen(false); setMultiMode(false) }}
-            >
-              {selected.length === 0 && <i className="fas fa-check" style={{ fontSize: 9, color: 'var(--accent-500)', marginRight: 4 }}></i>}
-              <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>All {pluralize(label)}</span>
+          {/* Search Input Bar */}
+          <div style={{
+            padding: '5px 8px',
+            borderBottom: '1px solid var(--border-color)',
+            background: 'var(--bg-card)',
+            flexShrink: 0,
+          }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <i
+                className="fas fa-search"
+                style={{
+                  position: 'absolute',
+                  left: 8,
+                  fontSize: 10,
+                  color: 'var(--text-muted)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Search ${pluralize(label).toLowerCase()}...`}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setOpen(false)
+                    setSearch('')
+                  } else if (e.key === 'Enter' && filteredOptions.length === 1) {
+                    e.preventDefault()
+                    handleOptionClick(filteredOptions[0])
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '5px 22px 5px 24px',
+                  fontSize: 11,
+                  fontWeight: 500,
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 6,
+                  background: 'var(--bg-subtle)',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSearch('')
+                    searchInputRef.current?.focus()
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: 6,
+                    border: 'none',
+                    background: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 10,
+                    lineHeight: 1,
+                  }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-            {options.map((opt) => (
+          </div>
+
+          {/* Scrollable Options List */}
+          <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, maxHeight: 180 }}>
+            {/* All option shown when not filtering */}
+            {!search.trim() && (
+              <div
+                className={`multi-select-option${selected.length === 0 ? ' selected' : ''}`}
+                onClick={() => { onChange([]); setOpen(false); setMultiMode(false); setSearch('') }}
+              >
+                {selected.length === 0 && <i className="fas fa-check" style={{ fontSize: 9, color: 'var(--accent-500)', marginRight: 4 }}></i>}
+                <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>All {pluralize(label)}</span>
+              </div>
+            )}
+
+            {filteredOptions.map((opt) => (
               <div
                 key={opt}
                 className={`multi-select-option${selected.includes(opt) ? ' selected' : ''}`}
@@ -2088,34 +2246,62 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
                     type="checkbox"
                     checked={selected.includes(opt)}
                     onChange={() => {}}
-                    style={{ accentColor: 'var(--accent-600)', width: 12, height: 12, cursor: 'pointer' }}
+                    style={{ accentColor: 'var(--accent-600)', width: 13, height: 13, cursor: 'pointer' }}
                   />
                 ) : (
                   selected.includes(opt)
                     ? <i className="fas fa-check" style={{ fontSize: 9, color: 'var(--accent-500)', width: 12 }} />
                     : <span style={{ display: 'inline-block', width: 12 }} />
                 )}
-                <span>{opt}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt}</span>
               </div>
             ))}
+
+            {filteredOptions.length === 0 && (
+              <div style={{
+                padding: '16px 10px',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+                fontSize: 11,
+              }}>
+                <div>No matching {pluralize(label).toLowerCase()} for "<strong>{search}</strong>"</div>
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); searchInputRef.current?.focus() }}
+                  style={{
+                    marginTop: 6,
+                    padding: '3px 8px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 4,
+                    color: 'var(--accent-600)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
           </div>
 
           {selected.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border-color)', padding: '5px 8px', background: 'var(--bg-subtle)', display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ borderTop: '1px solid var(--border-color)', padding: '5px 8px', background: 'var(--bg-subtle)', display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <button
                 type="button"
-                onClick={() => { onChange([]); setOpen(false); setMultiMode(false) }}
-                style={{ fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onClick={() => { onChange([]); setOpen(false); setMultiMode(false); setSearch('') }}
+                style={{ fontSize: 9.5, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
               >
                 ✕ Clear all
               </button>
               {multiMode && (
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => { setOpen(false); setSearch('') }}
                   style={{
                     padding: '3px 8px',
-                    fontSize: 9,
+                    fontSize: 9.5,
                     fontWeight: 700,
                     background: 'var(--accent-gradient)',
                     color: '#fff',

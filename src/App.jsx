@@ -12,7 +12,7 @@ import {
 import { getSubscriptionStatus, listenSubscriptionStatus, isAdminEmail, ensureUserProfile } from './api/subscription'
 import { listenAppConfig } from './api/appConfig'
 import { loadSnapshot } from './api/localCache'
-import { fetchBankTransactionsFromFirestore, parseSafeDate } from './api/bankTransactions'
+import { fetchBankTransactionsFromFirestore, parseSafeDate, deleteBankTransaction } from './api/bankTransactions'
 import { formatUserFriendlyError } from './utils/userFriendlyError'
 
 import LoginScreen from './components/LoginScreen'
@@ -25,7 +25,8 @@ import LendingForm from './components/LendingForm'
 import TransactionList from './components/TransactionList'
 import TransactionModal from './components/TransactionModal'
 import WalletVibeLogo from './components/WalletVibeLogo'
-import CustomDialogModal from './components/CustomDialogModal'
+import CustomDialogModal, { showAlert } from './components/CustomDialogModal'
+import { registerDeviceSession, listenDeviceSession, clearDeviceSession } from './api/deviceSession'
 
 // Code-split heavy views & modals for ultra-fast mobile initial page load
 const SubscriptionModal = lazy(() => import('./components/SubscriptionModal'))
@@ -169,6 +170,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [registrationError, setRegistrationError] = useState('')
+  const [sessionNotice, setSessionNotice] = useState('')
 
   // Modals
   const [selectedTxn, setSelectedTxn] = useState(null)
@@ -230,7 +232,13 @@ export default function App() {
   const [editLending, setEditLending] = useState(null)
 
   // Subscription state
-  const [subscriptionState, setSubscriptionState] = useState({ active: true, isAdmin: false, status: 'checking', plan: 'none' })
+  const [subscriptionState, setSubscriptionState] = useState(() => {
+    try {
+      const cached = localStorage.getItem('wv_sub_status')
+      if (cached) return JSON.parse(cached)
+    } catch {}
+    return { active: true, isAdmin: false, status: 'checking', plan: 'none' }
+  })
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
 
@@ -243,6 +251,17 @@ export default function App() {
       setAuthState(state)
       setAuthReady(true)
       if (state.loggedIn && state.uid) {
+        try {
+          localStorage.setItem('wv_last_uid', state.uid)
+          localStorage.setItem('wv_last_email', state.email || '')
+        } catch {}
+
+        if (isAdminEmail(state.email)) {
+          const adminSub = { active: true, isAdmin: true, status: 'active', plan: 'lifetime_admin' }
+          setSubscriptionState(adminSub)
+          try { localStorage.setItem('wv_sub_status', JSON.stringify(adminSub)) } catch {}
+        }
+
         // Fast instant local snapshot re-hydration for the logged in user
         const cachedExp = loadSnapshot('expenses', state.uid)
         const cachedLend = loadSnapshot('lending', state.uid)
@@ -270,6 +289,8 @@ export default function App() {
             dateObj: parseSafeDate(b.dateObj || b.date),
           })))
         }
+
+        registerDeviceSession(state).catch(() => {})
 
         ensureUserProfile(state).catch((err) => {
           if (err?.code === 'REGISTRATION_CLOSED_LIMIT_REACHED' || err?.message?.includes('REGISTRATION_CLOSED_LIMIT_REACHED')) {
@@ -374,16 +395,19 @@ export default function App() {
 
     let unsubSub = null
 
-    if (authState.loggedIn) {
-      checkSubscription(authState)
-      loadDashboard()
-
+    if (authState.loggedIn && authState.uid) {
       unsubSub = listenSubscriptionStatus(authState.uid, authState.email, (sub) => {
         setSubscriptionState(sub)
+        try {
+          localStorage.setItem('wv_sub_status', JSON.stringify(sub))
+        } catch {}
         if (sub.active || sub.isAdmin) {
           setShowSubscriptionModal(false)
         }
       })
+
+      // Fast initial dashboard load (uses cache if fresh, avoids redundant blocking queries)
+      loadDashboard(false)
     }
 
     return () => {
@@ -392,10 +416,30 @@ export default function App() {
     }
   }, [authState.loggedIn, authState.uid, authState.email])
 
+  // Real-time Single Device Session Enforcement
+  useEffect(() => {
+    if (!authState.loggedIn || !authState.uid) return
+    const unsub = listenDeviceSession(authState.uid, authState.email, async (details) => {
+      const deviceName = details.newDevice || 'Another device'
+      const notice = `⚠️ Logged Out: Your account was accessed from ${deviceName}. WalletVibe allows only one active device at a time.`
+      setSessionNotice(notice)
+      showAlert({
+        title: 'Active Session Switched',
+        message: `You were logged out because your WalletVibe account was signed in on another device (${deviceName}). Only one device can be active at a time.`,
+        buttonText: 'Got It',
+        variant: 'warning',
+        icon: '📱',
+      })
+      await handleLogout()
+    })
+    return () => unsub?.()
+  }, [authState.loggedIn, authState.uid, authState.email])
+
   const checkSubscription = useCallback(async (user) => {
     try {
       const sub = await getSubscriptionStatus(user)
       setSubscriptionState(sub)
+      try { localStorage.setItem('wv_sub_status', JSON.stringify(sub)) } catch {}
       // If non-admin and inactive/expired/pending, show subscription modal automatically
       if (!sub.active && !sub.isAdmin) {
         setShowSubscriptionModal(true)
@@ -407,9 +451,9 @@ export default function App() {
     }
   }, [])
 
-  const loadDashboard = useCallback(async (forceRefresh = true) => {
-    // Only show blocking loading state if there's currently zero cached data
-    if (allExpenses.length === 0 && allLending.length === 0) {
+  const loadDashboard = useCallback(async (forceRefresh = false) => {
+    // Only show loading indicator if explicitly forced or if zero cached data exists
+    if (forceRefresh || (allExpenses.length === 0 && allLending.length === 0)) {
       setLoading(true)
     }
     setError('')
@@ -467,45 +511,161 @@ export default function App() {
     }, 150)
   }
 
-  // Expense save
+  // Instant 0ms Optimistic Expense Save
   async function handleSaveExpense(data) {
-    setLoading(true)
     setError('')
-    try {
-      if (data.id) {
-        const result = await updateExpense(data.id, data)
-        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Expense updated!', result.offline)
-      } else {
-        const result = await addExpense(data)
-        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Expense saved!', result.offline)
-      }
+    const isUpdate = Boolean(data.id)
+    const activeUid = authState.uid || auth?.currentUser?.uid || ''
+
+    if (isUpdate) {
+      const updatedDate = parseSafeDate(data.date)
+      setAllExpenses((prev) => {
+        const updated = prev.map((e) => (e.id === data.id ? { ...e, ...data, dateObj: updatedDate } : e))
+        updated.sort((a, b) => b.dateObj - a.dateObj)
+        setRecentExpenses(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, expense: computeExpenseStatsLocally(updated) }))
+        return updated
+      })
       setEditExpense(null)
-      await loadDashboard()
-    } catch (err) {
-      setError(err?.message || 'Save failed')
-    } finally {
-      setLoading(false)
+      showToast('Expense updated!')
+
+      try {
+        const result = await updateExpense(data.id, data, activeUid)
+        if (result?.offline) {
+          showToast('✔ Saved offline — will sync when online', true)
+        }
+      } catch (err) {
+        setError(formatUserFriendlyError(err, 'Failed to update expense.'))
+      }
+    } else {
+      const tempId = `exp_tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const newDate = parseSafeDate(data.date)
+      const optimisticItem = {
+        id: tempId,
+        date: newDate.toISOString(),
+        dateObj: newDate,
+        forWhom: data.forWhom || 'Self',
+        category: data.category || '',
+        details: data.details || '',
+        amount: parseFloat(data.amount) || 0,
+        paymentMode: data.paymentMode || 'Cash',
+        remarks: data.remarks || '',
+        fileName: data.fileName || '',
+        mimeType: data.mimeType || '',
+        hasAttachment: Boolean(data.fileData),
+        hasChunkedAttachment: false,
+        fileData: data.fileData || null,
+        receipt: data.fileData ? 'inline' : '',
+        _createdLocalAt: Date.now(),
+      }
+
+      setAllExpenses((prev) => {
+        const updated = [optimisticItem, ...prev.filter((e) => e.id !== tempId)]
+        updated.sort((a, b) => b.dateObj - a.dateObj)
+        setRecentExpenses(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, expense: computeExpenseStatsLocally(updated) }))
+        return updated
+      })
+      setEditExpense(null)
+      showToast('Expense saved!')
+
+      try {
+        const result = await addExpense(data, activeUid)
+        if (result?.id && result.id !== tempId) {
+          setAllExpenses((prev) =>
+            prev.map((e) => (e.id === tempId ? { ...e, id: result.id, _createdLocalAt: Date.now() } : e))
+          )
+          setRecentExpenses((prev) =>
+            prev.map((e) => (e.id === tempId ? { ...e, id: result.id, _createdLocalAt: Date.now() } : e))
+          )
+        }
+        if (result?.offline) {
+          showToast('✔ Saved offline — will sync when online', true)
+        }
+      } catch (err) {
+        setError(formatUserFriendlyError(err, 'Failed to save expense.'))
+      }
     }
   }
 
-  // Lending save
+  // Instant 0ms Optimistic Lending Save
   async function handleSaveLending(data) {
-    setLoading(true)
     setError('')
-    try {
-      if (data.id) {
-        const result = await updateLending(data.id, data)
-        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Record updated!', result.offline)
-      } else {
-        const result = await addLending(data)
-        showToast(result.offline ? '✔ Saved offline — will sync when online' : 'Record saved!', result.offline)
-      }
+    const isUpdate = Boolean(data.id)
+    const activeUid = authState.uid || auth?.currentUser?.uid || ''
+
+    if (isUpdate) {
+      const updatedDate = parseSafeDate(data.date)
+      setAllLending((prev) => {
+        const updated = prev.map((l) => (l.id === data.id ? { ...l, ...data, dateObj: updatedDate } : l))
+        updated.sort((a, b) => b.dateObj - a.dateObj)
+        setRecentLending(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, lending: computeLendingStatsLocally(updated) }))
+        return updated
+      })
       setEditLending(null)
-      await loadDashboard()
-    } catch (err) {
-      setError(err?.message || 'Save failed')
-    } finally {
-      setLoading(false)
+      showToast('Record updated!')
+
+      try {
+        const result = await updateLending(data.id, data, activeUid)
+        if (result?.offline) {
+          showToast('✔ Saved offline — will sync when online', true)
+        }
+      } catch (err) {
+        setError(formatUserFriendlyError(err, 'Failed to update record.'))
+      }
+    } else {
+      const tempId = `lend_tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const newDate = parseSafeDate(data.date)
+      const optimisticItem = {
+        id: tempId,
+        date: newDate.toISOString(),
+        dateObj: newDate,
+        type: data.type || 'Lend',
+        label: data.type || 'Loan Given',
+        person: data.person || '',
+        amount: parseFloat(data.amount) || 0,
+        remarks: data.remarks || '',
+        mobileNo: data.mobileNo || data.phone || '',
+        email: data.email || '',
+        status: data.status || 'Pending',
+        fileName: data.fileName || '',
+        mimeType: data.mimeType || '',
+        hasAttachment: Boolean(data.fileData),
+        hasChunkedAttachment: false,
+        fileData: data.fileData || null,
+        receipt: data.fileData ? 'inline' : '',
+        isLend: true,
+        sheet: 'lending',
+        _createdLocalAt: Date.now(),
+      }
+
+      setAllLending((prev) => {
+        const updated = [optimisticItem, ...prev.filter((l) => l.id !== tempId)]
+        updated.sort((a, b) => b.dateObj - a.dateObj)
+        setRecentLending(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, lending: computeLendingStatsLocally(updated) }))
+        return updated
+      })
+      setEditLending(null)
+      showToast('Record saved!')
+
+      try {
+        const result = await addLending(data, activeUid)
+        if (result?.id && result.id !== tempId) {
+          setAllLending((prev) =>
+            prev.map((l) => (l.id === tempId ? { ...l, id: result.id, _createdLocalAt: Date.now() } : l))
+          )
+          setRecentLending((prev) =>
+            prev.map((l) => (l.id === tempId ? { ...l, id: result.id, _createdLocalAt: Date.now() } : l))
+          )
+        }
+        if (result?.offline) {
+          showToast('✔ Saved offline — will sync when online', true)
+        }
+      } catch (err) {
+        setError(formatUserFriendlyError(err, 'Failed to save record.'))
+      }
     }
   }
 
@@ -526,38 +686,63 @@ export default function App() {
     }
   }
 
-  // Delete from modal
+  // Instant 0ms Optimistic Delete
   async function handleDelete(item) {
     setSelectedTxn(null)
-    setLoading(true)
     const isLend = Boolean(item.sheet === 'lending' || item.isLend || item.person || item.formType === 'lending')
     const isBank = Boolean(item.sheet === 'bank' || item.bank)
+    const activeUid = authState.uid || auth?.currentUser?.uid || ''
 
-    try {
-      if (isBank) {
-        await deleteBankTransaction(item.id)
-      } else if (isLend) {
-        await deleteLending(item.id)
-      } else {
-        await deleteExpense(item.id)
-      }
+    if (isBank) {
+      setBankRecords((prev) => prev.filter((b) => b.id !== item.id))
       showToast('Deleted!')
-      await loadDashboard()
-    } catch (err) {
-      setError(err?.message || 'Delete failed')
-    } finally {
-      setLoading(false)
+      try {
+        await deleteBankTransaction(item.id, item.parentDocId, activeUid)
+      } catch (err) {
+        console.warn('Bank delete error:', err?.message)
+      }
+    } else if (isLend) {
+      setAllLending((prev) => {
+        const updated = prev.filter((l) => l.id !== item.id)
+        setRecentLending(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, lending: computeLendingStatsLocally(updated) }))
+        return updated
+      })
+      showToast('Deleted!')
+      try {
+        await deleteLending(item.id, item.parentDocId, activeUid)
+      } catch (err) {
+        console.warn('Lending delete error:', err?.message)
+      }
+    } else {
+      setAllExpenses((prev) => {
+        const updated = prev.filter((e) => e.id !== item.id)
+        setRecentExpenses(updated.slice(0, 20))
+        setStats((prevStats) => ({ ...prevStats, expense: computeExpenseStatsLocally(updated) }))
+        return updated
+      })
+      showToast('Deleted!')
+      try {
+        await deleteExpense(item.id, item.parentDocId, activeUid)
+      } catch (err) {
+        console.warn('Expense delete error:', err?.message)
+      }
     }
   }
 
   async function handleLogout() {
+    clearDeviceSession()
     await signOut()
     setAuthState({ loggedIn: false, uid: null, email: '', name: '' })
     setRecentExpenses([])
     setRecentLending([])
     setAllExpenses([])
     setAllLending([])
+    setBankRecords([])
     // Security: Purge sensitive cached data on logout
+    localStorage.removeItem('wv_last_uid')
+    localStorage.removeItem('wv_last_email')
+    localStorage.removeItem('wv_sub_status')
     localStorage.removeItem('wv_cache_expenses')
     localStorage.removeItem('wv_cache_lending')
     localStorage.removeItem('wv_cache_bank')
@@ -599,7 +784,7 @@ export default function App() {
 
   // Login screen
   if (!authState.loggedIn) {
-    return <LoginScreen registrationError={registrationError} appConfig={appConfig} />
+    return <LoginScreen registrationError={sessionNotice || registrationError} appConfig={appConfig} />
   }
 
   return (
@@ -617,7 +802,7 @@ export default function App() {
         subscription={subscriptionState}
         allowNonCsvImport={(subscriptionState?.isAdmin || isAdminEmail(authState?.email)) || (appConfig?.allowNonCsvImport !== false)}
         onLogout={handleLogout}
-        onRefresh={loadDashboard}
+        onRefresh={() => loadDashboard(true)}
         onSettings={() => setShowSettings(true)}
         onBankSearch={() => setShowBankSearch(true)}
         onSearchSelect={(item) => setSelectedTxn(item)}

@@ -1,0 +1,33 @@
+name: Auto-Deploy Firebase Rules
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - 'scripts/deploy-firestore-rules.mjs'
+      - '.github/workflows/deploy-firebase-rules.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-rules:
+    name: Deploy Firestore Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy Firestore Security Rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          VITE_FIREBASE_PROJECT_ID: walletpro-aa1f3
+        run: |
+          node scripts/deploy-firestore-rules.mjs

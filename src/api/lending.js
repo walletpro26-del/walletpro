@@ -93,41 +93,67 @@ registerInvalidationListener((type, uid) => {
   }
 })
 
-export async function addLending(data) {
+export async function addLending(data, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
   const fsData = toFirestore(data)
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('lending', currentUid)
-  invalidateLendingInMemoryCache(currentUid)
+  if (currentUid && !fsData.userId) {
+    fsData.userId = currentUid
+    fsData.uid = currentUid
+  }
+
+  const tempId = data.id || `lend_tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const ts = data.date ? new Date(data.date) : new Date()
+  const norm = normalizeLendingType(data.type || data.lendType || 'Lend')
+
+  let label = data.type || ''
+  if (norm === 'LEND') label = 'Loan Given'
+  else if (norm === 'BORROW') label = 'Borrowed'
+  else if (norm === 'THEY_RETURN') label = 'Received Return'
+  else if (norm === 'I_RETURN') label = 'I Returned'
+  else if (norm === 'FORGIVE') label = 'Forgiven'
+
+  // Full unpacked optimistic item for instant UI & local cache
+  const optimisticItem = {
+    id: tempId,
+    date: ts.toISOString(),
+    dateObj: ts,
+    type: data.type || 'Lend',
+    label,
+    person: data.person || '',
+    amount: parseFloat(data.amount) || 0,
+    remarks: data.remarks || '',
+    mobileNo: data.mobileNo || data.phone || '',
+    email: data.email || '',
+    status: data.status || 'Pending',
+    fileName: data.fileName || data.existingFileName || '',
+    mimeType: data.mimeType || data.existingMimeType || '',
+    hasAttachment: Boolean(data.fileData || data.hasAttachment),
+    hasChunkedAttachment: Boolean(data.hasChunkedAttachment),
+    fileData: data.fileData || null,
+    receipt: data.fileData ? 'inline' : '',
+    isLend: true,
+    sheet: 'lending',
+    userId: currentUid,
+    _createdLocalAt: Date.now(),
+  }
+
+  // 1. Immediately update local snapshot & in-memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('lending', currentUid) || []
+  const updatedSnapshot = [optimisticItem, ...snapshot.filter((l) => l.id !== tempId && l.id !== data.id)]
+  updatedSnapshot.sort((a, b) => b.dateObj - a.dateObj)
+  saveSnapshot('lending', updatedSnapshot, currentUid)
+  _memLendingCacheMap.set(currentUid, updatedSnapshot)
+  _memLendingCacheTimeMap.set(currentUid, Date.now())
 
   const saveOffline = () => {
-    const tempId = addPending({
+    addPending({
       type: 'add',
       collection: COL,
       data: { ...data, _offline: true },
+      tempId,
     })
-    const snapshot = loadSnapshot('lending', currentUid) || []
-    const optimistic = {
-      id: tempId,
-      date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
-      dateObj: data.date ? new Date(data.date) : new Date(),
-      person: data.person || '',
-      type: data.type || 'LENT',
-      amount: parseFloat(data.amount) || 0,
-      remarks: data.remarks || '',
-      status: data.status || 'Pending',
-      phone: data.phone || '',
-      email: data.email || '',
-      fileName: data.fileName || '',
-      mimeType: data.mimeType || '',
-      hasAttachment: false,
-      hasChunkedAttachment: false,
-      _pending: true,
-    }
-    snapshot.unshift(optimistic)
-    saveSnapshot('lending', snapshot, currentUid)
-    _memLendingCacheMap.set(currentUid, snapshot)
-    _memLendingCacheTimeMap.set(currentUid, Date.now())
-    return { success: true, id: tempId, offline: true }
+    optimisticItem._pending = true
+    return { success: true, id: tempId, offline: true, item: optimisticItem }
   }
 
   if (!navigator.onLine) {
@@ -137,12 +163,24 @@ export async function addLending(data) {
   try {
     const docRef = await Promise.race([
       addDoc(collection(db, COL), fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
-    if (data.fileData) {
-      await saveAttachment(COL, docRef.id, data.fileData).catch(() => {})
+
+    // Replace tempId with permanent Firestore doc ID in local cache
+    const finalId = docRef.id
+    optimisticItem.id = finalId
+    const currentList = _memLendingCacheMap.get(currentUid) || updatedSnapshot
+    const idx = currentList.findIndex((l) => l.id === tempId)
+    if (idx !== -1) {
+      currentList[idx] = { ...currentList[idx], id: finalId }
+      saveSnapshot('lending', currentList, currentUid)
+      _memLendingCacheMap.set(currentUid, currentList)
     }
-    return { success: true, id: docRef.id }
+
+    if (data.fileData) {
+      saveAttachment(COL, finalId, data.fileData).catch(() => {})
+    }
+    return { success: true, id: finalId, item: optimisticItem }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
       return saveOffline()
@@ -151,25 +189,35 @@ export async function addLending(data) {
   }
 }
 
-export async function updateLending(id, data) {
+export async function updateLending(id, data, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
   const ref = doc(db, COL, id)
   const fsData = toFirestore(data)
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('lending', currentUid)
-  invalidateLendingInMemoryCache(currentUid)
   delete fsData.fileData
+
+  // 1. Immediately update local snapshot & in-memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('lending', currentUid) || []
+  const idx = snapshot.findIndex((l) => l.id === id)
+  let updatedItem = null
+  if (idx !== -1) {
+    const ts = data.date ? new Date(data.date) : (snapshot[idx].dateObj || new Date(snapshot[idx].date))
+    updatedItem = {
+      ...snapshot[idx],
+      ...data,
+      date: ts.toISOString(),
+      dateObj: ts,
+      amount: parseFloat(data.amount) || snapshot[idx].amount,
+    }
+    snapshot[idx] = updatedItem
+    snapshot.sort((a, b) => b.dateObj - a.dateObj)
+    saveSnapshot('lending', snapshot, currentUid)
+    _memLendingCacheMap.set(currentUid, snapshot)
+    _memLendingCacheTimeMap.set(currentUid, Date.now())
+  }
 
   const saveOfflineUpdate = () => {
     addPending({ type: 'update', collection: COL, id, data })
-    const snapshot = loadSnapshot('lending', currentUid) || []
-    const idx = snapshot.findIndex((l) => l.id === id)
-    if (idx !== -1) {
-      snapshot[idx] = { ...snapshot[idx], ...data, _pending: true }
-      saveSnapshot('lending', snapshot, currentUid)
-      _memLendingCacheMap.set(currentUid, snapshot)
-      _memLendingCacheTimeMap.set(currentUid, Date.now())
-    }
-    return { success: true, id, offline: true }
+    return { success: true, id, offline: true, item: updatedItem }
   }
 
   if (!navigator.onLine) {
@@ -179,13 +227,13 @@ export async function updateLending(id, data) {
   try {
     await Promise.race([
       updateDoc(ref, fsData),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
     if (data.fileData) {
-      await deleteAttachmentChunks(COL, id).catch(() => {})
-      await saveAttachment(COL, id, data.fileData).catch(() => {})
+      deleteAttachmentChunks(COL, id).catch(() => {})
+      saveAttachment(COL, id, data.fileData).catch(() => {})
     }
-    return { success: true }
+    return { success: true, id, item: updatedItem }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
       return saveOfflineUpdate()
@@ -222,18 +270,18 @@ function unpackLendingDoc(docSnap) {
   return [fromFirestore(docSnap)]
 }
 
-export async function deleteLending(id, parentDocId = null) {
-  const currentUid = auth.currentUser?.uid || ''
-  invalidateSnapshot('lending', currentUid)
-  invalidateLendingInMemoryCache(currentUid)
+export async function deleteLending(id, parentDocId = null, uidOverride = '') {
+  const currentUid = uidOverride || auth.currentUser?.uid || ''
+
+  // 1. Immediately delete from local snapshot & memory cache for 0ms UI reflection
+  const snapshot = loadSnapshot('lending', currentUid) || []
+  const filtered = snapshot.filter((l) => l.id !== id)
+  saveSnapshot('lending', filtered, currentUid)
+  _memLendingCacheMap.set(currentUid, filtered)
+  _memLendingCacheTimeMap.set(currentUid, Date.now())
 
   const saveOfflineDelete = () => {
     addPending({ type: 'delete', collection: COL, id })
-    const snapshot = loadSnapshot('lending', currentUid) || []
-    const filtered = snapshot.filter((l) => l.id !== id)
-    saveSnapshot('lending', filtered, currentUid)
-    _memLendingCacheMap.set(currentUid, filtered)
-    _memLendingCacheTimeMap.set(currentUid, Date.now())
     return { success: true, offline: true }
   }
 
@@ -265,9 +313,9 @@ export async function deleteLending(id, parentDocId = null) {
   try {
     await Promise.race([
       deleteDoc(doc(db, COL, id)),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
-    await deleteAttachmentChunks(COL, id).catch(() => {})
+    deleteAttachmentChunks(COL, id).catch(() => {})
     return { success: true }
   } catch (err) {
     if (!navigator.onLine || err?.code === 'unavailable' || err?.message?.includes('unavailable') || err?.message === 'timeout_unavailable') {
@@ -304,10 +352,11 @@ export async function getAllLending(forceRefresh = false, uidOverride = '') {
   }
 
   try {
+    // Fetch user-scoped lending with 8s network timeout
     const qScoped = query(collection(db, COL), where('userId', '==', currentUid))
     const snapScoped = await Promise.race([
       getDocs(qScoped),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout_unavailable')), 8000))
     ])
 
     let items = []
@@ -339,6 +388,18 @@ export async function getAllLending(forceRefresh = false, uidOverride = '') {
             }
           })
         })
+      }
+    }
+
+    // Merge any recently saved or pending items from local snapshot so replication lag never drops an item
+    const localSnapshot = loadSnapshot('lending', currentUid) || []
+    for (const localItem of localSnapshot) {
+      if (!seenIds.has(localItem.id)) {
+        const isRecent = (Date.now() - (localItem._createdLocalAt || 0)) < 180000 // 3 minutes
+        if (localItem._pending || isRecent) {
+          items.push(localItem)
+          seenIds.add(localItem.id)
+        }
       }
     }
 

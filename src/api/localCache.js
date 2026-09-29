@@ -7,8 +7,19 @@
  *  - All stored in localStorage (browser-local, not sent anywhere)
  */
 
+function getEffectiveUid(uid = '') {
+  if (uid) return uid
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('wv_last_uid') || ''
+    }
+  } catch {}
+  return ''
+}
+
 function getKey(type, uid = '') {
-  const userPrefix = uid ? `_${uid}` : ''
+  const effUid = getEffectiveUid(uid)
+  const userPrefix = effUid ? `_${effUid}` : ''
   return `wv_cache${userPrefix}_${type}`
 }
 
@@ -28,12 +39,13 @@ const PENDING_KEYS = {
 export function saveSnapshot(type, data, uid = '') {
   try {
     if (!Array.isArray(data)) return
+    const effUid = getEffectiveUid(uid)
     // Do not overwrite non-empty cache with empty array
     if (data.length === 0) {
-      const existing = localStorage.getItem(getKey(type, uid))
+      const existing = localStorage.getItem(getKey(type, effUid))
       if (existing && existing !== '[]' && existing.length > 2) return
     }
-    const key = getKey(type, uid)
+    const key = getKey(type, effUid)
     // Store only essential fields to keep size manageable and prevent QuotaExceededError
     const slim = data.map((item) => {
       const { dateObj, fileData, ...rest } = item
@@ -51,7 +63,8 @@ export function saveSnapshot(type, data, uid = '') {
  */
 export function isCacheFresh(type, uid = '', maxAgeMs = 15 * 60 * 1000) {
   try {
-    const key = getKey(type, uid)
+    const effUid = getEffectiveUid(uid)
+    const key = getKey(type, effUid)
     const tsStr = localStorage.getItem(key + '_ts')
     if (!tsStr) return false
     const ts = parseInt(tsStr, 10)

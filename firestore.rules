@@ -119,6 +119,13 @@ service cloud.firestore {
       );
     }
 
+    // ── User Sessions (single device concurrent session enforcement) ──
+    match /userSessions/{userId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId || isAdmin()
+      );
+    }
+
     // ── Scheduled Reminders (admin full access, users own) ──
     match /scheduledReminders/{docId} {
       allow read: if request.auth != null && (isOwner() || isAdmin());
