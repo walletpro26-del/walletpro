@@ -1,3 +1,5 @@
+import useToolDialog from './useToolDialog'
+import { loadSnapshot, clearUserCache } from '../api/localCache'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isAdminEmail } from '../api/subscription'
@@ -6,6 +8,7 @@ import { checkIsPwaInstalled } from './InstallBanner'
 import { showConfirm, showAlert } from './CustomDialogModal'
 
 export default function SettingsModal({ auth, subscription, onClose, onSave, onMigrate, onManageSubscription, onOpenRatingModal }) {
+  const dialogRef = useToolDialog(onClose)
   const [theme, setTheme] = useState(localStorage.getItem('wv_theme') || localStorage.getItem('wp_theme') || 'light')
   const [currency, setCurrency] = useState(localStorage.getItem('wv_currency') || localStorage.getItem('wp_currency') || '₹')
   const [startScreen, setStartScreen] = useState(localStorage.getItem('wv_startScreen') || localStorage.getItem('wp_startScreen') || 'expense')
@@ -40,22 +43,22 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
   async function handleClearCache() {
     const confirmed = await showConfirm({
       title: 'Clear Local Cache',
-      message: 'Clear all local app cache and reload? Your cloud data will automatically re-sync.',
+      message: 'Clear this account’s cached records and reload? Pending offline entries and preferences are retained. Cloud records will re-sync.',
       confirmText: 'Clear Cache & Reload',
       cancelText: 'Cancel',
       variant: 'danger',
       icon: '🧹',
     })
     if (!confirmed) return
-    localStorage.clear()
+    clearUserCache(auth?.uid)
     location.reload()
   }
 
   function handleExportBackup() {
     try {
-      const exp = JSON.parse(localStorage.getItem('wv_cache_expenses') || '[]')
-      const lend = JSON.parse(localStorage.getItem('wv_cache_lending') || '[]')
-      const bank = JSON.parse(localStorage.getItem('wv_cache_bank') || '[]')
+      const exp = loadSnapshot('expenses', auth?.uid) || []
+      const lend = loadSnapshot('lending', auth?.uid) || []
+      const bank = loadSnapshot('bank', auth?.uid) || []
 
       const backupData = {
         app: 'WalletVibe',
@@ -92,7 +95,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
   const userInitial = (auth?.email || auth?.name || 'U').charAt(0).toUpperCase()
 
   const themes = [
-    { id: 'light', name: 'Light', bg: '#ffffff', color: '#1e293b', accent: '#6366f1' },
+    { id: 'light', name: 'Light', bg: '#ffffff', color: '#1e293b', accent: 'var(--accent-600)' },
     { id: 'dark', name: 'Dark', bg: '#0f172a', color: '#f8fafc', accent: '#818cf8' },
     { id: 'midnight', name: 'Midnight', bg: '#0b1120', color: '#f1f5f9', accent: '#38bdf8' },
     { id: 'forest', name: 'Forest', bg: '#022c22', color: '#ecfdf5', accent: '#34d399' },
@@ -102,7 +105,8 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
     <div className="modal-overlay" style={{ zIndex: 130 }}>
       <div className="modal-backdrop" onClick={onClose}></div>
       <div
-        className="modal-container custom-scrollbar"
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Settings"
+        className="modal-container custom-scrollbar tool-dialog settings-dialog"
         style={{
           maxWidth: 440,
           width: '92%',
@@ -116,69 +120,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           padding: 0,
         }}
       >
-        {/* Luxury Modern Header */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #090d16 0%, #1e1b4b 60%, #312e81 100%)',
-            color: '#fff',
-            padding: '14px 16px 12px',
-            position: 'relative',
-            flexShrink: 0,
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 10,
-                  fontSize: 14,
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))',
-                  border: '1px solid rgba(165, 180, 252, 0.3)',
-                  color: '#e0e7ff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 0 14px rgba(99, 102, 241, 0.3)',
-                }}
-              >
-                <i className="fas fa-sliders-h"></i>
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, letterSpacing: '-0.3px', color: '#ffffff' }}>
-                  Settings &amp; Preferences
-                </h3>
-                <div style={{ fontSize: 10, color: '#a5b4fc', marginTop: 1 }}>WalletVibe Account &amp; App Config</div>
-              </div>
-            </div>
-
-            <button
-              className="modal-close"
-              onClick={onClose}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.12)',
-                border: 'none',
-                color: '#fff',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                backdropFilter: 'blur(8px)',
-                transition: 'all 0.2s ease',
-              }}
-              aria-label="Close"
-            >
-              <i className="fas fa-times"></i>
-            </button>
-          </div>
-        </div>
-
+        <div className="tool-dialog-header"><h3>Settings</h3><button type="button" aria-label="Close settings" onClick={onClose}>×</button></div>
         {/* Modal Body */}
         <div
           className="modal-body custom-scrollbar"
@@ -212,7 +154,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   width: 34,
                   height: 34,
                   borderRadius: 10,
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  background: 'linear-gradient(135deg, var(--accent-600) 0%, var(--accent-600) 100%)',
                   color: '#fff',
                   fontWeight: 900,
                   fontSize: 14,
@@ -245,7 +187,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   ) : subscription?.active ? (
                     <span style={{ color: '#059669', fontWeight: 800 }}>🟢 Pro Plan Active</span>
                   ) : (
-                    <span style={{ color: '#64748b', fontWeight: 700 }}>⚠️ Free Plan</span>
+                    <span style={{ color: '#64748b', fontWeight: 700 }}>Free plan</span>
                   )}
                 </div>
               </div>
@@ -266,14 +208,14 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   fontSize: 11,
                   fontWeight: 900,
                   borderRadius: 8,
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  background: 'linear-gradient(135deg, var(--accent-600) 0%, var(--accent-600) 100%)',
                   boxShadow: '0 3px 10px rgba(79, 70, 229, 0.35)',
                   border: 'none',
                   color: '#fff',
                   cursor: 'pointer',
                 }}
               >
-                {subscription?.active ? 'Manage Plan' : '⚡ Upgrade'}
+                {subscription?.active ? 'Manage Plan' : 'Upgrade'}
               </button>
             )}
           </div>
@@ -281,7 +223,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           {/* Theme Selector */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <i className="fas fa-palette" style={{ color: '#6366f1' }} />
+              <i className="fas fa-palette" style={{ color: 'var(--accent-600)' }} />
               <span>Theme Appearance</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
@@ -295,7 +237,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                     style={{
                       padding: '10px 6px',
                       borderRadius: 10,
-                      border: isActive ? '2px solid #4f46e5' : '1.5px solid var(--border-color, #e2e8f0)',
+                      border: isActive ? '2px solid var(--accent-600)' : '1.5px solid var(--border-color, #e2e8f0)',
                       background: t.bg,
                       color: t.color,
                       cursor: 'pointer',
@@ -404,7 +346,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       gap: 6,
                     }}
                   >
-                    <i className={`fas ${isPwaInstalled ? 'fa-check-circle' : 'fa-mobile-alt'}`} style={{ color: isPwaInstalled ? '#10b981' : '#6366f1' }} />
+                    <i className={`fas ${isPwaInstalled ? 'fa-check-circle' : 'fa-mobile-alt'}`} style={{ color: isPwaInstalled ? '#10b981' : 'var(--accent-600)' }} />
                     <span>App Installation Status</span>
                   </div>
                   <div style={{ fontSize: 10, color: isPwaInstalled ? '#065f46' : '#64748b', marginTop: 2 }}>
@@ -436,7 +378,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       fontSize: 10.5,
                       fontWeight: 800,
                       background: 'rgba(99,102,241,0.12)',
-                      color: '#4f46e5',
+                      color: 'var(--accent-600)',
                       padding: '6px 12px',
                       borderRadius: 8,
                       border: '1px solid rgba(99,102,241,0.3)',
@@ -495,7 +437,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           {/* Quick Action Tools */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <i className="fas fa-tools" style={{ color: '#6366f1' }} />
+              <i className="fas fa-tools" style={{ color: 'var(--accent-600)' }} />
               <span>Quick Actions &amp; Tools</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -507,7 +449,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   borderRadius: 10,
                   border: '1.5px solid rgba(99,102,241,0.3)',
                   background: 'rgba(99,102,241,0.06)',
-                  color: '#4f46e5',
+                  color: 'var(--accent-600)',
                   fontWeight: 800,
                   fontSize: 11,
                   cursor: 'pointer',
@@ -543,7 +485,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                   transition: 'all 0.15s ease',
                 }}
               >
-                ⭐ Rate App
+                Rate app
               </button>
 
               <button
@@ -601,7 +543,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
                       padding: '7px 12px',
                       borderRadius: 8,
                       border: '1px solid rgba(99,102,241,0.3)',
-                      background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                      background: 'linear-gradient(135deg, var(--accent-600), var(--accent-600))',
                       color: '#ffffff',
                       fontWeight: 800,
                       fontSize: 11,
@@ -631,13 +573,13 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
           >
             <div>
               <strong style={{ color: 'var(--text-primary, #1e293b)' }}>WalletVibe Pro v1.0.0</strong> • Developed by{' '}
-              <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#4f46e5', fontWeight: 800, textDecoration: 'none' }}>
+              <a href="https://nexliftech.netlify.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-600)', fontWeight: 800, textDecoration: 'none' }}>
                 NextLifTechnologies
               </a>
             </div>
             <div style={{ marginTop: 2 }}>
               Support:{' '}
-              <a href="mailto:walletpro26@gmail.com" style={{ color: '#4f46e5', fontWeight: 700, textDecoration: 'none' }}>
+              <a href="mailto:walletpro26@gmail.com" style={{ color: 'var(--accent-600)', fontWeight: 700, textDecoration: 'none' }}>
                 walletpro26@gmail.com
               </a>
             </div>
@@ -660,7 +602,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
               padding: '11px 16px',
               fontSize: 13,
               fontWeight: 900,
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              background: 'linear-gradient(135deg, var(--accent-600) 0%, var(--accent-600) 100%)',
               boxShadow: '0 4px 18px rgba(79, 70, 229, 0.4)',
               borderRadius: 10,
               border: 'none',
@@ -674,7 +616,7 @@ export default function SettingsModal({ auth, subscription, onClose, onSave, onM
             }}
           >
             <i className="fas fa-check"></i>
-            <span>Save &amp; Apply Settings</span>
+            <span>Save settings</span>
           </button>
         </div>
       </div>

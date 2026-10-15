@@ -1,3 +1,4 @@
+import useToolDialog from './useToolDialog'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { auth } from '../firebase'
@@ -16,6 +17,7 @@ import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 import { showAlert } from './CustomDialogModal'
 
 export default function CsvImportModal({ type = 'expense', isAdmin = false, allowNonCsvImport = true, onClose, onImportComplete }) {
+  const dialogRef = useToolDialog(onClose)
   const [mode, setMode] = useState(type) // 'expense' | 'lending'
   const [csvPreviewData, setCsvPreviewData] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -802,7 +804,8 @@ function isLendingDuplicateCheck(cand, existing) {
     <div className="modal-overlay" style={{ zIndex: 140 }}>
       <div className="modal-backdrop" onClick={onClose} />
       <div
-        className="modal-container custom-scrollbar"
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Import entries"
+        className="modal-container custom-scrollbar tool-dialog import-dialog"
         style={{
           maxWidth: 540,
           width: '94%',
@@ -815,25 +818,8 @@ function isLendingDuplicateCheck(cand, existing) {
           boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
         }}
       >
-        {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', padding: '10px 14px 8px', color: '#fff', position: 'relative' }}>
-          <button className="modal-close" style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-            <i className="fas fa-times" />
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
-              📥
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, letterSpacing: -0.2 }}>
-                {csvPreviewData ? 'CSV Import Preview' : 'Import Statement Data'}
-              </h3>
-              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#c7d2fe', fontWeight: 500 }}>
-                Bulk import entries with duplicate detection &amp; 1-click Undo
-              </p>
-            </div>
-          </div>
-
+        <div className="import-dialog-top">
+          <div className="tool-dialog-header"><h3>{csvPreviewData ? 'Import preview' : 'Import entries'}</h3><button type="button" aria-label="Close import" onClick={onClose}>×</button></div>
           {/* Mode Switcher */}
           {!csvPreviewData && (
             <div style={{ display: 'flex', gap: 4, marginTop: 8, background: 'rgba(0,0,0,0.25)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -843,12 +829,12 @@ function isLendingDuplicateCheck(cand, existing) {
                 style={{
                   flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'expense' ? '#ffffff' : 'transparent',
-                  color: mode === 'expense' ? '#312e81' : '#cbd5e1',
+                  color: mode === 'expense' ? 'var(--accent-600)' : '#cbd5e1',
                   fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
                   boxShadow: mode === 'expense' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
-                💸 Expenses
+                Expenses
               </button>
               <button
                 type="button"
@@ -856,12 +842,12 @@ function isLendingDuplicateCheck(cand, existing) {
                 style={{
                   flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'lending' ? '#ffffff' : 'transparent',
-                  color: mode === 'lending' ? '#312e81' : '#cbd5e1',
+                  color: mode === 'lending' ? 'var(--accent-600)' : '#cbd5e1',
                   fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
                   boxShadow: mode === 'lending' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
-                🤝 Lend/Borrow
+                Lend / borrow
               </button>
               <button
                 type="button"
@@ -869,12 +855,12 @@ function isLendingDuplicateCheck(cand, existing) {
                 style={{
                   flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
                   background: mode === 'bank' ? '#ffffff' : 'transparent',
-                  color: mode === 'bank' ? '#312e81' : '#cbd5e1',
+                  color: mode === 'bank' ? 'var(--accent-600)' : '#cbd5e1',
                   fontSize: 10, fontWeight: 800, cursor: 'pointer', transition: 'all 0.15s ease',
                   boxShadow: mode === 'bank' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
                 }}
               >
-                🏦 Bank Statement
+                Bank statement
               </button>
             </div>
           )}
@@ -918,7 +904,7 @@ function isLendingDuplicateCheck(cand, existing) {
               <div style={{ textAlign: 'center', padding: '14px 12px', background: 'var(--bg-subtle, #f8fafc)', border: '1.5px dashed var(--border-color, #cbd5e1)', borderRadius: 10 }}>
                 {aiParsing ? (
                   <div style={{ padding: '10px 6px' }}>
-                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontSize: 16 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', color: 'var(--accent-600)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontSize: 16 }}>
                       <i className="fas fa-brain fa-spin" />
                     </div>
                     <h4 style={{ margin: '0 0 4px', fontSize: 12.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
@@ -933,20 +919,20 @@ function isLendingDuplicateCheck(cand, existing) {
                         style={{
                           height: '100%',
                           width: `${aiProgress.percent || 15}%`,
-                          background: 'linear-gradient(90deg, #6366f1, #10b981)',
+                          background: 'linear-gradient(90deg, var(--accent-600), #10b981)',
                           borderRadius: 99,
                           transition: 'width 0.35s ease-in-out',
                         }}
                       />
                     </div>
-                    <div style={{ fontSize: 9.5, fontWeight: 800, color: '#6366f1', marginTop: 4 }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--accent-600)', marginTop: 4 }}>
                       {aiProgress.percent || 15}% Completed
                     </div>
                   </div>
                 ) : (
                   <>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
-                      <i className="fas fa-file-csv" style={{ fontSize: 18, color: '#6366f1' }} />
+                      <i className="fas fa-file-csv" style={{ fontSize: 18, color: 'var(--accent-600)' }} />
                       <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800 }}>/</span>
                       <i className="fas fa-file-pdf" style={{ fontSize: 18, color: '#ef4444' }} />
                     </div>
@@ -958,7 +944,7 @@ function isLendingDuplicateCheck(cand, existing) {
                     </p>
 
                     {/* Limit Info Badge */}
-                    <div style={{ margin: '0 auto 8px', padding: '2px 8px', borderRadius: 4, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 9, fontWeight: 700, color: isAdmin ? '#6366f1' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
+                    <div style={{ margin: '0 auto 8px', padding: '2px 8px', borderRadius: 4, background: isAdmin ? 'rgba(99,102,241,0.08)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'), border: `1px solid ${isAdmin ? 'rgba(99,102,241,0.2)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)')}`, display: 'inline-block', fontSize: 9, fontWeight: 700, color: isAdmin ? 'var(--accent-600)' : (csvStats.todayCount >= 3 || csvStats.monthCount >= 3 ? '#ef4444' : '#059669') }}>
                       {isAdmin ? (
                         <>👑 <strong>Admin:</strong> Unlimited Imports</>
                       ) : (
@@ -971,7 +957,7 @@ function isLendingDuplicateCheck(cand, existing) {
                         type="button"
                         onClick={() => downloadCsvTemplate()}
                         style={{
-                          padding: '5px 10px', background: 'rgba(99,102,241,0.08)', color: '#6366f1',
+                          padding: '5px 10px', background: 'rgba(99,102,241,0.08)', color: 'var(--accent-600)',
                           border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, fontSize: 9.5,
                           fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
                         }}
@@ -981,7 +967,7 @@ function isLendingDuplicateCheck(cand, existing) {
 
                       <label
                         style={{
-                          padding: '5px 12px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          padding: '5px 12px', background: 'linear-gradient(135deg, var(--accent-600), var(--accent-600))',
                           color: '#fff', borderRadius: 6, fontSize: 9.5, fontWeight: 800,
                           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
                           boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
@@ -999,9 +985,9 @@ function isLendingDuplicateCheck(cand, existing) {
               {cachedStatements && cachedStatements.length > 0 && (
                 <div style={{ background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 10, padding: '8px 10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--accent-600)', display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span>📋 AI Statement Cache</span>
-                      <span style={{ fontSize: 9, background: 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>
+                      <span style={{ fontSize: 9, background: 'rgba(99,102,241,0.1)', color: 'var(--accent-600)', padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>
                         {cachedStatements.length} saved
                       </span>
                     </div>
@@ -1041,7 +1027,7 @@ function isLendingDuplicateCheck(cand, existing) {
                                 setError('Failed to load statement: ' + err?.message)
                               }
                             }}
-                            style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: '#6366f1', color: '#fff', fontSize: 9, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
+                            style={{ padding: '2px 7px', borderRadius: 4, border: 'none', background: 'var(--accent-600)', color: '#fff', fontSize: 9, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2 }}
                             title="Instantly re-import without AI"
                           >
                             <i className="fas fa-bolt" style={{ fontSize: 8 }} /> Re-Import
@@ -1071,7 +1057,7 @@ function isLendingDuplicateCheck(cand, existing) {
                     onClick={() => setShowHistory((s) => !s)}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: 10.5, fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}
                   >
-                    <span><i className="fas fa-history" style={{ color: '#6366f1', marginRight: 5 }} /> Recent CSV Imports ({importHistory.length})</span>
+                    <span><i className="fas fa-history" style={{ color: 'var(--accent-600)', marginRight: 5 }} /> Recent CSV Imports ({importHistory.length})</span>
                     <i className={`fas fa-chevron-${showHistory ? 'up' : 'down'}`} style={{ color: '#94a3b8', fontSize: 9 }} />
                   </div>
 
@@ -1124,7 +1110,7 @@ function isLendingDuplicateCheck(cand, existing) {
                     importTaskQueue.clearDraftPreview(mode)
                     setCsvPreviewData(null)
                   }}
-                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #6366f1', background: '#ffffff', color: '#4338ca', fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--accent-600)', background: '#ffffff', color: '#4338ca', fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
                 >
                   📁 Select New File
                 </button>
@@ -1144,7 +1130,7 @@ function isLendingDuplicateCheck(cand, existing) {
                     type="checkbox"
                     checked={allSelected}
                     onChange={(e) => toggleSelectAll(e.target.checked)}
-                    style={{ accentColor: '#6366f1', width: 15, height: 15 }}
+                    style={{ accentColor: 'var(--accent-600)', width: 15, height: 15 }}
                   />
                   Select All ({selectedCount} / {csvPreviewData.items.length})
                 </label>
@@ -1168,7 +1154,7 @@ function isLendingDuplicateCheck(cand, existing) {
                     onClick={() => toggleItem(item.id)}
                     style={{
                       padding: '8px 10px', borderRadius: 8,
-                      border: item.selected ? '1.5px solid #6366f1' : '1px solid var(--border-color, #e2e8f0)',
+                      border: item.selected ? '1.5px solid var(--accent-600)' : '1px solid var(--border-color, #e2e8f0)',
                       background: item.isDuplicate ? 'rgba(245,158,11,0.06)' : (item.selected ? 'rgba(99,102,241,0.04)' : 'var(--bg-subtle, #f8fafc)'),
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 11
                     }}
@@ -1177,12 +1163,12 @@ function isLendingDuplicateCheck(cand, existing) {
                       type="checkbox"
                       checked={item.selected}
                       onChange={() => {}}
-                      style={{ accentColor: '#6366f1', width: 15, height: 15 }}
+                      style={{ accentColor: 'var(--accent-600)', width: 15, height: 15 }}
                     />
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color: '#6366f1', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color: 'var(--accent-600)', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
                             Sl. {idx + 1}
                           </span>
                           {mode === 'expense' ? item.category : mode === 'bank' ? (item.bank || 'Bank') : item.person}

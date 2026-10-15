@@ -45,3 +45,15 @@ Rule field restrictions follow Firebase's documented `diff().affectedKeys()` app
 - Moved lending attachments beside Amount. For whom and Category share one expense-form row; payment is a compact control above the auto-sizing details editor. Removed duplicate detail suggestions and empty helper spacing. The header uses less vertical space.
 - Replaced bright blue/purple surfaces with warm neutrals, a charcoal header and restrained green accents. Bank History has compact toolbars, neutral filters, expandable descriptions and aligned amounts. Reports use a single period selector, smaller summaries and simpler breakdown rows.
 - `node --test tests/expense-detail-suggestions.test.mjs tests/person-contacts.test.mjs tests/security-regressions.test.mjs` passes all twelve checks after building.
+
+
+### Mobile-first and tools-menu follow-up — 15 October 2026
+
+- Replaced duplicate mouse-down/click menu actions with native buttons and one click handler. Removed the decorative menu tiles, badges, and repeated icons.
+- Added a shared body-portal popup for entry suggestions, global search, and report filters. It uses VisualViewport bounds, follows page/nested scrolling and keyboard resize/pan, switches above the anchor when space is limited, and constrains list scrolling to the visible area. Entry lists no longer close on blur before a selection click arrives.
+- Reduced mobile form spacing and control typography, retaining separate clear/toggle targets and iOS 16px editing text to avoid focus zoom. Kept context fields side by side.
+- Simplified Settings, Import, Reviews, and Subscription headers; retained all existing workflows and the earlier compact admin panel. Added dialog names, focus containment, Escape dismissal, focus restoration, and body scroll locking. Blocking subscription screens retain their explicit close restrictions.
+- Made review stars keyboard-operable buttons and connected review labels to their fields.
+- Fixed settings backup to export the current account’s scoped cached records. Clear cache now clears only that account’s snapshots and preserves preferences and pending offline writes. Backup is a cached-record export; it does not fetch uncached cloud records or include attachment bytes.
+
+Validation: production build and the existing 12 regression tests pass. Browser fixture checks cover 320px and 390px phone widths, successful category/person selection, report filtering (Fuel → one transaction / ₹3,300), tools-menu navigation, settings/import/reviews, and a 390×420 reduced-height viewport with the suggestion panel entirely within bounds. No real accounts, imports, reviews, payments, refreshes, or logout were submitted. A reduced-height desktop viewport does not reproduce an actual Android/iOS keyboard; verify keyboard resize/panning on physical devices before release.

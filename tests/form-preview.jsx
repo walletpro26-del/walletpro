@@ -3,6 +3,9 @@ import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import ExpenseForm from '../src/components/ExpenseForm'
 import Header from '../src/components/Header'
+import SettingsModal from '../src/components/SettingsModal'
+import CsvImportModal from '../src/components/CsvImportModal'
+import RatingModal from '../src/components/RatingModal'
 import { buildDetailPatterns } from '../src/utils/expenseDetailSuggestions'
 import '../src/styles.css'
 
@@ -16,12 +19,17 @@ const expenses = [
 const suggestions = { categories: ['Fuel', 'Groceries', 'Health'], forWhom: ['Home', 'Self'], details: expenses.map(item => item.details), quickFills: [], detailPatterns: buildDetailPatterns(expenses) }
 function Preview() {
   const [saved, setSaved] = useState(null)
-  return <div style={{maxWidth:620,margin:'24px auto'}}><Header auth={{email:'admin@example.com'}} subscription={{isAdmin:true}} stats={{expense:{today:0,month:1250,total:5200}}} activeTab="expense" searchIndex={[]} />
+  const [tool, setTool] = useState('')
+  return <div style={{maxWidth:620,margin:'24px auto'}}><Header auth={{email:'admin@example.com'}} subscription={{isAdmin:true}} stats={{expense:{today:0,month:1250,total:5200}}} activeTab="expense" searchIndex={[]} onSettings={() => setTool('settings')} onOpenCsvImport={() => setTool('import')} onOpenRatingModal={() => setTool('reviews')} />
   <main style={{ padding: 24, borderRadius: 20, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
     <h1 style={{ fontSize: 21, marginBottom: 6 }}>New expense</h1>
     <p style={{ marginBottom: 24, fontSize: 13, color: 'var(--text-muted)' }}>Design preview · Sample records · No data is saved</p>
     <ExpenseForm suggestions={suggestions} loading={false} onSave={setSaved} />
     {saved && <output aria-label="Saved preview">{JSON.stringify(saved)}</output>}
-  </main></div>
+  </main>
+    {tool === 'settings' && <SettingsModal auth={{uid:'preview',email:'preview@example.com'}} subscription={{}} onClose={() => setTool('')} onSave={() => {}} />}
+    {tool === 'import' && <CsvImportModal auth={{uid:'preview'}} onClose={() => setTool('')} onImport={() => {}} />}
+    {tool === 'reviews' && <RatingModal user={null} onClose={() => setTool('')} />}
+  </div>
 }
 createRoot(document.getElementById('root')).render(<Preview />)

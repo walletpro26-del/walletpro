@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useId } from 'react'
+import FloatingPanel from './FloatingPanel.jsx'
 
 export default function MultiSelectCombobox({ label, value, onChange, suggestions = [], placeholder = ' ', allowMulti = true }) {
   const id = useId()
@@ -14,6 +15,15 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
   const custom = multiMode && search.trim() && !choices.some(item => item.toLowerCase() === search.trim().toLowerCase())
   const options = custom ? [...filtered, search.trim()] : filtered
   const displayValue = String(value || '').includes('|||') ? selected.join(', ') : String(value || '')
+
+  useEffect(() => {
+    if (!open || activeIndex < 0) return
+    const option = document.getElementById(`${id}-option-${activeIndex}`)
+    const list = option?.parentElement
+    if (!list) return
+    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop
+    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight
+  }, [activeIndex, open, id])
 
   function close() {
     setOpen(false)
@@ -32,12 +42,9 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
 
   useEffect(() => {
     const otherOpened = event => { if (event.detail?.id !== id) close() }
-    const outside = event => { if (!containerRef.current?.contains(event.target)) close() }
     window.addEventListener('wv-combobox-open', otherOpened)
-    document.addEventListener('pointerdown', outside)
     return () => {
       window.removeEventListener('wv-combobox-open', otherOpened)
-      document.removeEventListener('pointerdown', outside)
     }
   }, [id])
 
@@ -50,7 +57,6 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
       onChange(item)
       close()
     }
-    inputRef.current?.focus()
   }
 
   function handleKeyDown(event) {
@@ -72,7 +78,7 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
   }
 
   return (
-    <div className={`float-group entry-combobox${open ? ' is-open' : ''}`} ref={containerRef} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close() }}>
+    <div className={`float-group entry-combobox${open ? ' is-open' : ''}`} ref={containerRef}>
       <label className="entry-field-label" htmlFor={id}>{label}</label>
       <div className="combobox-input-wrap">
         <input
@@ -110,7 +116,7 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
         </div>
       )}
       {open && (
-        <div className="combobox-panel">
+        <FloatingPanel open={open} anchorRef={containerRef} onDismiss={close} className="combobox-panel" maxHeight={300}>
           <div className="combobox-toolbar">
             <span>{multiMode ? `${selected.length} selected` : 'Suggestions'}</span>
             <div>
@@ -121,14 +127,14 @@ export default function MultiSelectCombobox({ label, value, onChange, suggestion
           </div>
           <div id={`${id}-options`} role="listbox" aria-label={`${label} suggestions`} aria-multiselectable={multiMode || undefined} className="combobox-options custom-scrollbar">
             {options.map((item, index) => (
-              <button type="button" role="option" id={`${id}-option-${index}`} key={item} aria-selected={selected.includes(item)} className={`combobox-option${index === activeIndex ? ' is-active' : ''}`} onMouseDown={event => event.preventDefault()} onClick={() => choose(item)}>
+              <button type="button" role="option" id={`${id}-option-${index}`} key={item} aria-selected={selected.includes(item)} className={`combobox-option${index === activeIndex ? ' is-active' : ''}`} onPointerDown={event => { if (event.pointerType === 'mouse') event.preventDefault() }} onClick={() => choose(item)}>
                 <span>{custom && index === options.length - 1 ? `Add “${item}”` : item}</span>
                 {selected.includes(item) && <span aria-hidden="true">✓</span>}
               </button>
             ))}
             {!options.length && <p className="combobox-empty">{search ? 'Your typed value is ready to use.' : 'Type a new value to get started.'}</p>}
           </div>
-        </div>
+        </FloatingPanel>
       )}
     </div>
   )

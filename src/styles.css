@@ -3002,9 +3002,98 @@ html, body {
   outline: 2px solid var(--accent-500, #6366f1);
   outline-offset: 2px;
 }
-@media (max-width: 600px) {
-  input, select, textarea { font-size: 16px !important; }
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 600px) { input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; } }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Shared compact surfaces and popovers. Portal panels follow the visual viewport. */
+.floating-panel { box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); box-shadow: 0 8px 28px rgb(0 0 0 / .14); }
+.floating-panel .combobox-options { flex: 1 1 auto; min-height: 0; max-height: none; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.floating-panel .combobox-toolbar { flex-shrink: 0; }
+.report-filter-search { margin: 6px 8px; padding: 8px 10px; width: calc(100% - 16px); min-height: 38px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-subtle); color: var(--text-primary); }
+.tools-menu { padding: 5px; overflow-y: auto; }
+.tools-menu-account { padding: 8px 9px 11px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; }
+.tools-menu-account span { display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 3px; }
+.tools-menu-account strong { display: block; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; }
+.tools-menu > button { display: block; flex-shrink: 0; width: 100%; min-height: 42px; padding: 9px 11px; text-align: left; font: inherit; font-size: 13px; font-weight: 500; background: transparent; border: 0; border-radius: 6px; color: var(--text-primary); cursor: pointer; }
+.tools-menu > button:hover, .tools-menu > button:focus-visible { background: var(--bg-subtle); }
+.tools-menu > .tools-menu-logout { color: var(--red-600, #c53535); border-top: 1px solid var(--border-color); border-radius: 0; margin-top: 4px; }
+.search-results-panel { overflow-y: auto; }
+.search-results-panel > button { width: 100%; background: var(--bg-card); color: var(--text-primary); border: 0; text-align: left; font: inherit; }
+.search-results-panel > button:hover { background: var(--bg-subtle); }
+.modal-overlay { top: var(--visible-top, 0px); bottom: auto; height: var(--visible-height, 100dvh); box-sizing: border-box; }
+.modal-container { max-height: calc(var(--visible-height, 100dvh) - 24px) !important; }
+.tool-dialog { max-height: calc(var(--visible-height, 100dvh) - 24px) !important; border-radius: 12px !important; box-shadow: 0 16px 48px rgb(0 0 0 / .2) !important; }
+.tool-dialog-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 10px 14px; background: var(--bg-card); color: var(--text-primary); border-bottom: 1px solid var(--border-color); }
+.tool-dialog-header h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.tool-dialog-header > button { display: grid; place-items: center; flex-shrink: 0; min-width: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 8px; background: var(--bg-subtle); color: var(--text-secondary); font-size: 23px; cursor: pointer; }
+.tool-dialog .modal-body { min-height: 0; overscroll-behavior: contain; }
+.tool-dialog button { box-shadow: none !important; }
+.tool-dialog button:not(:disabled) { cursor: pointer; }
+.tool-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .tool-dialog select, .tool-dialog textarea { border-radius: 8px !important; }
+.settings-dialog .modal-body > div { box-shadow: none !important; border-width: 1px !important; border-radius: 10px !important; }
+.settings-dialog [style*="linear-gradient"], .subscription-dialog [style*="linear-gradient"] { background: var(--accent-600) !important; }
+.settings-dialog .modal-body > div:first-child > div > div:first-child { display: none !important; }
+.import-dialog-top { flex-shrink: 0; background: var(--bg-subtle); }
+.import-dialog-top > div:last-child:not(.tool-dialog-header) { margin: 0 !important; border: 0 !important; border-radius: 0 !important; padding: 6px 10px !important; background: var(--bg-subtle) !important; }
+.import-dialog-top > div:last-child button { min-height: 36px; font-size: 12px !important; color: var(--text-primary) !important; }
+@media (max-width: 600px) {
+  .app-header { padding: 12px 12px 16px; }
+  .header-top { gap: 8px; margin-bottom: 8px; }
+  .header-brand { gap: 6px; }
+  .header-brand h1 { font-size: 16px; }
+  .header-date { font-size: 9px; }
+  .header-search { min-height: 36px; margin-bottom: 9px; }
+  .header-search input { padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+  .stat-card { padding: 8px 5px; border-radius: 10px; }
+  .entry-field-label { font-size: 12px; margin-bottom: 5px; }
+  .entry-combobox .float-input { min-height: 44px; padding: 10px 66px 10px 10px; font-size: 14px; line-height: 22px; border-radius: 10px; }
+  .combobox-field-actions { right: 3px; gap: 0; }
+  .combobox-icon-button { width: 30px; min-height: 38px; }
+  .combobox-option { min-height: 42px; padding: 9px 10px; font-size: 13px; }
+  .combobox-toolbar { padding: 5px 8px; }
+  .combobox-toolbar button { min-height: 34px; padding: 5px 7px; font-size: 11px; }
+  .expense-context-row { gap: 8px; }
+  .expense-entry .entry-combobox, .lending-entry .entry-combobox { margin-bottom: 9px; }
+  .compact-input-block { min-height: 54px !important; padding: 8px 10px !important; border-radius: 10px !important; }
+  .compact-input-block label { font-size: 10px !important; }
+  .compact-input-block input { font-size: 14px; }
+  .compact-input-block .amount-input { font-size: 20px; }
+  .details-field-heading { gap: 5px; }
+  .details-payment-mode { gap: 4px !important; }
+  .details-payment-mode select { width: 112px; min-height: 34px; font-size: 12px; }
+  .details-editor { padding: 8px 10px; font-size: 14px; line-height: 1.5; border-radius: 10px; }
+  .details-field-hint { font-size: 10px; margin-top: 4px; }
+  .expense-entry .btn-primary, .lending-entry .btn-primary { min-height: 44px; padding: 11px 14px !important; font-size: 14px !important; border-radius: 10px !important; }
+  .tool-dialog { width: calc(100% - 16px) !important; margin: auto; }
+  .tool-dialog .modal-body { padding: 10px 12px !important; gap: 10px !important; }
+  .tool-dialog button { min-height: 36px; }
+  .tool-dialog input[type="checkbox"], .tool-dialog input[type="radio"] { width: 18px !important; height: 18px !important; flex-shrink: 0; }
+  .tool-dialog-header { padding: 7px 12px; }
+  .tool-dialog-header h3 { font-size: 14px; }
+}
+
+.tool-dialog:focus { outline: none; }
+.import-dialog button, .import-dialog label[style] { box-shadow: none !important; }
+.import-dialog button, .import-dialog label[style*="cursor: pointer"] { font-size: 12px !important; }
+.import-dialog [style*="linear-gradient"] { background: var(--accent-600) !important; }
+.reviews-dialog { top: 0; }
+
+/* Keep prompts quieter than entered values, including iOS's 16px editing text. */
+:root { --placeholder-font-size: 12px; }
+input::placeholder,
+textarea::placeholder {
+  font-size: min(.85em, var(--placeholder-font-size)) !important;
+  font-weight: 400 !important;
+}
+
+/* Custom prompts do not use ::placeholder: cover these on every screen too. */
+.filter-placeholder,
+.float-input:placeholder-shown:not(:focus) + .float-label:not(.active),
+select:has(option[value=""]:checked):not(:focus) {
+  font-size: var(--placeholder-font-size) !important;
+  font-weight: 400 !important;
 }

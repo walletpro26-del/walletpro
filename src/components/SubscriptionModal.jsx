@@ -1,3 +1,4 @@
+import useToolDialog from './useToolDialog'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -15,6 +16,7 @@ export default function SubscriptionModal({
   onSubscriptionSuccess,
   isBlocking = false,
 }) {
+  const dialogRef = useToolDialog(isBlocking ? undefined : onClose)
   const [selectedPlan, setSelectedPlan] = useState('yearly')
   const [step, setStep] = useState('select') // 'select' | 'success'
 
@@ -98,7 +100,8 @@ export default function SubscriptionModal({
     <div className="modal-overlay" style={{ zIndex: 120 }}>
       <div className="modal-backdrop" onClick={() => { if (!isBlocking) onClose?.() }} />
       <div
-        className="modal-container custom-scrollbar"
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Subscription"
+        className="modal-container custom-scrollbar tool-dialog subscription-dialog"
         style={{
           maxWidth: 420,
           width: '94%',
@@ -111,48 +114,10 @@ export default function SubscriptionModal({
           boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
         }}
       >
-        {/* ── Compact Header ── */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
-          padding: '8px 12px 6px',
-          color: '#fff',
-          position: 'relative',
-          flexShrink: 0,
-        }}>
-          {/* Close / Logout button */}
-          {!isBlocking || step === 'success' || step === 'pending' ? (
-            <button
-              className="modal-close"
-              style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(255,255,255,0.12)', color: '#fff', width: 24, height: 24, fontSize: 10, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <i className="fas fa-times" />
-            </button>
-          ) : onLogout ? (
-            <button
-              onClick={() => { onClose?.(); onLogout() }}
-              style={{ position: 'absolute', top: 8, right: 10, background: 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-            >
-              <i className="fas fa-sign-out-alt" /> Log Out
-            </button>
-          ) : null}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 60 }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
-              {isAdmin ? '👑' : step === 'success' ? '🎉' : step === 'pending' ? '⏳' : '⚡'}
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>
-                {isAdmin ? 'Admin Access' : step === 'success' ? 'Activated!' : step === 'pending' ? 'Pending Verification' : 'WalletVibe Pro'}
-              </h3>
-              <p style={{ margin: '1px 0 0', fontSize: 9.5, color: '#a5b4fc', lineHeight: 1.1 }}>
-                {isAdmin ? 'Free lifetime admin access' : step === 'success' ? 'Your account is upgraded' : step === 'pending' ? 'Admin will verify your payment' : '0% Commission • UPI Activation'}
-              </p>
-            </div>
-          </div>
+        <div className="tool-dialog-header">
+          <h3>{isAdmin ? 'Administration access' : step === 'success' ? 'Subscription activated' : step === 'pending' ? 'Verification pending' : 'Subscription'}</h3>
+          {!isBlocking || step === 'success' || step === 'pending' ? <button type="button" aria-label="Close subscription" onClick={onClose}>×</button> : onLogout ? <button type="button" onClick={() => { onClose?.(); onLogout() }}>Log out</button> : null}
         </div>
-
         {/* ── Body ── */}
         <div style={{ padding: '12px 14px', flex: 1 }}>
 

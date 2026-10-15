@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import useToolDialog from './useToolDialog'
+import { useState, useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { submitReview, getAllReviews, getUserReview } from '../api/reviews'
 
 export default function RatingModal({ user, onClose }) {
+  const dialogRef = useToolDialog(onClose)
+  const fieldId = useId()
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -120,10 +123,10 @@ export default function RatingModal({ user, onClose }) {
   }
 
   return createPortal(
-    <div
+    <div className="modal-overlay"
       style={{
         position: 'fixed',
-        inset: 0,
+        left: 0, right: 0, top: 'var(--visible-top, 0px)', height: 'var(--visible-height, 100dvh)',
         background: 'rgba(15, 23, 42, 0.8)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
@@ -136,7 +139,7 @@ export default function RatingModal({ user, onClose }) {
       }}
       onClick={onClose}
     >
-      <div
+      <div className="tool-dialog reviews-dialog" ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Ratings and reviews"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -155,71 +158,7 @@ export default function RatingModal({ user, onClose }) {
           position: 'relative',
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-            padding: '14px 44px 14px 16px',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justify: 'space-between',
-            flexShrink: 0,
-            position: 'relative',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justify: 'center',
-                fontSize: 16,
-              }}
-            >
-              ⭐
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 'clamp(14px, 4vw, 15px)', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
-                App Rating &amp; Reviews
-              </h3>
-              <p style={{ margin: '2px 0 0', fontSize: 'clamp(10px, 3vw, 11px)', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.2 }}>
-                Rate &amp; share feedback for WalletVibe Pro
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              position: 'absolute',
-              right: 12,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 30,
-              height: 30,
-              borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.2)',
-              border: 'none',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justify: 'center',
-              cursor: 'pointer',
-              fontSize: 13,
-              boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
-            }}
-          >
-            <i className="fas fa-times" />
-          </button>
-        </div>
-
+        <div className="tool-dialog-header"><h3>Ratings &amp; reviews</h3><button type="button" aria-label="Close reviews" onClick={onClose}>×</button></div>
         {/* Navigation Tabs - Non-conflicting Tab styling */}
         <div
           style={{
@@ -240,7 +179,7 @@ export default function RatingModal({ user, onClose }) {
               border: 'none',
               borderRadius: '8px',
               background: activeTab === 'write' ? 'var(--bg-card, #ffffff)' : 'transparent',
-              color: activeTab === 'write' ? 'var(--accent-600, #4f46e5)' : 'var(--text-muted, #64748b)',
+              color: activeTab === 'write' ? 'var(--accent-600, var(--accent-600))' : 'var(--text-muted, #64748b)',
               fontWeight: activeTab === 'write' ? 800 : 600,
               fontSize: 'clamp(11px, 3.2vw, 12px)',
               cursor: 'pointer',
@@ -258,7 +197,7 @@ export default function RatingModal({ user, onClose }) {
               border: 'none',
               borderRadius: '8px',
               background: activeTab === 'view' ? 'var(--bg-card, #ffffff)' : 'transparent',
-              color: activeTab === 'view' ? 'var(--accent-600, #4f46e5)' : 'var(--text-muted, #64748b)',
+              color: activeTab === 'view' ? 'var(--accent-600, var(--accent-600))' : 'var(--text-muted, #64748b)',
               fontWeight: activeTab === 'view' ? 800 : 600,
               fontSize: 'clamp(11px, 3.2vw, 12px)',
               cursor: 'pointer',
@@ -331,19 +270,19 @@ export default function RatingModal({ user, onClose }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, fontSize: 'clamp(28px, 8vw, 34px)', cursor: 'pointer' }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <span
+                    <button type="button" aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`} aria-pressed={rating === star}
                       key={star}
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(0)}
                       onClick={() => setRating(star)}
-                      style={{
+                      style={{ background: 'transparent', border: 0, padding: 0, width: 38, height: 40, font: 'inherit', cursor: 'pointer',
                         color: star <= (hoverRating || rating) ? '#f59e0b' : 'var(--border-color, #cbd5e1)',
                         transition: 'transform 0.15s ease, color 0.15s ease',
                         transform: star <= (hoverRating || rating) ? 'scale(1.15)' : 'scale(1)',
                       }}
                     >
                       ★
-                    </span>
+                    </button>
                   ))}
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#d97706', marginTop: 4 }}>
@@ -353,10 +292,10 @@ export default function RatingModal({ user, onClose }) {
 
               {/* Full Name Field */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
+                <label htmlFor={`${fieldId}-name`} style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
                   Full Name <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
+                <input id={`${fieldId}-name`}
                   type="text"
                   placeholder="e.g. Sheikh Gulfam"
                   value={name}
@@ -377,10 +316,10 @@ export default function RatingModal({ user, onClose }) {
 
               {/* Mobile Field */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
+                <label htmlFor={`${fieldId}-mobile`} style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
                   Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
+                <input id={`${fieldId}-mobile`}
                   type="tel"
                   placeholder="e.g. +91 98765 43210"
                   value={mobile}
@@ -401,10 +340,10 @@ export default function RatingModal({ user, onClose }) {
 
               {/* Email Address Field */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
+                <label htmlFor={`${fieldId}-email`} style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
                   Email Address
                 </label>
-                <input
+                <input id={`${fieldId}-email`}
                   type="email"
                   placeholder="your.email@gmail.com"
                   value={email}
@@ -424,10 +363,10 @@ export default function RatingModal({ user, onClose }) {
 
               {/* Comment Textarea */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
+                <label htmlFor={`${fieldId}-feedback`} style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary, #475569)', marginBottom: 4 }}>
                   Feedback &amp; Review Comments
                 </label>
-                <textarea
+                <textarea id={`${fieldId}-feedback`}
                   rows={2}
                   placeholder="Write your thoughts, experience, or feature suggestions..."
                   value={comment}
@@ -457,7 +396,7 @@ export default function RatingModal({ user, onClose }) {
                   fontSize: 13,
                   fontWeight: 800,
                   color: '#ffffff',
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  background: 'linear-gradient(135deg, var(--accent-600) 0%, var(--accent-600) 100%)',
                   border: 'none',
                   borderRadius: 12,
                   cursor: submitting ? 'wait' : 'pointer',
@@ -543,7 +482,7 @@ export default function RatingModal({ user, onClose }) {
                               width: 28,
                               height: 28,
                               borderRadius: '50%',
-                              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                              background: 'linear-gradient(135deg, var(--accent-600), #8b5cf6)',
                               color: '#ffffff',
                               display: 'flex',
                               alignItems: 'center',
