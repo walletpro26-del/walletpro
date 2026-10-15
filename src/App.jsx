@@ -25,7 +25,6 @@ import ExpenseForm from './components/ExpenseForm'
 import LendingForm from './components/LendingForm'
 import TransactionList from './components/TransactionList'
 import TransactionModal from './components/TransactionModal'
-import WalletVibeLogo from './components/WalletVibeLogo'
 import CustomDialogModal, { showAlert } from './components/CustomDialogModal'
 import { registerDeviceSession, listenDeviceSession, clearDeviceSession } from './api/deviceSession'
 
@@ -44,39 +43,10 @@ const RatingModal = lazy(() => import('./components/RatingModal'))
 const AboutModal = lazy(() => import('./components/AboutModal'))
 
 function LazyLoader({ isView = false }) {
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: isView ? '60px 20px' : '40px 20px',
-      gap: '12px',
-      color: 'var(--text-muted, #64748b)',
-    }}>
-      <div style={{
-        position: 'relative',
-        width: '56px',
-        height: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          border: '2.5px solid rgba(99, 102, 241, 0.2)',
-          borderTopColor: '#6366f1',
-          borderRadius: '50%',
-          animation: 'spin 0.85s linear infinite',
-        }} />
-        <WalletVibeLogo size={34} variant="icon" animate={false} />
-      </div>
-      <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.3px' }}>Loading view...</span>
-    </div>
-  )
+  return <div role="status" aria-label="Loading view" style={{ display: 'grid', placeItems: 'center', padding: isView ? '32px 20px' : '24px 20px' }}>
+    <span aria-hidden="true" className="view-loading-spinner" />
+  </div>
 }
-
 
 // Record when the app opened (for update banner age check)
 window.__wv_open_time = Date.now()

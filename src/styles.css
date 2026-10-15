@@ -3097,3 +3097,5 @@ select:has(option[value=""]:checked):not(:focus) {
   font-size: var(--placeholder-font-size) !important;
   font-weight: 400 !important;
 }
+
+.view-loading-spinner { display: block; width: 28px; height: 28px; border: 2px solid var(--border-color); border-top-color: var(--accent-500); border-radius: 50%; animation: spin .9s linear infinite; }

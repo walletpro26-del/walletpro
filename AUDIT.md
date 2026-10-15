@@ -57,3 +57,14 @@ Rule field restrictions follow Firebase's documented `diff().affectedKeys()` app
 - Fixed settings backup to export the current account’s scoped cached records. Clear cache now clears only that account’s snapshots and preserves preferences and pending offline writes. Backup is a cached-record export; it does not fetch uncached cloud records or include attachment bytes.
 
 Validation: production build and the existing 12 regression tests pass. Browser fixture checks cover 320px and 390px phone widths, successful category/person selection, report filtering (Fuel → one transaction / ₹3,300), tools-menu navigation, settings/import/reviews, and a 390×420 reduced-height viewport with the suggestion panel entirely within bounds. No real accounts, imports, reviews, payments, refreshes, or logout were submitted. A reduced-height desktop viewport does not reproduce an actual Android/iOS keyboard; verify keyboard resize/panning on physical devices before release.
+
+
+### Installed-phone startup follow-up — 15 October 2026
+
+The phone screenshots show the packaged/installed launch splash followed by the HTML auth-initialization loader. The earlier form palette changes had not covered the hardcoded HTML startup colors, web manifest, Android TWA colors, or packaged splash artwork.
+
+Changed the launch background/status/navigation colors to charcoal (#202b27), replaced the second branded splash with one 30px neutral spinner, and simplified lazy-view loading to a plain 28px spinner. Updated the web and Android icon/splash exports from reproducible code geometry (`scripts/generate-brand-icons.py`), and switched React/favicons to green. Removed the wrapper's extra 300ms splash fade. Android's own launch screen remains a distinct platform-controlled stage.
+
+Bumped service-worker cache to v11 and the deployed version marker; service-worker registration bypasses its HTTP cache, and Netlify entry/manifest/worker headers now request revalidation. These source changes have not been deployed during this task. Existing installed native artwork/colors require an updated Android package; clearing website cache alone cannot replace those packaged resources.
+
+Validation: production web build passes, all 15 regression tests pass, and diff whitespace check passes. Inspected the rendered 512px icon. Android debug build was attempted using the existing offline Gradle cache, then retried without custom daemon JVM arguments; both executions failed before Android compilation with `java.io.IOException: Unable to establish loopback connection`. No new APK/AAB was produced or installed, and physical-phone launch transitions remain unverified.

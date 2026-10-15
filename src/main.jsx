@@ -12,7 +12,7 @@ if (import.meta.hot) import.meta.hot.dispose(stopViewportObserver)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/service-worker.js')
+      .register('/service-worker.js', { updateViaCache: 'none' })
       .catch(() => {})
   })
 }
