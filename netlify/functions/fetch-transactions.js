@@ -5,6 +5,10 @@ import { decrypt } from './_shared/crypto.js'
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return handleOptions()
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method Not Allowed' }) }
+  if (!event.headers?.authorization && !event.headers?.Authorization) {
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Authentication required' }) }
+  }
 
   try {
     let targetUserId = null

@@ -6,6 +6,7 @@ import { fetchBankTransactionsFromFirestore, deleteBankTransactionsBulk, parseSa
 import { downloadBankCsvTemplate } from '../utils/csvTemplate'
 import { normalizeBankDescription } from '../utils/bankDescriptionNormalizer'
 import BankLinkCard from './BankLinkCard'
+import './record-views.css'
 import { showConfirm, showAlert } from './CustomDialogModal'
 
 function toLocalYMD(d) {
@@ -148,6 +149,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedBankFilter, setSelectedBankFilter] = useState('ALL')
   const [deletingId, setDeletingId] = useState(null)
+  const [expandedRecord, setExpandedRecord] = useState(null)
   const [error, setError] = useState('')
   const [showLlmGuideModal, setShowLlmGuideModal] = useState(false)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
@@ -418,7 +420,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
   }
 
   return (
-    <div style={{ paddingBottom: 24 }}>
+    <div className="bank-history-view" style={{ paddingBottom: 16 }}>
       {/* Automatic Bank Transaction Sync Card */}
       <BankLinkCard
         subscription={subscription}
@@ -429,9 +431,9 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
 
       {/* Header & Controls Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, maxWidth: '100%' }}>
+        <div className="bank-history-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, maxWidth: '100%' }}>
           <div className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)' }}>🏦 Bank History</span>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)' }}>Bank history</span>
             {allRecords.length > 0 && (
               <span style={{ fontSize: 9.5, fontWeight: 800, background: 'var(--accent-50, #e0e7ff)', color: 'var(--accent-600, #4f46e5)', padding: '1px 6px', borderRadius: 10, border: '1px solid var(--accent-200, #c7d2fe)' }}>
                 {allRecords.length.toLocaleString('en-IN')}
@@ -439,10 +441,11 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, maxWidth: '100%', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="bank-history-toolbar">
             {onOpenImport && (
               <button
                 type="button"
+                className="bank-import-button"
                 onClick={onOpenImport}
                 title="Import PDF/CSV Bank Statement"
                 style={{
@@ -491,7 +494,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
               }}
             >
               <i className={`fas ${scanningDups ? 'fa-spinner fa-spin' : 'fa-copy'}`} style={{ fontSize: 9 }} />
-              <span>{scanningDups ? 'Scanning…' : 'Clean Dups'}</span>
+              <span>{scanningDups ? 'Scanning…' : 'Duplicates'}</span>
             </button>
 
             {onOpenMerge && (
@@ -544,7 +547,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
                 flexShrink: 0,
               }}
             >
-              <i className={`fas ${refreshing ? 'fa-spin' : ''} fa-sync-alt`} style={{ fontSize: 9 }} />
+              <span aria-hidden="true" style={{fontSize:16}}>{refreshing ? '…' : '↻'}</span>
             </button>
           </div>
         </div>
@@ -804,7 +807,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by amount, bank, remarks..."
+              aria-label="Search bank transactions" placeholder="Search amount, bank or description"
               style={{
                 width: '100%',
                 paddingLeft: 28,
@@ -832,9 +835,9 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
 
         {/* Unique Banks Filter Bar */}
         {uniqueBanks.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+          <div className="bank-filter-bar" style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
             <button
-              onClick={() => setSelectedBankFilter('ALL')}
+              aria-pressed={selectedBankFilter === 'ALL'} onClick={() => setSelectedBankFilter('ALL')}
               style={{
                 padding: '3px 10px',
                 borderRadius: 12,
@@ -856,7 +859,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
               return (
                 <button
                   key={bName}
-                  onClick={() => setSelectedBankFilter(bName)}
+                  aria-pressed={selectedBankFilter === bName} onClick={() => setSelectedBankFilter(bName)}
                   style={{
                     padding: '3px 10px',
                     borderRadius: 12,
@@ -869,7 +872,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
                     cursor: 'pointer',
                   }}
                 >
-                  🏦 {bName} ({count})
+                  {bName} ({count})
                 </button>
               )
             })}
@@ -878,7 +881,7 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
 
         {/* Summary Card Banner */}
         {filtered.length > 0 && (
-          <div style={{
+          <div className="bank-summary" style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr 1fr',
             gap: 8,
@@ -985,73 +988,14 @@ export default function BankHistoryView({ bankRecords = [], uid, isAdmin = false
               const amtStr = `${amtSign}₹${Number(amount || 0).toLocaleString('en-IN')}`
 
               return (
-                <li key={r.id} className="txn-item" style={{ position: 'relative', cursor: 'default', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
-                  {/* Icon */}
-                  <div
-                    className={`txn-icon ${isCredit ? 'positive' : 'expense'}`}
-                    style={{
-                      flexShrink: 0,
-                      width: 32,
-                      height: 32,
-                      borderRadius: 10,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: isCredit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
-                      color: isCredit ? '#10b981' : '#ef4444',
-                      fontSize: 12,
-                    }}
-                  >
-                    <i className={`fas ${isCredit ? 'fa-arrow-down' : 'fa-arrow-up'}`}></i>
+                <li key={r.id} className="bank-record-row">
+                  <div className="bank-record-copy">
+                    <button type="button" className={`bank-record-description${expandedRecord === r.id ? ' is-expanded' : ''}`} aria-expanded={expandedRecord === r.id} onClick={() => setExpandedRecord(expandedRecord === r.id ? null : r.id)} title={r.description || 'No description'}>{r.description || 'No description'}</button>
+                    <div className="bank-record-meta"><span>{formatDate(r.date)}</span>{r.bank && <span>{r.bank}</span>}{r.balance != null && <span>Bal ₹{Number(r.balance).toLocaleString('en-IN')}</span>}</div>
                   </div>
-
-                  {/* Main Info */}
-                  <div className="txn-info" style={{ flex: 1, minWidth: 0 }}>
-                    <div className="txn-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
-                        Sl. {index + 1}
-                      </span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)' }}>
-                        {r.description || '—'}
-                      </span>
-                      {r.bank && (
-                        <span style={{ fontSize: 8.5, padding: '1px 5px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', fontWeight: 700, border: '1px solid rgba(99,102,241,0.18)', flexShrink: 0 }}>
-                          {r.bank}
-                        </span>
-                      )}
-                    </div>
-                    <div className="txn-sub" style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {formatDate(r.date)}
-                      {r.balance ? ` · Bal: ₹${Number(r.balance).toLocaleString('en-IN')}` : ''}
-                    </div>
-                  </div>
-
-                  {/* Amount & Delete */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <div className={`txn-amount ${amtCls}`} style={{ textAlign: 'right', fontWeight: 800, fontSize: 12.5 }}>
-                      {amtStr}
-                    </div>
-
-                    <button
-                      onClick={() => handleDelete(r)}
-                      disabled={deletingId === r.id}
-                      title="Delete Bank Entry"
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--text-muted)',
-                        padding: 4,
-                        cursor: 'pointer',
-                        fontSize: 11,
-                        borderRadius: 4,
-                        opacity: 0.6,
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = 'var(--text-muted)' }}
-                    >
-                      {deletingId === r.id ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-trash-alt" />}
-                    </button>
+                  <div className="bank-record-actions">
+                    <span className={`txn-amount ${amtCls}`}>{amtStr}</span>
+                    <button type="button" aria-label={`Delete bank entry ${formatDate(r.date)} ${amtStr}`} disabled={deletingId === r.id} title="Delete bank entry" onClick={() => handleDelete(r)}>{deletingId === r.id ? '…' : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>}</button>
                   </div>
                 </li>
               )

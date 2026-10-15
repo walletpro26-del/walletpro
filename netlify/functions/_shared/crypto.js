@@ -3,8 +3,9 @@ import crypto from 'node:crypto'
 const ALGORITHM = 'aes-256-gcm'
 
 function getKey() {
-  const hexKey = process.env.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-  return Buffer.from(hexKey.slice(0, 64), 'hex')
+  const hexKey = process.env.ENCRYPTION_KEY
+  if (!/^[a-fA-F0-9]{64}$/.test(hexKey || '')) throw new Error('ENCRYPTION_KEY must contain exactly 64 hexadecimal characters')
+  return Buffer.from(hexKey, 'hex')
 }
 
 export function encrypt(text) {

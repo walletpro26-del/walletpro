@@ -3,6 +3,7 @@
  */
 
 import { showAlert } from '../components/CustomDialogModal'
+import { buildPersonContactMap } from './personContacts'
 
 export function cleanPhoneNumber(phone) {
   if (!phone) return ''
@@ -13,18 +14,7 @@ export function cleanPhoneNumber(phone) {
 }
 
 export function getPersonContactMap(allLending = []) {
-  const map = {}
-  if (!Array.isArray(allLending)) return map
-  // Sort ascending by date so newer entries overwrite older ones
-  const sorted = [...allLending].sort((a, b) => new Date(a.date) - new Date(b.date))
-  sorted.forEach((item) => {
-    if (!item.person) return
-    const pKey = item.person.trim().toLowerCase()
-    if (!map[pKey]) map[pKey] = { mobileNo: '', email: '' }
-    if (item.mobileNo || item.phone) map[pKey].mobileNo = item.mobileNo || item.phone
-    if (item.email) map[pKey].email = item.email
-  })
-  return map
+  return buildPersonContactMap(allLending)
 }
 
 export function getEffectiveContact(item, personContactMap = {}) {

@@ -19,6 +19,10 @@ export async function handler(event) {
       return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'consentId parameter required' }) }
     }
 
+    const pending = await adminDb.collection('linkedBanks').doc(userId).get()
+    if (!pending.exists || pending.data().consentId !== consentId) {
+      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'Consent does not belong to this account' }) }
+    }
     const details = await getConsentDetails(consentId)
     if (details.status !== 'APPROVED') {
       return {

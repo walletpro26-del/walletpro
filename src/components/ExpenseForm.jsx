@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachments'
 import MultiSelectCombobox from './MultiSelectCombobox'
 import QuickFillModal from './QuickFillModal'
 import { normalizePersonName } from '../api/entityNormalizer'
+import ExpenseDetailsField from './ExpenseDetailsField'
+import { getDetailSuggestions } from '../utils/expenseDetailSuggestions'
 
 export default function ExpenseForm({ suggestions, onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -28,6 +30,24 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   const [isQuickFillModalOpen, setIsQuickFillModalOpen] = useState(false)
   const [importedNotice, setImportedNotice] = useState('')
   const chipsRef = useRef(null)
+  const autoDetailsRef = useRef(null)
+  const detailSuggestions = useMemo(() => getDetailSuggestions(suggestions?.detailPatterns, form.category, form.forWhom), [suggestions?.detailPatterns, form.category, form.forWhom])
+
+  function changeContext(key, value) {
+    const next = { ...form, [key]: value }
+    if (form[key] !== value && !editData && (!form.details || form.details === autoDetailsRef.current)) {
+      const topSuggestion = getDetailSuggestions(suggestions?.detailPatterns, next.category, next.forWhom)[0]
+      const recurring = topSuggestion?.count >= 2 ? topSuggestion : null
+      next.details = recurring?.details || ''
+      autoDetailsRef.current = recurring?.details || null
+    }
+    setForm(next)
+  }
+
+  function changeDetails(value) {
+    autoDetailsRef.current = null
+    set('details', value)
+  }
 
   useEffect(() => {
     if (!loading) {
@@ -73,7 +93,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
       date: customizedData.date || s.date,
       forWhom: customizedData.forWhom || s.forWhom,
       category: customizedData.category || s.category,
-      details: customizedData.details || s.details,
+      details: customizedData.details ?? s.details,
       amount: customizedData.amount !== undefined ? customizedData.amount : s.amount,
       paymentMode: customizedData.paymentMode || s.paymentMode,
       remarks: customizedData.remarks || s.remarks,
@@ -147,7 +167,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
         category: '',
         details: '',
         amount: '',
-        paymentMode: 'Cash',
+        paymentMode: form.paymentMode,
         remarks: '',
         fileData: null,
         fileName: '',
@@ -158,7 +178,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   }
 
   return (
-    <div className="animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
+    <div className="expense-entry animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
       {/* Quick Fill Review & Customization Modal */}
       <QuickFillModal
         isOpen={isQuickFillModalOpen}
@@ -248,7 +268,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 >
                   <span style={{ color: '#4f46e5', fontWeight: 900 }}>₹{qf.amount || 0}</span>
                   <span style={{ opacity: 0.4 }}>·</span>
-                  <span>{qf.label}</span>
+                  <span className="quick-fill-preview">{qf.label}</span>
                 </button>
               ))}
             </div>
@@ -261,7 +281,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
       <form onSubmit={handleSubmit}>
         {/* Date + Amount + Attach (Compact & Balanced Full-Width Layout) */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', width: '100%', marginBottom: 12 }}>
+        <div className="expense-amount-row" style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', width: '100%', marginBottom: 12 }}>
           <div
             className="compact-input-block"
             style={{
@@ -278,6 +298,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
               Date
             </label>
             <input
+              aria-label="Expense date"
               type="date"
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
@@ -304,6 +325,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
               <span className="currency-sym" style={{ fontSize: 16, fontWeight: 800, marginRight: 4, color: '#4f46e5' }}>₹</span>
               <input
+                aria-label="Expense amount"
                 type="number"
                 step="0.01"
                 className="amount-input"
@@ -336,7 +358,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
             }}
           >
             <div className="attach-icon" style={{ fontSize: 13, color: form.fileData ? '#4f46e5' : '#64748b' }}>
-              <i className="fas fa-paperclip"></i>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg>
             </div>
             <span className="attach-label" style={{ fontSize: 8, fontWeight: 800, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, color: form.fileData ? '#4f46e5' : '#64748b' }}>
               {fileLabel}
@@ -397,54 +419,43 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           </div>
         )}
 
-        {/* For Whom */}
+        <div className="expense-context-row">
         <MultiSelectCombobox 
-          label="For Whom? (e.g. Self, Home)"
-          title="Specify who this expense was for (e.g. Self, Family, Home, Friend)"
+          label="For whom"
+          placeholder="e.g. Home"
           value={form.forWhom}
-          onChange={(val) => set('forWhom', val)}
+          onChange={(val) => changeContext('forWhom', val)}
           suggestions={suggestions?.forWhom || []}
         />
 
-        {/* Category + Payment Mode */}
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1 }}>
             <MultiSelectCombobox 
               label="Category"
-              title="Select spending category for analytics (Food, Fuel, Utility, Medical, Shopping)"
+              placeholder="e.g. Fuel"
               value={form.category}
-              onChange={(val) => set('category', val)}
+              onChange={(val) => changeContext('category', val)}
+              allowMulti={false}
               suggestions={Array.from(new Set([
                 'Food & Dining', 'Health & Medical', 'Education', 'Electricity & Utilities', 
                 'Groceries', 'Shopping', 'Travel & Fuel', 'Rent & Housing', 'Entertainment',
                 ...(suggestions?.categories || [])
               ]))}
             />
-          </div>
-          <div className="float-group" style={{ flex: 1 }} title="Select method used to pay for this expense">
-            <select className="float-input" value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)}>
-              <option value="Online/UPI">Online/UPI</option>
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Card">Card</option>
-            </select>
-            <label className="float-label active">Payment Mode</label>
-            <i className="select-chevron fas fa-chevron-down"></i>
-          </div>
         </div>
 
         {/* Details */}
-        <MultiSelectCombobox 
-          label="Details (e.g. Swiggy Order, Fuel)"
-          title="Brief description or vendor particulars"
+        <ExpenseDetailsField
           value={form.details}
-          onChange={(val) => set('details', val)}
-          suggestions={suggestions?.details || []}
+          onChange={changeDetails}
+          category={form.category}
+          suggestions={detailSuggestions}
+          autoFilled={!!form.details && form.details === autoDetailsRef.current}
+          paymentMode={form.paymentMode}
+          onPaymentModeChange={value => set('paymentMode', value)}
         />
 
         <button
           type="submit"
-          className="btn-primary"
+          className="btn-primary expense-save-button"
           disabled={loading}
           style={{
             background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6366f1 100%)',

@@ -353,7 +353,7 @@ export function listenSubscriptionStatus(uidOrUser, secondArg, thirdArg) {
   let unsubEmail = null
 
   const notify = (sub) => {
-    const isAdmin = isAdminEmail(email) || isAdminEmail(auth?.currentUser?.email) || sub?.isAdmin || sub?.plan === 'lifetime_admin'
+    const isAdmin = isAdminEmail(email) || isAdminEmail(auth?.currentUser?.email)
     if (isAdmin) {
       callback({
         active: true,

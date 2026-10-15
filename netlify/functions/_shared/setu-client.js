@@ -44,7 +44,7 @@ export async function createConsentRequest(userId, phone = '9999999999') {
         ConsentMode: 'STORE',
         fetchType: 'PERIODIC',
         ConsentTypes: ['TRANSACTIONS', 'PROFILE', 'SUMMARY'],
-        FI Types: ['DEPOSIT'],
+        FITypes: ['DEPOSIT'],
         DataConsumer: { id: SETU_CLIENT_ID },
         Customer: { id: `${phone}@setu` },
         Purpose: {

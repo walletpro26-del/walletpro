@@ -12,10 +12,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          html2canvas: ['html2canvas'],
-          pdf: ['jspdf', 'jspdf-autotable']
+        manualChunks(id) {
+          if (id.includes('commonjsHelpers') || id.includes('vite/preload-helper')) return 'vendor-helpers'
+          if (!id.includes('node_modules')) return
+          if (/\/(react|react-dom|scheduler)\//.test(id)) return 'react'
+          if (id.includes('/@firebase/') || id.includes('/firebase/')) return 'firebase'
+          if (id.includes('/html2canvas/')) return 'html2canvas'
+          if (id.includes('/jspdf/') || id.includes('/jspdf-autotable/')) return 'pdf'
         }
       }
     }

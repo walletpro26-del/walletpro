@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, lazy, Suspense } from 'react'
 import { normalizeLendingType } from '../api/lending'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
-import ShareFormatModal from './ShareFormatModal'
+const ShareFormatModal = lazy(() => import('./ShareFormatModal'))
 import { findMatchingBankProof } from '../api/bankProofMatcher'
 import { loadSnapshot } from '../api/localCache'
 
@@ -156,7 +156,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
           const bankMatch = bankMatchesMap[itemKey] || null
 
           return (
-            <li key={item.id || i} className="txn-item" onClick={() => onSelect?.(item)}>
+            <li key={item.id || i} className="txn-item" tabIndex={0} role="button" aria-label={`Open ${titleText}, ${amtInfo.text}`} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSelect?.(item) } }} onClick={() => onSelect?.(item)}>
               <div className={`txn-icon ${icon.cls}`}>
                 <i className={`fas ${icon.icon}`}></i>
               </div>
@@ -166,7 +166,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
                   <span style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
                     Sl. {i + 1}
                   </span>
-                  <span>{titleText}</span>
+                  <span className="txn-title-text">{titleText}</span>
                   {bankMatch && (
                     <span
                       title={`Verified Bank Statement Proof (${bankMatch.bankTransaction.bank || 'Bank'})`}
@@ -184,7 +184,7 @@ export default function TransactionList({ items = [], title, onSelect }) {
                     </span>
                   )}
                 </div>
-                <div className="txn-sub">{formatDate(item.date)} · {sub}</div>
+                <div className="txn-sub" title={`${formatDate(item.date)} · ${sub}`}>{formatDate(item.date)} · {sub}</div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -275,13 +275,13 @@ export default function TransactionList({ items = [], title, onSelect }) {
       </ul>
 
       {/* Share Format Selection Modal */}
-      <ShareFormatModal
+      {shareModal.open && <Suspense fallback={<div role="status">Loading sharing options…</div>}><ShareFormatModal
         isOpen={shareModal.open}
         onClose={() => setShareModal({ ...shareModal, open: false })}
         channel={shareModal.channel}
         targetContact={shareModal.contact}
         item={shareModal.item}
-      />
+      /></Suspense>}
     </div>
   )
 }

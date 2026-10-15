@@ -139,61 +139,9 @@ export default function BankLinkCard({ subscription, appConfig, onOpenSubscripti
   if (!isUltraActive && !status.linked) {
     if (dismissed || appConfig?.hideUltraBanner) return null
 
-    return (
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.08))',
-        border: '1px solid rgba(99, 102, 241, 0.2)',
-        borderRadius: 12,
-        padding: '8px 12px',
-        marginBottom: 12,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-          <span style={{ fontSize: 14, flexShrink: 0 }}>⚡</span>
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary)' }}>Automatic Bank Transaction Sync</span>
-            <span style={{ fontSize: 9.5, color: 'var(--text-muted)', marginLeft: 6 }}>(Account Aggregator)</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 9,
-            fontWeight: 800,
-            padding: '2px 8px',
-            borderRadius: 99,
-            background: 'rgba(139, 92, 246, 0.15)',
-            color: '#8b5cf6',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
-            whiteSpace: 'nowrap',
-          }}>
-            COMING SOON
-          </span>
-          <button
-            type="button"
-            onClick={handleDismiss}
-            title="Hide Coming Soon banner"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: 12,
-              padding: '2px 4px',
-              borderRadius: 4,
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-    )
+    return <div className="bank-sync-note"><span>Automatic bank sync <small>Coming soon</small></span><button type="button" aria-label="Hide bank sync notice" onClick={handleDismiss}>×</button></div>
   }
 
-  // 2. Active Ultra / Linked State
   return (
     <div style={{
       background: status.linked

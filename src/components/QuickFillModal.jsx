@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import MultiSelectCombobox from './MultiSelectCombobox'
+import ExpenseDetailsField from './ExpenseDetailsField'
+import { getDetailSuggestions } from '../utils/expenseDetailSuggestions'
 import { normalizePersonName } from '../api/entityNormalizer'
 
 export default function QuickFillModal({
@@ -511,12 +513,11 @@ export default function QuickFillModal({
 
           {/* Details / Description */}
           <div>
-            <MultiSelectCombobox
-              label="Details (e.g. Swiggy Order, Fuel)"
-              title="Brief description or particulars"
+            <ExpenseDetailsField
               value={details}
               onChange={(val) => setDetails(val)}
-              suggestions={suggestions?.details || []}
+              category={category}
+              suggestions={getDetailSuggestions(suggestions?.detailPatterns, category, forWhom)}
             />
           </div>
 

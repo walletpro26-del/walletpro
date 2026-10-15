@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  loadRazorpaySDK,
-  createRazorpayOptions,
   claimFreeTrial,
+  listenSubscriptionStatus,
 } from '../api/subscription'
 import { showAlert } from './CustomDialogModal'
 
@@ -42,20 +41,11 @@ export default function SubscriptionModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [activationResult, setActivationResult] = useState(null)
-  const [allSubscriptions, setAllSubscriptions] = useState([])
-
-  // Real-time listener: watch subscriber count to enforce limit
-  useEffect(() => {
-    const unsub = listenAllSubscriptions((subs) => {
-      setAllSubscriptions(subs)
-    })
-    return unsub
-  }, [])
 
   const [copiedEmail, setCopiedEmail] = useState(false)
   const subscriberLimit = Number(appConfig?.subscriberLimit ?? 10)
   const isUnlimited = subscriberLimit <= 0
-  const regularActiveCount = appConfig?.activeSubscriberCount ?? getSubscriberCounts(allSubscriptions).regularActiveCount ?? 0
+  const regularActiveCount = appConfig?.activeSubscriberCount ?? 0
   const isLimitReached = !subscription?.active && !subscription?.isAdmin && !isUnlimited && regularActiveCount >= subscriberLimit
 
   function handleCopyAdminEmail() {
@@ -81,39 +71,7 @@ export default function SubscriptionModal({
   }, [user?.uid, user?.email])
 
   async function handleRazorpayCheckout() {
-    setError('')
-    setSubmitting(true)
-    try {
-      const loaded = await loadRazorpaySDK()
-      if (!loaded) {
-        throw new Error('Failed to load Razorpay payment gateway. Please check your network connection.')
-      }
-
-      const options = createRazorpayOptions({
-        user,
-        plan: selectedPlan,
-        amount,
-        razorpayKey: appConfig?.razorpayKeyId,
-        onSuccess: (result) => {
-          setActivationResult(result)
-          setStep('success')
-          onSubscriptionSuccess?.(result)
-        },
-        onError: (err) => {
-          setError(err?.message || 'Razorpay payment cancelled or failed.')
-        },
-      })
-
-      const rzp = new window.Razorpay(options)
-      rzp.on('payment.failed', function (resp) {
-        setError(resp?.error?.description || 'Payment failed')
-      })
-      rzp.open()
-    } catch (err) {
-      setError(err?.message || 'Could not launch payment gateway')
-    } finally {
-      setSubmitting(false)
-    }
+    setError('Online checkout is temporarily unavailable. Contact the admin for payment verification and activation.')
   }
 
   async function handleClaimTrial() {

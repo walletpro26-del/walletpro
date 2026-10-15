@@ -1,0 +1,58 @@
+.bank-history-view .section-title { text-transform: none; letter-spacing: 0; }
+.bank-history-toolbar { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+.bank-history-toolbar button { min-height: 30px; height: auto !important; padding: 5px 8px !important; border-radius: 7px !important; border: 1px solid var(--border-color) !important; background: var(--bg-card) !important; color: var(--text-secondary) !important; box-shadow: none !important; font-size: 11px !important; font-weight: 550 !important; }
+.bank-history-toolbar .bank-import-button { background: var(--accent-600) !important; border-color: var(--accent-600) !important; color: #fff !important; }
+.bank-filter-bar { gap: 5px !important; }
+.bank-filter-bar button { background: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 7px !important; padding: 5px 8px !important; font-weight: 500 !important; font-size: 11px !important; }
+.bank-filter-bar button[aria-pressed="true"] { background: var(--accent-50) !important; border-color: var(--accent-300) !important; color: var(--accent-700) !important; }
+.bank-summary { padding: 9px 10px !important; gap: 6px !important; border-radius: 9px !important; box-shadow: none !important; }
+.bank-summary > div { min-width: 0; }
+.bank-summary > div > :first-child { text-transform: none !important; letter-spacing: 0 !important; font-size: 10px !important; font-weight: 500 !important; }
+.bank-summary > div > :last-child { font-size: clamp(10px, 2.7vw, 13px) !important; font-weight: 600 !important; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bank-record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-color); }
+.bank-record-row:last-child { border-bottom: 0; }
+.bank-record-copy { min-width: 0; }
+.bank-record-description { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; border: 0; padding: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12px; font-weight: 550; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.bank-record-description.is-expanded { -webkit-line-clamp: unset; }
+.bank-record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; margin-top: 4px; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+.bank-record-actions { display: flex; align-items: center; gap: 7px; }
+.bank-record-actions .txn-amount { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bank-record-actions > button { width: 28px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; }
+.bank-record-actions > button:hover { color: var(--red-600); background: var(--red-50); }
+.bank-sync-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; margin-bottom: 12px; background: var(--bg-subtle); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-secondary); font-size: 11px; }
+.bank-sync-note small { margin-left: 6px; color: var(--text-muted); font-size: 10px; }
+.bank-sync-note button { width: 24px; height: 24px; padding: 0; background: transparent; border: 0; border-radius: 5px; color: var(--text-muted); cursor: pointer; font-size: 18px; }
+.reports-view .report-card { padding: 12px; margin-bottom: 10px; border-radius: 10px; box-shadow: none; }
+.reports-view .report-card > :last-child { margin-bottom: 0 !important; }
+.reports-view .report-title { font-size: 14px; font-weight: 600; }
+.reports-view .report-compact-header { margin-bottom: 10px; }
+.reports-view .report-header-actions .export-menu-btn { min-height: 30px; padding: 5px 8px; border-radius: 7px; font-size: 11px; font-weight: 550; box-shadow: none; background: var(--bg-card) !important; color: var(--text-secondary) !important; border: 1px solid var(--border-color) !important; }
+.reports-view .report-type-switcher { padding: 3px; border-radius: 8px; margin-bottom: 10px; }
+.reports-view .report-type-btn { padding: 7px 6px; font-size: 12px; font-weight: 500; border-radius: 6px; }
+.report-range-controls { margin-bottom: 10px; }
+.report-period-field { display: grid; grid-template-columns: 50px minmax(0, 1fr); align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
+.report-period-field select { width: 100%; min-height: 34px; padding: 5px 10px; border: 1px solid var(--border-color); border-radius: 7px; font: inherit; font-size: 12px; background: var(--bg-card); color: var(--text-primary); }
+.report-range-controls .date-range-row { margin-top: 8px; }
+.reports-view .multi-select-trigger { width: 100%; min-height: 34px; padding: 7px 9px; border-radius: 7px; font: inherit; }
+.reports-view .multi-select > div:first-child { font-size: 10px !important; font-weight: 500 !important; text-transform: none !important; letter-spacing: 0 !important; }
+.reports-view .report-summary { padding: 8px 0; margin-bottom: 8px; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
+.reports-view .report-stat { padding: 3px 8px; border: 0; border-right: 1px solid var(--border-color); border-radius: 0; background: transparent; }
+.reports-view .report-stat:last-child { border-right: 0; }
+.reports-view .report-stat .label { text-transform: none; font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.reports-view .report-stat .value { font-size: 14px; font-weight: 600; }
+.reports-view .report-breakdown-toolbar { padding: 0 !important; margin: 12px 0 10px !important; background: transparent !important; border: 0 !important; border-radius: 0 !important; gap: 8px !important; }
+.reports-view .report-breakdown-toolbar > :last-child { min-width: 140px !important; flex: 1 1 160px !important; }
+.reports-view .report-breakdown-tab { border: 1px solid transparent !important; padding: 6px 8px !important; border-radius: 7px !important; font-size: 11px !important; font-weight: 550 !important; box-shadow: none !important; background: transparent !important; color: var(--text-secondary) !important; }
+.reports-view .report-breakdown-tab[aria-pressed="true"] { border-color: var(--border-color) !important; background: var(--bg-subtle) !important; color: var(--accent-700) !important; }
+.reports-view .breakdown-group { margin-bottom: 0; border-bottom: 1px solid var(--border-color); }
+.reports-view .breakdown-header { padding: 10px 2px; border: 0; border-radius: 0; box-shadow: none; }
+.reports-view .breakdown-header .group-name,
+.reports-view .breakdown-header .group-total { font-size: 12px; font-weight: 550; }
+@media (max-width: 420px) {
+  .bank-history-heading { flex-wrap: wrap; }
+  .bank-record-row { gap: 7px; padding: 9px; }
+  .bank-record-description { -webkit-line-clamp: 2; }
+  .bank-record-description.is-expanded { -webkit-line-clamp: unset; }
+  .bank-record-actions { gap: 3px; }
+  .bank-record-actions .txn-amount { font-size: 11px; }
+}

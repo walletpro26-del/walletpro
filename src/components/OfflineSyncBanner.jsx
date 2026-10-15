@@ -29,11 +29,13 @@ export default function OfflineSyncBanner({ onSyncComplete }) {
     }
 
     syncingRef.current = true
+    const syncUid = auth.currentUser.uid
     setSyncing(true)
     const succeeded = []
     let networkFailed = false
 
     for (const op of queue) {
+      if (auth.currentUser?.uid !== syncUid) break
       if (networkFailed) break
 
       try {
@@ -103,7 +105,7 @@ export default function OfflineSyncBanner({ onSyncComplete }) {
       }
     }
 
-    if (succeeded.length > 0) {
+    if (succeeded.length > 0 && auth.currentUser?.uid === syncUid) {
       clearPending(succeeded)
       const remaining = getPendingQueue().length
       setPendingCount(remaining)

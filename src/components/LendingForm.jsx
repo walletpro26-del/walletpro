@@ -3,6 +3,7 @@ import { compressImage, getAttachment, getBase64ByteSize } from '../api/attachme
 import { getPersonContactMap } from '../utils/commUtils'
 import MultiSelectCombobox from './MultiSelectCombobox'
 import { normalizePersonName } from '../api/entityNormalizer'
+import { getLendingRemarkSuggestions } from '../utils/personContacts'
 
 export default function LendingForm({ suggestions, allLending = [], onSave, loading, editData, onCancelEdit }) {
   const today = new Date().toISOString().split('T')[0]
@@ -41,6 +42,26 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
   const [attachmentError, setAttachmentError] = useState('')
   const [attachmentSuccess, setAttachmentSuccess] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingContact, setEditingContact] = useState(false)
+  const [contactDirty, setContactDirty] = useState(false)
+  const personContacts = useMemo(() => getPersonContactMap(allLending), [allLending])
+  const savedContact = personContacts[normalizePersonName(form.person || '').trim().toLowerCase()]
+  const hasSavedContact = !!(savedContact?.mobileNo || savedContact?.email || (editData?.person === form.person && (editData?.mobileNo || editData?.phone || editData?.email)))
+  const showContactFields = !!form.person.trim() && (!hasSavedContact || editingContact)
+  const remarkSuggestions = useMemo(() => getLendingRemarkSuggestions(allLending, form.person, getFinalType()), [allLending, form.person, lendMode, direction, isForgive])
+
+  function changePerson(person) {
+    if (person === form.person) return
+    const contact = personContacts[normalizePersonName(person).trim().toLowerCase()]
+    setForm(previous => ({ ...previous, person, mobileNo: contact?.mobileNo || '', email: contact?.email || '' }))
+    setEditingContact(false)
+    setContactDirty(false)
+  }
+
+  useEffect(() => {
+    if (editingContact || contactDirty || editData || !savedContact) return
+    setForm(previous => ({ ...previous, mobileNo: savedContact.mobileNo || '', email: savedContact.email || '' }))
+  }, [savedContact, editingContact, contactDirty, editData])
 
   useEffect(() => {
     if (!loading) {
@@ -124,6 +145,8 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
     onSave({
       ...form,
       person: normalizePersonName(form.person),
+      contactEdited: contactDirty || !!editData?.contactEdited,
+      contactUpdatedAt: contactDirty ? new Date().toISOString() : (editData?.contactUpdatedAt || ''),
       formType: 'lending',
       type: getFinalType(),
       lendType: getFinalType(),
@@ -146,11 +169,13 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         mimeType: '',
       })
       setFileLabel('None')
+      setContactDirty(false)
+      setEditingContact(false)
     }
   }
 
   return (
-    <div className="animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
+    <div className="lending-entry animate-fade-in" style={{ position: 'relative', zIndex: 10 }}>
       {editData && (
         <div className="edit-banner">
           <span><i className="fas fa-edit"></i> Editing Record</span>
@@ -177,7 +202,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           </button>
         </div>
 
-        {/* Direction + Attachment */}
+        {/* Transaction direction */}
         <div className="direction-grid">
           <button
             type="button"
@@ -187,17 +212,6 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             <div className="dir-icon"><i className="fas fa-arrow-up" style={{ transform: 'rotate(45deg)' }}></i></div>
             <span className="dir-label">{outLabel}</span>
           </button>
-
-          <label className="attach-btn" style={{ minWidth: 44 }} title="Attach Image or PDF (Max 130 KB)">
-            <div className="attach-icon"><i className="fas fa-paperclip"></i></div>
-            <span className="attach-label">{fileLabel}</span>
-            <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFile} />
-            {form.fileData && (
-              <button type="button" className="attach-remove" onClick={(e) => { e.preventDefault(); clearFile() }}>
-                <i className="fas fa-times"></i>
-              </button>
-            )}
-          </label>
 
           <button
             type="button"
@@ -268,7 +282,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         )}
 
         {/* Date + Amount (Compact & Balanced Layout) */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', maxWidth: 360, width: '100%', marginBottom: 12 }}>
+        <div className="lending-amount-row">
           <div
             className="compact-input-block"
             style={{
@@ -286,6 +300,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             </label>
             <input
               type="date"
+              aria-label="Lending date"
               value={form.date}
               onChange={(e) => set('date', e.target.value)}
               required
@@ -310,6 +325,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
               <span className="currency-sym" style={{ fontSize: 15, fontWeight: 700, marginRight: 3, color: '#059669' }}>₹</span>
               <input
+                aria-label="Lending amount"
                 type="number"
                 step="0.01"
                 className="amount-input"
@@ -321,29 +337,37 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
               />
             </div>
           </div>
+          <label className="attach-btn lending-attach" title="Attach an image or PDF">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg>
+            <span className="attach-label">{form.fileData ? fileLabel : 'File'}</span>
+            <input type="file" aria-label="Attach lending receipt" accept="image/*,application/pdf" onChange={handleFile} />
+            {form.fileData && <button type="button" className="attach-remove" aria-label="Remove lending receipt" onClick={event => {event.preventDefault(); clearFile()}}>×</button>}
+          </label>
         </div>
 
         {/* Person */}
         <MultiSelectCombobox 
-          label="Person Name"
-          title="Select or enter person's name for loan tracking (e.g. Rahul, Father, Office)"
+          label="Person name"
+          placeholder="Choose or type a name"
           value={form.person}
-          onChange={(val) => set('person', val)}
+          onChange={changePerson}
+          allowMulti={false}
           suggestions={Array.from(new Set([
             'Father', 'Mother', 'Brother', 'Sister', 'Friend', 'Colleague', 'Spouse', 'Relative',
             ...(suggestions?.persons || [])
           ]))}
         />
 
-        {/* Mobile No & Email (Floating Label Inputs with Icons) */}
-        <div style={{ display: 'flex', gap: 10 }}>
+        {form.person.trim() && <div className="lending-contact-heading"><span>{hasSavedContact ? 'Contact saved' : 'Contact details (optional)'}</span>{hasSavedContact && <button type="button" className="details-text-action" aria-expanded={editingContact} onClick={() => setEditingContact(!editingContact)}>{editingContact ? 'Done' : 'Edit contact'}</button>}</div>}
+        {showContactFields && <div className="lending-contact-fields">
           <div className="float-group" style={{ flex: '0 0 42%' }} title="WhatsApp number for sending payment reminders">
             <input
               type="tel"
+              aria-label="Mobile number"
               className="float-input"
               placeholder=" "
               value={form.mobileNo}
-              onChange={(e) => set('mobileNo', e.target.value)}
+              onChange={(e) => { setContactDirty(true); set('mobileNo', e.target.value) }}
             />
             <label className="float-label">
               <i className="fab fa-whatsapp" style={{ color: '#25D366', fontSize: 12 }} /> Mobile
@@ -352,28 +376,20 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
           <div className="float-group" style={{ flex: 1 }} title="Email address for digital receipt or notifications">
             <input
               type="email"
+              aria-label="Contact email"
               className="float-input"
               placeholder=" "
               value={form.email}
-              onChange={(e) => set('email', e.target.value)}
+              onChange={(e) => { setContactDirty(true); set('email', e.target.value) }}
             />
             <label className="float-label">
               <i className="fas fa-envelope" style={{ color: '#3b82f6', fontSize: 11 }} /> Email
             </label>
           </div>
-        </div>
+        </div>}
 
         {/* Remarks */}
-        <div className="float-group" title="Optional details, reason, or repayment note">
-          <input
-            type="text"
-            className="float-input"
-            placeholder=" "
-            value={form.remarks}
-            onChange={(e) => set('remarks', e.target.value)}
-          />
-          <label className="float-label">Remarks</label>
-        </div>
+        <MultiSelectCombobox label="Remarks" placeholder="Write or reuse a remark" value={form.remarks} onChange={value => set('remarks', value)} suggestions={remarkSuggestions} allowMulti={false} />
 
         <button
           type="submit"

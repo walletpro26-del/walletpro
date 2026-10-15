@@ -147,7 +147,7 @@ export default function LoginScreen({ registrationError = '', appConfig: initial
 
         {/* Error Notification */}
         {error && (
-          <div className="login-error">
+          <div className="login-error" role="alert">
             <div className="login-error-msg">
               <i className="fas fa-circle-exclamation" />
               <span>{error}</span>

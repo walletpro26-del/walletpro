@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { getAttachment } from '../api/attachments'
 import { openWhatsApp, openEmail } from '../utils/commUtils'
-import ShareFormatModal from './ShareFormatModal'
+const ShareFormatModal = lazy(() => import('./ShareFormatModal'))
 import { findMatchingBankProof } from '../api/bankProofMatcher'
 import { showConfirm } from './CustomDialogModal'
 
@@ -432,13 +432,13 @@ export default function TransactionModal({ item, onClose, onEdit, onDelete, onSh
       </div>
 
       {/* Share Format Selection Modal */}
-      <ShareFormatModal
+      {shareModal.open && <Suspense fallback={<div role="status">Loading sharing options…</div>}><ShareFormatModal
         isOpen={shareModal.open}
         onClose={() => setShareModal({ ...shareModal, open: false })}
         channel={shareModal.channel}
         targetContact={shareModal.contact}
         item={item}
-      />
+      /></Suspense>}
 
       {/* Fullscreen Attachment */}
       {fullscreen && attachmentData && (

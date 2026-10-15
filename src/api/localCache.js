@@ -1,3 +1,4 @@
+import { auth } from '../firebase'
 /**
  * localCache.js — WalletVibe offline-first user-isolated local cache
  *
@@ -8,13 +9,7 @@
  */
 
 function getEffectiveUid(uid = '') {
-  if (uid) return uid
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem('wv_last_uid') || ''
-    }
-  } catch {}
-  return ''
+  return uid || auth.currentUser?.uid || ''
 }
 
 function getKey(type, uid = '') {
@@ -28,6 +23,12 @@ const PENDING_KEYS = {
   pendingId: 'wv_pending_id',
 }
 
+function pendingKey() {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('No authenticated queue owner')
+  return `${PENDING_KEYS.pending}_${uid}`
+}
+
 // ── Snapshot (read cache) ────────────────────────────────────────────────────
 
 /**
@@ -38,13 +39,8 @@ const PENDING_KEYS = {
  */
 export function saveSnapshot(type, data, uid = '') {
   try {
-    if (!Array.isArray(data)) return
+    if (!Array.isArray(data) || !getEffectiveUid(uid)) return
     const effUid = getEffectiveUid(uid)
-    // Do not overwrite non-empty cache with empty array
-    if (data.length === 0) {
-      const existing = localStorage.getItem(getKey(type, effUid))
-      if (existing && existing !== '[]' && existing.length > 2) return
-    }
     const key = getKey(type, effUid)
     // Store only essential fields to keep size manageable and prevent QuotaExceededError
     const slim = data.map((item) => {
@@ -109,37 +105,12 @@ export function invalidateSnapshot(type, uid = '') {
  */
 export function loadSnapshot(type, uid = '') {
   try {
-    const isValidArray = (str) => {
-      if (!str || typeof str !== 'string') return false
-      const trimmed = str.trim()
-      return trimmed.startsWith('[') && trimmed !== '[]' && trimmed.length > 2
-    }
-
-    let key = getKey(type, uid)
-    let raw = localStorage.getItem(key)
-
-    // Fallback 1: Try without uid prefix
-    if (!isValidArray(raw) && uid) {
-      key = getKey(type, '')
-      raw = localStorage.getItem(key)
-    }
-
-    // Fallback 2: Dynamic localStorage key scanner
-    if (!isValidArray(raw)) {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)
-        if (k && (k.endsWith(`_${type}`) || k.includes(`_${type}_`) || k.includes(type))) {
-          const val = localStorage.getItem(k)
-          if (isValidArray(val)) {
-            raw = val
-            break
-          }
-        }
-      }
-    }
-
-    if (!isValidArray(raw)) return null
+    const owner = getEffectiveUid(uid)
+    if (!owner) return null
+    const raw = localStorage.getItem(getKey(type, owner))
+    if (!raw) return null
     const items = JSON.parse(raw)
+    if (!Array.isArray(items)) return null
     // Rehydrate date objects safely for mobile browsers
     return items.map((item) => {
       let dateObj = new Date()
@@ -213,10 +184,11 @@ function generatePendingId() {
  */
 export function addPending(op) {
   try {
+    if (!auth.currentUser?.uid) throw new Error('Sign in before saving offline')
     const queue = getPendingQueue()
     const tempId = op.tempId || generatePendingId()
     queue.push({ ...op, tempId, createdAt: Date.now() })
-    localStorage.setItem(PENDING_KEYS.pending, JSON.stringify(queue))
+    localStorage.setItem(pendingKey(), JSON.stringify(queue))
     return tempId
   } catch (err) {
     console.warn('[localCache] addPending failed:', err?.message)
@@ -230,7 +202,7 @@ export function addPending(op) {
  */
 export function getPendingQueue() {
   try {
-    const raw = localStorage.getItem(PENDING_KEYS.pending)
+    const raw = localStorage.getItem(pendingKey())
     return raw ? JSON.parse(raw) : []
   } catch { return [] }
 }
@@ -243,7 +215,7 @@ export function clearPending(tempIds) {
   try {
     const queue = getPendingQueue()
     const remaining = queue.filter((op) => !tempIds.includes(op.tempId))
-    localStorage.setItem(PENDING_KEYS.pending, JSON.stringify(remaining))
+    localStorage.setItem(pendingKey(), JSON.stringify(remaining))
   } catch (err) {
     console.warn('[localCache] clearPending failed:', err?.message)
   }
@@ -261,6 +233,6 @@ export function getPendingCount() {
  */
 export function clearAllPending() {
   try {
-    localStorage.setItem(PENDING_KEYS.pending, '[]')
+    localStorage.setItem(pendingKey(), '[]')
   } catch {}
 }

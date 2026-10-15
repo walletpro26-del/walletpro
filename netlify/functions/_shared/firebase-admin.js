@@ -32,12 +32,8 @@ export async function verifyAuthToken(event) {
   }
   const token = authHeader.split('Bearer ')[1].trim()
   if (!adminAuth) {
-    if (process.env.NODE_ENV === 'production' || process.env.NETLIFY === 'true') {
-      throw new Error('Authentication service unavailable. Firebase admin credentials not initialized.')
-    }
-    // Local development fallback only
-    return { uid: 'dev-user-id', email: 'dev-user@example.com' }
+    throw new Error('Authentication service unavailable')
   }
-  const decodedToken = await adminAuth.verifyIdToken(token)
+  const decodedToken = await adminAuth.verifyIdToken(token, true)
   return decodedToken
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { onAuthChange, signOut } from './api/auth'
+import { auth } from './firebase'
 import {
   addExpense, updateExpense, deleteExpense,
   getAllExpenses, computeSuggestions, computeExpenseStatsLocally,
@@ -232,13 +233,7 @@ export default function App() {
   const [editLending, setEditLending] = useState(null)
 
   // Subscription state
-  const [subscriptionState, setSubscriptionState] = useState(() => {
-    try {
-      const cached = localStorage.getItem('wv_sub_status')
-      if (cached) return JSON.parse(cached)
-    } catch {}
-    return { active: true, isAdmin: false, status: 'checking', plan: 'none' }
-  })
+  const [subscriptionState, setSubscriptionState] = useState({ active: false, isAdmin: false, status: 'checking', plan: 'none' })
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
 
@@ -248,7 +243,19 @@ export default function App() {
   // Auth listener
   useEffect(() => {
     const unsub = onAuthChange((state) => {
+      setSubscriptionState({ active: false, isAdmin: false, status: 'checking', plan: 'none' })
+      setSelectedTxn(null)
+      setEditExpense(null)
+      setEditLending(null)
+      setShowAdminPanel(false)
+      setAllExpenses([])
+      setAllLending([])
+      setRecentExpenses([])
+      setRecentLending([])
+      setBankRecords([])
+      setStats({ expense: computeExpenseStatsLocally([]), lending: computeLendingStatsLocally([]) })
       setAuthState(state)
+      document.getElementById('startup-loader')?.remove()
       setAuthReady(true)
       if (state.loggedIn && state.uid) {
         try {
@@ -438,6 +445,7 @@ export default function App() {
   const checkSubscription = useCallback(async (user) => {
     try {
       const sub = await getSubscriptionStatus(user)
+      if (auth.currentUser?.uid !== user.uid) return
       setSubscriptionState(sub)
       try { localStorage.setItem('wv_sub_status', JSON.stringify(sub)) } catch {}
       // If non-admin and inactive/expired/pending, show subscription modal automatically
@@ -452,18 +460,20 @@ export default function App() {
   }, [])
 
   const loadDashboard = useCallback(async (forceRefresh = false) => {
+    const activeUid = authState.uid || auth.currentUser?.uid || ''
+    if (!activeUid || auth.currentUser?.uid !== activeUid) return
     // Only show loading indicator if explicitly forced or if zero cached data exists
     if (forceRefresh || (allExpenses.length === 0 && allLending.length === 0)) {
       setLoading(true)
     }
     setError('')
     try {
-      const activeUid = authState.uid || auth?.currentUser?.uid || ''
       const [allExp, allL, bankRaw] = await Promise.all([
         getAllExpenses(forceRefresh, activeUid),
         getAllLending(forceRefresh, activeUid),
         fetchBankTransactionsFromFirestore(activeUid, subscriptionState?.isAdmin || isAdminEmail(authState?.email), forceRefresh).catch(() => []),
       ])
+      if (auth.currentUser?.uid !== activeUid) return
       const expStats = computeExpenseStatsLocally(allExp)
       const lendStats = computeLendingStatsLocally(allL)
       const recent = allExp.slice(0, 20)
@@ -751,35 +761,7 @@ export default function App() {
 
   // ─── Direct Clean Logo + Spinning Circle Loader (auth initializing) ───────
   if (!authReady) {
-    return (
-      <div style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-primary, #0f172a)',
-      }}>
-        <div style={{
-          position: 'relative',
-          width: '72px',
-          height: '72px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            border: '3px solid rgba(99, 102, 241, 0.2)',
-            borderTopColor: '#6366f1',
-            borderRadius: '50%',
-            animation: 'spin 0.9s linear infinite',
-          }} />
-          <WalletVibeLogo size={44} variant="icon" animate={false} />
-        </div>
-      </div>
-    )
+    return null
   }
 
   // Login screen

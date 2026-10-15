@@ -2,12 +2,14 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { db, auth } from '../firebase'
 import { normalizeLendingType } from '../api/lending'
 import { loadSnapshot, saveSnapshot } from '../api/localCache'
-import { parseSafeDate } from '../api/bankTransactions'
+import { parseSafeDate, fetchBankTransactionsFromFirestore } from '../api/bankTransactions'
+import PersonMergeModal from './PersonMergeModal'
 import { openWhatsApp, openEmail, getPersonContactMap, openWhatsAppPerson, openEmailPerson } from '../utils/commUtils'
 import ShareFormatModal from './ShareFormatModal'
 import { normalizePersonName } from '../api/entityNormalizer'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import './record-views.css'
 import { showAlert } from './CustomDialogModal'
 
 export default function ReportsView({ allExpenses = [], allLending = [], bankRecords: parentBankRecords = [], onSelectTxn, uid, isAdmin = false, onMergeComplete }) {
@@ -884,12 +886,12 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="reports-view animate-fade-in">
       <div className="report-card">
         {/* ── Compact Header Row ── */}
         <div className="report-compact-header">
           <h3 className="report-title">
-            <i className="fas fa-chart-pie"></i> Report Generator
+            <i className="fas fa-chart-pie"></i> Reports
           </h3>
           <div className="report-header-actions" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
             {/* Person & Category Merge Tool */}
@@ -901,7 +903,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
               style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' }}
             >
               <i className="fas fa-random" style={{ fontSize: 10 }}></i>
-              Merge Names, Categories &amp; Banks
+              Merge labels
             </button>
 
             {/* Unified Export / Download Menu */}
@@ -1185,60 +1187,11 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
           <button className={`report-type-btn ${reportType === 'bank' ? 'active' : ''}`} onClick={() => setReportType('bank')}>Bank History</button>
         </div>
 
-        {/* ── Date Range ── */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-            <i className="fas fa-calendar-alt" style={{ marginRight: 4 }} /> Time Range
-          </div>
-          <div className="chips-container no-scrollbar" style={{ padding: '2px 0 6px', display: 'flex', gap: 6, overflowX: 'auto' }}>
-            {[
-              { id: 'allTime', label: 'All Time' },
-              { id: 'today', label: 'Today' },
-              { id: 'yesterday', label: 'Yesterday' },
-              { id: 'thisMonth', label: 'This Month' },
-              { id: 'lastMonth', label: 'Last Month' },
-              { id: 'thisYear', label: 'This Year' },
-              { id: 'custom', label: 'Custom' },
-            ].map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className={`chip ${activeRange === r.id ? 'active' : ''}`}
-                onClick={() => applyQuickRange(r.id)}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  borderRadius: 99,
-                  border: activeRange === r.id ? '1px solid var(--accent-500)' : '1px solid var(--border-color)',
-                  background: activeRange === r.id ? 'var(--accent-gradient)' : 'var(--bg-card)',
-                  color: activeRange === r.id ? '#fff' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  boxShadow: activeRange === r.id ? 'var(--shadow-sm)' : 'none',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          {activeRange === 'custom' && (
-            <div className="date-range-row" style={{ marginTop: 8 }}>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setIsAllTime(false) }}
-              />
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setIsAllTime(false) }}
-              />
-            </div>
-          )}
+        <div className="report-range-controls">
+          <label className="report-period-field"><span>Period</span><select value={activeRange} onChange={event => applyQuickRange(event.target.value)}>
+            {[['allTime','All time'],['today','Today'],['yesterday','Yesterday'],['thisMonth','This month'],['lastMonth','Last month'],['thisYear','This year'],['custom','Custom dates']].map(([id,label]) => <option key={id} value={id}>{label}</option>)}
+          </select></label>
+          {activeRange === 'custom' && <div className="date-range-row"><input type="date" aria-label="Report start date" value={startDate} onChange={event => {setStartDate(event.target.value);setIsAllTime(false)}} /><span>to</span><input type="date" aria-label="Report end date" value={endDate} onChange={event => {setEndDate(event.target.value);setIsAllTime(false)}} /></div>}
         </div>
 
         {/* ── Filters ── */}
@@ -1319,7 +1272,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
           </div>
 
           {/* Expenses Breakdown Tabbed Bar */}
-          <div style={{
+          <div className="report-breakdown-toolbar" style={{
             marginTop: 18,
             marginBottom: 12,
             display: 'flex',
@@ -1336,7 +1289,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 type="button"
-                onClick={() => setExpenseBreakdownTab('category')}
+                className="report-breakdown-tab" aria-pressed={expenseBreakdownTab === 'category'} onClick={() => setExpenseBreakdownTab('category')}
                 style={{
                   padding: '6px 12px',
                   borderRadius: 20,
@@ -1353,11 +1306,11 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
                   gap: 6,
                 }}
               >
-                🏷️ By Category ({Object.keys(expenseReport.byCat).length})
+                Category ({Object.keys(expenseReport.byCat).length})
               </button>
               <button
                 type="button"
-                onClick={() => setExpenseBreakdownTab('person')}
+                className="report-breakdown-tab" aria-pressed={expenseBreakdownTab === 'person'} onClick={() => setExpenseBreakdownTab('person')}
                 style={{
                   padding: '6px 12px',
                   borderRadius: 20,
@@ -1374,7 +1327,7 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
                   gap: 6,
                 }}
               >
-                👤 By Person ({Object.keys(expenseReport.byWhom).length})
+                Person ({Object.keys(expenseReport.byWhom).length})
               </button>
             </div>
 
@@ -2021,10 +1974,10 @@ function MultiSelect({ label, options, selected, onChange, open, setOpen }) {
   return (
     <div className="multi-select" ref={containerRef} style={{ position: 'relative', zIndex: open ? 100 : 1 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{label}</div>
-      <div className="multi-select-trigger" onClick={() => setOpen(!open)}>
+      <button type="button" className="multi-select-trigger" aria-label={label + ' filter'} aria-expanded={open} onClick={() => setOpen(!open)}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontSize: 12, fontWeight: selected.length ? 700 : 500, color: selected.length ? 'var(--accent-600)' : 'var(--text-secondary)' }}>{displayText}</span>
         <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 9, color: 'var(--text-muted)' }}></i>
-      </div>
+      </button>
       {open && (
         <div
           className="multi-select-options custom-scrollbar"

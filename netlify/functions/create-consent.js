@@ -16,11 +16,11 @@ export async function handler(event) {
     if (adminDb) {
       const subDoc = await adminDb.collection('subscriptions').doc(userId).get()
       const subData = subDoc.exists ? subDoc.data() : null
+      const expiresAt = subData?.expiresAt?.toDate?.()
       const isUltraOrAdmin =
-        user.email === 'walletpro26@gmail.com' ||
-        subData?.plan?.startsWith('ultra') ||
-        subData?.plan === 'trial' ||
-        subData?.status === 'active'
+        (user.email_verified === true && user.email === 'walletpro26@gmail.com') ||
+        (subData?.status === 'active' && expiresAt > new Date() &&
+          (subData?.plan?.startsWith('ultra') || subData?.plan === 'trial'))
 
       if (!isUltraOrAdmin) {
         return {

@@ -1,4 +1,5 @@
 import { db, auth } from '../firebase'
+import { buildDetailPatterns } from '../utils/expenseDetailSuggestions'
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, getDocs,
   query, orderBy, limit, where, Timestamp,
@@ -508,6 +509,7 @@ export function computeSuggestions(expenses) {
     forWhom: [...forWhomSet],
     categories: [...categorySet],
     details: [...detailsSet],
+    detailPatterns: buildDetailPatterns(expenses),
     quickFills: sorted.slice(0, 15).map((item) => item.data),
   }
 }

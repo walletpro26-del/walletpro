@@ -4,7 +4,7 @@
    - Posts SW_UPDATED message to all clients when a new SW activates
 */
 
-const CACHE_NAME = 'walletvibe-cache-v9'
+const CACHE_NAME = 'walletvibe-cache-v10'
 const VERSION_KEY = 'wv-deployed-version'
 
 // On install — cache shell assets
@@ -24,7 +24,7 @@ self.addEventListener('activate', (event) => {
       // Clean old caches
       const keys = await caches.keys()
       await Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.filter((k) => k.startsWith('walletvibe-cache-') && k !== CACHE_NAME).map((k) => caches.delete(k))
       )
       // Claim clients
       await self.clients.claim()
@@ -65,6 +65,24 @@ self.addEventListener('fetch', (event) => {
   // Browser loads them natively according to style-src, font-src, img-src, etc.
   if (url.origin !== self.location.origin) return
 
+  // Authenticated endpoints must never enter a shared browser cache.
+  if (url.pathname.startsWith('/.netlify/') || url.pathname.startsWith('/api/') || req.headers.has('Authorization')) return
+
+  // Vite filenames contain content hashes: unchanged assets need no network round trip.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME)
+      const cached = await cache.match(req)
+      if (cached) return cached
+      const response = await fetch(req)
+      if (response.ok && response.type === 'basic') await cache.put(req, response.clone())
+      return response
+    })())
+    return
+  }
+
+  if (req.mode !== 'navigate' && !/\.(png|ico|svg|webmanifest)$/.test(url.pathname)) return
+
   // Don't cache version.json (always fresh)
   if (url.pathname === '/version.json') {
     event.respondWith(fetch(req).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } })))
@@ -83,7 +101,7 @@ self.addEventListener('fetch', (event) => {
         }
         return res
       })
-      .catch(() => caches.match(req))
+      .catch(async () => (await caches.match(req)) || (req.mode === 'navigate' && await caches.match('/')) || new Response('Offline', { status: 503 }))
   )
 })
 
