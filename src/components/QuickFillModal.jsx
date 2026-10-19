@@ -518,6 +518,7 @@ export default function QuickFillModal({
               onChange={(val) => setDetails(val)}
               category={category}
               suggestions={getDetailSuggestions(suggestions?.detailPatterns, category, forWhom)}
+              allDetails={suggestions?.details || []}
             />
           </div>
 

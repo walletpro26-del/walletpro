@@ -1035,8 +1035,8 @@ export default function ReportsView({ allExpenses = [], allLending = [], bankRec
                     </div>
 
                     {/* Full Database */}
-                    <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.06))', borderRadius: 10, padding: 8, border: '1px solid rgba(99,102,241,0.2)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#4f46e5', marginBottom: 2 }}>
+                    <div style={{ background: 'var(--accent-50)', borderRadius: 10, padding: 8, border: '1px solid var(--accent-300, var(--border-color))' }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--accent-600)', marginBottom: 2 }}>
                         🌐 Full Database (Expenses + Lending + Bank)
                       </div>
                       <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginBottom: 6 }}>All historical records across all 3 modules</div>

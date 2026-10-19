@@ -430,8 +430,29 @@ export default function App() {
   }, [])
 
   const loadDashboard = useCallback(async (forceRefresh = false) => {
+    // Prefer authState.uid (set synchronously by onAuthStateChanged callback) over
+    // auth.currentUser which can lag behind on mobile due to async IndexedDB persistence.
     const activeUid = authState.uid || auth.currentUser?.uid || ''
-    if (!activeUid || auth.currentUser?.uid !== activeUid) return
+    if (!activeUid) return
+
+    // On mobile/Android the Firebase SDK may not yet have settled auth.currentUser into
+    // the JS object even though onAuthStateChanged already fired. Wait up to 2 s for it.
+    if (!auth.currentUser) {
+      await new Promise((resolve) => {
+        let waited = 0
+        const iv = setInterval(() => {
+          waited += 50
+          if (auth.currentUser || waited >= 2000) {
+            clearInterval(iv)
+            resolve()
+          }
+        }, 50)
+      })
+    }
+
+    // After the wait, if a different user is now active (or signed out), bail out.
+    if (auth.currentUser && auth.currentUser.uid !== activeUid) return
+
     // Only show loading indicator if explicitly forced or if zero cached data exists
     if (forceRefresh || (allExpenses.length === 0 && allLending.length === 0)) {
       setLoading(true)
@@ -443,7 +464,8 @@ export default function App() {
         getAllLending(forceRefresh, activeUid),
         fetchBankTransactionsFromFirestore(activeUid, subscriptionState?.isAdmin || isAdminEmail(authState?.email), forceRefresh).catch(() => []),
       ])
-      if (auth.currentUser?.uid !== activeUid) return
+      // Post-fetch stale check: if the user changed while the async calls were in flight, discard.
+      if (auth.currentUser && auth.currentUser.uid !== activeUid) return
       const expStats = computeExpenseStatsLocally(allExp)
       const lendStats = computeLendingStatsLocally(allL)
       const recent = allExp.slice(0, 20)

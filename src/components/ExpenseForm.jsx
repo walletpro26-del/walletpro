@@ -448,6 +448,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           onChange={changeDetails}
           category={form.category}
           suggestions={detailSuggestions}
+          allDetails={suggestions?.details || []}
           autoFilled={!!form.details && form.details === autoDetailsRef.current}
           paymentMode={form.paymentMode}
           onPaymentModeChange={value => set('paymentMode', value)}
