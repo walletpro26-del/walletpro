@@ -930,8 +930,8 @@ select.float-input { padding-right: 32px; }
 .txn-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.15s ease;
   border-bottom: 1px solid var(--border-color);
@@ -944,9 +944,9 @@ select.float-input { padding-right: 32px; }
   background: var(--bg-subtle);
 }
 .txn-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1004,8 +1004,8 @@ select.float-input { padding-right: 32px; }
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 0 4px;
-  margin-bottom: 12px;
-  margin-top: 24px;
+  margin-bottom: 8px;
+  margin-top: 14px;
 }
 
 /* --- Modals --- */
@@ -2415,12 +2415,15 @@ select.float-input { padding-right: 32px; }
 }
 @media (max-width: 420px) {
   .details-payment-mode select { width: 144px; }
-  .expense-entry .expense-amount-row { display: grid !important; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 42px; }
+  .expense-entry .expense-amount-row { display: grid !important; grid-template-columns: minmax(102px, 0.75fr) minmax(0, 1.65fr) 42px; }
   .expense-entry .expense-amount-row .attach-btn { padding: 5px 3px !important; }
 }
 @media (max-width: 360px) {
   .expense-entry .details-field-heading > label > span { display: none; }
-  .expense-entry .expense-amount-row { grid-template-columns: minmax(0, 1fr) 44px; }
+  .expense-entry .expense-amount-row { grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.65fr) 42px; }
+}
+@media (max-width: 330px) {
+  .expense-entry .expense-amount-row { grid-template-columns: minmax(0, 1fr) 42px; }
   .expense-entry .expense-amount-row > :first-child { grid-column: 1 / -1; }
 }
 
@@ -2714,7 +2717,9 @@ select.float-input { padding-right: 32px; }
 
   /* Form */
   .compact-row { flex-wrap: wrap; }
-  .compact-input-block { min-width: calc(50% - 4px); }
+  .compact-row .compact-input-block { min-width: calc(50% - 4px); }
+  .expense-amount-row .compact-input-block,
+  .lending-amount-row .compact-input-block { min-width: 0 !important; }
 
   /* Transaction list */
   .txn-list-header { font-size: 12px; padding: 10px 12px; }
@@ -3039,17 +3044,20 @@ html, body {
 .lending-contact-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 10px; font-size: 11px; color: var(--text-muted); }
 .lending-contact-fields { display: flex; gap: 10px; }
 .lending-entry .direction-grid { grid-template-columns: 1fr 1fr; }
-.lending-amount-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px; align-items: stretch; gap: 8px; margin-bottom: 12px; }
+.lending-amount-row { display: grid; grid-template-columns: minmax(102px, 0.75fr) minmax(0, 1.65fr) 44px; align-items: stretch; gap: 8px; margin-bottom: 12px; }
 .lending-entry .lending-attach { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 0; padding: 5px 3px; border: 1px dashed var(--border-color); border-radius: 10px; background: var(--bg-subtle); color: var(--text-muted); }
 .lending-attach .attach-label { max-width: 38px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lending-attach input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .lending-attach:focus-within { border-color: var(--accent-500); box-shadow: 0 0 0 3px var(--focus-ring); }
 .lending-attach .attach-remove { z-index: 2; }
 @media (max-width: 420px) {
-  .lending-amount-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 42px; }
+  .lending-amount-row { grid-template-columns: minmax(102px, 0.75fr) minmax(0, 1.65fr) 42px; }
 }
 @media (max-width: 360px) {
-  .lending-amount-row { grid-template-columns: minmax(0, 1fr) 44px; }
+  .lending-amount-row { grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.65fr) 42px; }
+}
+@media (max-width: 330px) {
+  .lending-amount-row { grid-template-columns: minmax(0, 1fr) 42px; }
   .lending-amount-row > :first-child { grid-column: 1 / -1; }
 }
 .lending-entry .btn-primary { background: var(--accent-600) !important; box-shadow: 0 3px 8px var(--focus-ring) !important; font-weight: 600 !important; }

@@ -30,22 +30,13 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
   const [isQuickFillModalOpen, setIsQuickFillModalOpen] = useState(false)
   const [importedNotice, setImportedNotice] = useState('')
   const chipsRef = useRef(null)
-  const autoDetailsRef = useRef(null)
   const detailSuggestions = useMemo(() => getDetailSuggestions(suggestions?.detailPatterns, form.category, form.forWhom), [suggestions?.detailPatterns, form.category, form.forWhom])
 
   function changeContext(key, value) {
-    const next = { ...form, [key]: value }
-    if (form[key] !== value && !editData && (!form.details || form.details === autoDetailsRef.current)) {
-      const topSuggestion = getDetailSuggestions(suggestions?.detailPatterns, next.category, next.forWhom)[0]
-      const recurring = topSuggestion?.count >= 2 ? topSuggestion : null
-      next.details = recurring?.details || ''
-      autoDetailsRef.current = recurring?.details || null
-    }
-    setForm(next)
+    setForm((s) => ({ ...s, [key]: value }))
   }
 
   function changeDetails(value) {
-    autoDetailsRef.current = null
     set('details', value)
   }
 
@@ -281,17 +272,18 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
 
       <form onSubmit={handleSubmit}>
         {/* Date + Amount + Attach (Compact & Balanced Full-Width Layout) */}
-        <div className="expense-amount-row" style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', width: '100%', marginBottom: 12 }}>
+        <div className="expense-amount-row" style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'nowrap', width: '100%', marginBottom: 10 }}>
           <div
-            className="compact-input-block"
+            className="compact-input-block date-input-block"
             style={{
-              flex: '1 1 120px',
+              flex: '1 1 138px',
+              maxWidth: 160,
               minWidth: 0,
-              padding: '7px 10px',
-              borderRadius: 12,
+              padding: '6px 9px',
+              borderRadius: 11,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
             }}
           >
             <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
@@ -308,22 +300,22 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           </div>
 
           <div
-            className="compact-input-block"
+            className="compact-input-block amount-input-block"
             style={{
-              flex: '1.4 1 150px',
+              flex: '1.5 1 160px',
               minWidth: 0,
-              padding: '7px 12px',
-              borderRadius: 12,
+              padding: '6px 12px',
+              borderRadius: 11,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
             }}
           >
             <label style={{ fontSize: 8.5, fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-muted, #64748b)', marginBottom: 2, display: 'block', letterSpacing: 0.5 }}>
               Amount
             </label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 16, fontWeight: 800, marginRight: 4, color: '#4f46e5' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 18, fontWeight: 900, marginRight: 4, color: '#4f46e5' }}>₹</span>
               <input
                 aria-label="Expense amount"
                 type="number"
@@ -333,7 +325,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '0', fontSize: 18, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
+                style={{ padding: '0', fontSize: 20, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
               />
             </div>
           </div>
@@ -342,9 +334,9 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
             className="attach-btn"
             title="Attach Image or PDF (Max 130 KB)"
             style={{
-              flex: '0 0 54px',
-              padding: '6px 8px',
-              borderRadius: 12,
+              flex: '0 0 50px',
+              padding: '5px 7px',
+              borderRadius: 11,
               border: '1.5px dashed var(--border-color, #cbd5e1)',
               background: form.fileData ? 'rgba(99,102,241,0.08)' : 'var(--bg-subtle, #f8fafc)',
               boxSizing: 'border-box',
@@ -449,7 +441,7 @@ export default function ExpenseForm({ suggestions, onSave, loading, editData, on
           category={form.category}
           suggestions={detailSuggestions}
           allDetails={suggestions?.details || []}
-          autoFilled={!!form.details && form.details === autoDetailsRef.current}
+          autoFilled={false}
           paymentMode={form.paymentMode}
           onPaymentModeChange={value => set('paymentMode', value)}
         />

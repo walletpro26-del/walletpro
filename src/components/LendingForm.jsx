@@ -284,12 +284,13 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
         {/* Date + Amount (Compact & Balanced Layout) */}
         <div className="lending-amount-row">
           <div
-            className="compact-input-block"
+            className="compact-input-block date-input-block"
             style={{
-              flex: '1 1 140px',
+              flex: '1 1 138px',
+              maxWidth: 160,
               minWidth: 0,
-              padding: '6px 10px',
-              borderRadius: 12,
+              padding: '6px 9px',
+              borderRadius: 11,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
               boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
@@ -308,12 +309,12 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
             />
           </div>
           <div
-            className="compact-input-block"
+            className="compact-input-block amount-input-block"
             style={{
-              flex: '1 1 160px',
+              flex: '1.5 1 160px',
               minWidth: 0,
-              padding: '6px 10px',
-              borderRadius: 12,
+              padding: '6px 12px',
+              borderRadius: 11,
               border: '1.5px solid var(--border-color, #e2e8f0)',
               background: 'var(--bg-card, #ffffff)',
               boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
@@ -323,7 +324,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
               Amount
             </label>
             <div className="amount-row" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="currency-sym" style={{ fontSize: 15, fontWeight: 700, marginRight: 3, color: '#059669' }}>₹</span>
+              <span className="currency-sym" style={{ fontSize: 18, fontWeight: 800, marginRight: 3, color: '#059669' }}>₹</span>
               <input
                 aria-label="Lending amount"
                 type="number"
@@ -333,7 +334,7 @@ export default function LendingForm({ suggestions, allLending = [], onSave, load
                 value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 required
-                style={{ padding: '0', fontSize: 18, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
+                style={{ padding: '0', fontSize: 20, fontWeight: 900, width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', color: 'var(--text-primary)' }}
               />
             </div>
           </div>
